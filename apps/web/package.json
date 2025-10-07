@@ -2,17 +2,6 @@
   "name": "taskmaster-web",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "next": "14.2.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
-  },
-  "devDependencies": {
-    "@types/node": "24.7.0",
-    "@types/react": "18.2.46",
-    "@types/react-dom": "18.2.18",
-    "typescript": "5.4.5"
-  },
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
