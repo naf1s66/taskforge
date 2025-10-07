@@ -1,0 +1,16 @@
+GET http://localhost:4000/api/taskforge/v1/health
+
+###
+GET http://localhost:4000/api/taskforge/v1/tasks
+Authorization: Bearer demo
+
+###
+POST http://localhost:4000/api/taskforge/v1/tasks
+Content-Type: application/json
+Authorization: Bearer demo
+
+{
+  "title": "Write docs",
+  "tags": ["work","docs"],
+  "dueDate": "2025-10-08T10:00:00.000Z"
+}

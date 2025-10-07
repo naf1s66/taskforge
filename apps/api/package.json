@@ -1,0 +1,13 @@
+{
+  "name": "taskmaster-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "echo \"No Jest configured yet\" && exit 0",
+    "gen:openapi": "node src/openapi.export.js",
+    "prisma:generate": "prisma generate"
+  }
+}

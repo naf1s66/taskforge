@@ -1,0 +1,38 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: taskforge_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: taskmaster
+    ports: ["5432:5432"]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: taskforge_mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: ../apps/api
+    ports: ["4000:4000"]
+    env_file:
+      - ./env/api.env.example
+    depends_on: [db, mailhog]
+
+  web:
+    build:
+      context: ../apps/web
+    ports: ["3000:3000"]
+    env_file:
+      - ./env/web.env.example
+    depends_on: [api]
+
+volumes:
+  db_data:
