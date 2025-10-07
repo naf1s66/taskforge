@@ -1,0 +1,19 @@
+# Node
+node_modules/
+
+# Build outputs
+apps/web/.next/
+apps/api/dist/
+apps/web/tsconfig.tsbuildinfo
+apps/api/tsconfig.tsbuildinfo
+
+# Env files
+.env
+apps/api/.env
+apps/web/.env
+
+# Logs
+*.log
+
+# Docker
+infra/db_data

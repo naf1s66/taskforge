@@ -2,4 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { height: 100%; }
+@layer base {
+  :root {
+    --background: 240 10% 5%;
+    --foreground: 0 0% 98%;
+    --muted: 240 10% 20%;
+    --muted-foreground: 240 5% 64%;
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
+    --card: 240 10% 8%;
+    --card-foreground: 0 0% 98%;
+    --border: 240 5% 26%;
+    --input: 240 5% 26%;
+    --primary: 270 95% 75%;
+    --primary-foreground: 240 10% 5%;
+    --secondary: 260 30% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --accent: 320 65% 60%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+    --ring: 270 95% 75%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply border border-white/10 bg-white/5 backdrop-blur;
+  }
+}
