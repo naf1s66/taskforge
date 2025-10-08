@@ -53,6 +53,26 @@ taskforge/
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
+## Auth Setup (Day 2)
+1. **Create OAuth apps**
+   - GitHub: [Developer settings → OAuth Apps](https://github.com/settings/developers). Callback URL: `http://localhost:3000/api/auth/callback/github`.
+   - Google: [Google Cloud Console → Credentials → OAuth Client ID](https://console.cloud.google.com/apis/credentials). Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`.
+2. **Populate the web env file** (`apps/web/.env` or Docker env):
+   ```bash
+   NEXTAUTH_URL=http://localhost:3000
+   NEXTAUTH_SECRET=changeme # generate a strong value before deploying
+   GITHUB_ID=your-app-id
+   GITHUB_SECRET=your-github-secret
+   GOOGLE_ID=your-client-id
+   GOOGLE_SECRET=your-google-secret
+   API_BASE_URL=http://localhost:4000/api/taskforge
+   ```
+3. **Restart the Next.js dev server** so NextAuth picks up the changes, then visit `http://localhost:3000/login`.
+
+If the secrets are missing, the `/login` page now shows an "OAuth not configured" banner instead of crashing.
+
+> Tip: when you're iterating locally without OAuth apps, use the **Development login** button on `/login` to spawn a temporary session. It is disabled automatically in production builds.
+
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
 - `make migrate` / `make seed` – DB ops (requires Prisma client and seed hooked up).
