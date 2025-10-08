@@ -1,14 +1,12 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-
-import { authOptions } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/server-auth';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
-  if (!session) {
+  if (!user) {
     const headerList = headers();
     const forwardedUrl = headerList.get('x-forwarded-url');
     const invokePath = headerList.get('x-invoke-path');

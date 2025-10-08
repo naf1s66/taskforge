@@ -1,6 +1,6 @@
 # TaskForge (Monorepo)
 
-**Full-stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • OAuth via Auth.js • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
+**Full-stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • JWT auth flows • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
 
 - 📄 PRD: [`docs/PRD.md`](docs/PRD.md)
 - 🧑‍💻 Agents: [`docs/AGENTS.md`](docs/AGENTS.md)
@@ -53,25 +53,26 @@ taskforge/
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
-## Auth Setup (Day 2)
-1. **Create OAuth apps**
-   - GitHub: [Developer settings → OAuth Apps](https://github.com/settings/developers). Callback URL: `http://localhost:3000/api/auth/callback/github`.
-   - Google: [Google Cloud Console → Credentials → OAuth Client ID](https://console.cloud.google.com/apis/credentials). Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`.
-2. **Populate the web env file** (`apps/web/.env` or Docker env):
+## Running frontend auth
+1. **Set environment variables**
+   - API (`apps/api/.env`): ensure `JWT_SECRET` is set (defaults to `dev-secret`) and configure database credentials if you are not using the in-memory store.
+   - Web (`apps/web/.env` or Docker env):
+     ```bash
+     NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/taskforge/v1
+     ```
+     Adjust the host/port to match where the API server is running.
+2. **Start both servers**
    ```bash
-   NEXTAUTH_URL=http://localhost:3000
-   NEXTAUTH_SECRET=changeme # generate a strong value before deploying
-   GITHUB_ID=your-app-id
-   GITHUB_SECRET=your-github-secret
-   GOOGLE_ID=your-client-id
-   GOOGLE_SECRET=your-google-secret
-   API_BASE_URL=http://localhost:4000/api/taskforge
+   pnpm -C apps/api dev
+   pnpm -C apps/web dev
    ```
-3. **Restart the Next.js dev server** so NextAuth picks up the changes, then visit `http://localhost:3000/login`.
-
-If the secrets are missing, the `/login` page now shows an "OAuth not configured" banner instead of crashing.
-
-> Tip: when you're iterating locally without OAuth apps, use the **Development login** button on `/login` to spawn a temporary session. It is disabled automatically in production builds.
+3. **Create an account**
+   - Visit `http://localhost:3000/register` to create a user. Client-side validation is powered by Zod and mirrors the API contract.
+   - Successful registration stores the issued JWT in a cookie and redirects to `/dashboard`.
+4. **Sign in**
+   - Navigate to `http://localhost:3000/login` and use the same credentials. Errors from the API appear inline, while success updates the shared auth context and redirects.
+5. **Sign out / reset state**
+   - Use the “Sign out” button in the header or clear the `tf_session` cookie if you need to reset the client state between manual tests.
 
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).

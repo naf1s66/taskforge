@@ -2,10 +2,11 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/components/auth/auth-provider';
 
 function UserAvatar({ name, image }: { name?: string | null; image?: string | null }) {
   if (image) {
@@ -34,7 +35,8 @@ function UserAvatar({ name, image }: { name?: string | null; image?: string | nu
 }
 
 export function SiteHeader() {
-  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { user, status, logout } = useAuth();
   const [isSigningOut, startSignOut] = useTransition();
 
   return (
@@ -48,12 +50,12 @@ export function SiteHeader() {
         {status === 'loading' && (
           <div className="h-10 w-32 animate-pulse rounded-full bg-border/60" />
         )}
-        {status !== 'loading' && session?.user && (
+        {status === 'authenticated' && user && (
           <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card/60 px-3 py-2">
-            <UserAvatar name={session.user.name} image={session.user.image} />
+            <UserAvatar name={user.email} image={null} />
             <div className="flex min-w-[8rem] flex-col leading-tight">
-              <span className="text-sm font-medium text-foreground">{session.user.name ?? 'Signed in'}</span>
-              {session.user.email && <span className="text-xs text-muted-foreground">{session.user.email}</span>}
+              <span className="text-sm font-medium text-foreground">{user.email.split('@')[0]}</span>
+              <span className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</span>
             </div>
             <Button
               variant="outline"
@@ -62,8 +64,9 @@ export function SiteHeader() {
               disabled={isSigningOut}
               onClick={() =>
                 startSignOut(() =>
-                  signOut({
-                    callbackUrl: '/login',
+                  logout().then(() => {
+                    router.push('/login');
+                    router.refresh();
                   }),
                 )
               }
@@ -72,7 +75,7 @@ export function SiteHeader() {
             </Button>
           </div>
         )}
-        {status !== 'loading' && !session?.user && (
+        {status !== 'loading' && status !== 'authenticated' && (
           <Button asChild size="sm" className="rounded-full">
             <Link href="/login">Sign in</Link>
           </Button>
