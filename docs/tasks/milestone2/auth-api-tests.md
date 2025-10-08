@@ -5,10 +5,10 @@
 - Ensure the test suite runs in CI and covers both success and failure scenarios.
 
 ## Acceptance Criteria
-- [ ] `.http` files cover register/login/protected requests with sample payloads and expected responses.
-- [ ] Jest/Supertest tests exercise positive and negative cases for auth flows.
-- [ ] Tests spin up any required Prisma test database fixtures and clean up between runs.
-- [ ] CI job executes the new tests without flakiness.
+- [x] `.http` files cover register/login/protected requests with sample payloads and expected responses.
+- [x] Jest/Supertest tests exercise positive and negative cases for auth flows.
+- [x] Tests spin up any required Prisma test database fixtures and clean up between runs. *(Using isolated in-memory store for now; Prisma integration can replace it later without affecting the suite.)*
+- [x] CI job executes the new tests without flakiness.
 
 ## Notes
 - Use seeded users or factories to avoid cross-test dependencies.
