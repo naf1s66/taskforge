@@ -2,8 +2,15 @@ import type { JSX, SVGProps } from 'react';
 import type { Metadata } from 'next';
 import { Github } from 'lucide-react';
 
+import { DevSignInButton } from '@/components/auth/dev-signin';
 import { OAuthSignIn } from '@/components/auth/oauth-signin';
-import { configuredOAuthProviders, hasOAuthProviders, type OAuthProviderId } from '@/lib/auth';
+import {
+  configuredOAuthProviders,
+  devSignInProfile,
+  hasOAuthProviders,
+  isDevSignInEnabled,
+  type OAuthProviderId,
+} from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Sign in • TaskForge',
@@ -70,6 +77,21 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             Required variables: <code>GITHUB_ID</code>, <code>GITHUB_SECRET</code>, <code>GOOGLE_ID</code>, <code>GOOGLE_SECRET</code>,
             <code> NEXTAUTH_URL</code>, <code> NEXTAUTH_SECRET</code>.
           </div>
+          {isDevSignInEnabled && devSignInProfile && (
+            <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/10 px-4 py-3">
+              <p className="text-sm text-primary-foreground/80">
+                Need to preview the app locally? Use the development login below to simulate an authenticated session.
+              </p>
+              <DevSignInButton
+                callbackPath={fromPath}
+                email={devSignInProfile.email}
+                label={`Continue as ${devSignInProfile.name}`}
+              />
+              <p className="text-xs text-primary-foreground/70">
+                Replace this flow with GitHub/Google OAuth before deploying.
+              </p>
+            </div>
+          )}
         </div>
       )}
       <footer className="text-xs text-muted-foreground">
