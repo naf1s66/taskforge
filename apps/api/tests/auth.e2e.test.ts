@@ -1,10 +1,11 @@
 import request from 'supertest';
 
+import { InMemoryUserStore } from '../src/auth/user-store';
 import { createApp } from '../src/app';
 
 describe('Auth API', () => {
   const createTestAgent = () => {
-    const app = createApp({ jwtSecret: 'test-secret' });
+    const app = createApp({ jwtSecret: 'test-secret', userStore: new InMemoryUserStore() });
     return request(app);
   };
 

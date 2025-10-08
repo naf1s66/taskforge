@@ -9,7 +9,7 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test": "cross-env NODE_ENV=test jest --runInBand",
-    "gen:openapi": "node src/openapi.export.js",
+    "gen:openapi": "tsx src/openapi.export.ts",
     "prisma:generate": "prisma generate"
   },
   "dependencies": {

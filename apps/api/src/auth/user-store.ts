@@ -1,7 +1,9 @@
+import type { PrismaClient } from '@prisma/client';
+
 export interface StoredUser {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
   createdAt: Date;
 }
 
@@ -21,12 +23,11 @@ export class InMemoryUserStore implements UserStore {
   }
 
   findByEmail(email: string): Promise<StoredUser | undefined> {
-    for (const user of this.users.values()) {
-      if (user.email.toLowerCase() === email.toLowerCase()) {
-        return Promise.resolve(user);
-      }
-    }
-    return Promise.resolve(undefined);
+    const normalized = email.toLowerCase();
+    const match = Array.from(this.users.values()).find(
+      candidate => candidate.email.toLowerCase() === normalized,
+    );
+    return Promise.resolve(match);
   }
 
   findById(id: string): Promise<StoredUser | undefined> {
@@ -38,3 +39,53 @@ export class InMemoryUserStore implements UserStore {
     return Promise.resolve();
   }
 }
+
+/* eslint-disable
+  @typescript-eslint/no-unsafe-assignment,
+  @typescript-eslint/no-unsafe-call,
+  @typescript-eslint/no-unsafe-member-access
+*/
+export class PrismaUserStore implements UserStore {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async create(user: StoredUser): Promise<void> {
+    await this.prisma.user.create({
+      data: {
+        id: user.id,
+        email: user.email,
+        passwordHash: user.passwordHash,
+        createdAt: user.createdAt,
+      },
+    });
+  }
+
+  async findByEmail(email: string): Promise<StoredUser | undefined> {
+    const record = await this.prisma.user.findUnique({ where: { email } });
+    return record ? this.toStoredUser(record) : undefined;
+  }
+
+  async findById(id: string): Promise<StoredUser | undefined> {
+    const record = await this.prisma.user.findUnique({ where: { id } });
+    return record ? this.toStoredUser(record) : undefined;
+  }
+
+  async clear(): Promise<void> {
+    await this.prisma.user.deleteMany();
+  }
+
+  private toStoredUser(record: PrismaUserRecord): StoredUser {
+    return {
+      id: record.id,
+      email: record.email,
+      passwordHash: record.passwordHash ?? null,
+      createdAt: record.createdAt,
+    };
+  }
+}
+/* eslint-enable
+  @typescript-eslint/no-unsafe-assignment,
+  @typescript-eslint/no-unsafe-call,
+  @typescript-eslint/no-unsafe-member-access
+*/
+
+type PrismaUserRecord = NonNullable<Awaited<ReturnType<PrismaClient['user']['findUnique']>>>;

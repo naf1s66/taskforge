@@ -11,6 +11,7 @@ CREATE TYPE "TaskPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 CREATE TABLE "User" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "email" TEXT NOT NULL,
+    "password_hash" TEXT,
     "name" TEXT,
     "image" TEXT,
     "emailVerified" TIMESTAMP(3),

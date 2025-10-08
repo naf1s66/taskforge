@@ -5,10 +5,10 @@
 - Ensure hashes are applied during registration and verified during login.
 
 ## Acceptance Criteria
-- [ ] Passwords are never stored in plaintext in the database.
-- [ ] Registration flow hashes incoming passwords before persistence.
-- [ ] Login flow verifies provided passwords against stored hashes.
-- [ ] Hashing cost parameters are configurable via environment variables when applicable.
+- [x] Passwords are never stored in plaintext in the database.
+- [x] Registration flow hashes incoming passwords before persistence.
+- [x] Login flow verifies provided passwords against stored hashes.
+- [x] Hashing cost parameters are configurable via environment variables when applicable.
 
 ## Notes
 - Update shared DTOs/types if password fields need to be excluded from responses.

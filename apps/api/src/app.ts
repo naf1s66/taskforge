@@ -2,15 +2,18 @@ import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import type { OpenAPIV3_1 } from 'openapi-types';
 import swaggerUi from 'swagger-ui-express';
 
+import { PrismaUserStore, UserStore } from './auth/user-store';
+import { openApiDocument } from './openapi';
 import { createAuthRouter } from './routes/auth';
+import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { router as taskRoutes } from './routes/tasks';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
+  userStore?: UserStore;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -23,15 +26,10 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.get('/api/taskforge/v1/health', (_req, res) => res.json({ ok: true }));
 
-  const openapi: OpenAPIV3_1.Document = {
-    openapi: '3.0.3',
-    info: { title: 'TaskForge API', version: '1.0.0' },
-    paths: {},
-    components: {},
-  };
-  app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openapi));
+  app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  const authRouterFactory = createAuthRouter({ jwtSecret: options.jwtSecret });
+  const userStore = options.userStore ?? new PrismaUserStore(getPrismaClient());
+  const authRouterFactory = createAuthRouter({ jwtSecret: options.jwtSecret, userStore });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 
   app.use(authRouterFactory.authMiddleware);

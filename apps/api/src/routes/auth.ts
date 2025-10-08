@@ -20,11 +20,26 @@ export interface AuthRouterOptions {
   passwordHasher?: PasswordHasher;
   tokenService?: TokenService;
   jwtSecret?: string;
+  bcryptSaltRounds?: number;
+}
+
+function resolveSaltRounds(explicit?: number): number {
+  if (explicit && Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+
+  const fromEnv = Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '', 10);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) {
+    return fromEnv;
+  }
+
+  return 10;
 }
 
 export function createAuthRouter(options: AuthRouterOptions = {}) {
   const store = options.userStore ?? new InMemoryUserStore();
-  const hasher = options.passwordHasher ?? createPasswordHasher();
+  const saltRounds = resolveSaltRounds(options.bcryptSaltRounds);
+  const hasher = options.passwordHasher ?? createPasswordHasher(saltRounds);
   const secret = options.jwtSecret ?? process.env.JWT_SECRET ?? 'dev-secret';
   const tokens = options.tokenService ?? createTokenService(secret);
   const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
@@ -65,7 +80,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     }
 
     const user = await store.findByEmail(parse.data.email);
-    if (!user) {
+    if (!user || !user.passwordHash) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
