@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Inter } from 'next/font/google';
 
+import { SiteHeader } from '@/components/layout/site-header';
 import { Providers } from './providers';
 import '../styles/globals.css';
 
@@ -20,11 +21,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className={cn('min-h-screen bg-background text-foreground antialiased', inter.variable)}>
         <Providers>
           <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10">
-            <header className="pb-6">
-              <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">TaskForge</div>
-              <h1 className="text-3xl font-semibold">Day 1 scaffold</h1>
-            </header>
-            <main className="flex-1">{children}</main>
+            <SiteHeader />
+            <main className="flex-1 py-8">{children}</main>
             <footer className="pt-6 text-sm text-muted-foreground">Build momentum, one task at a time.</footer>
           </div>
         </Providers>
