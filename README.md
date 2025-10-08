@@ -1,6 +1,6 @@
 # TaskForge (Monorepo)
 
-**Full‑stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • OAuth via Auth.js • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
+**Full-stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • OAuth via Auth.js • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
 
 - 📄 PRD: [`docs/PRD.md`](docs/PRD.md)
 - 🧑‍💻 Agents: [`docs/AGENTS.md`](docs/AGENTS.md)
@@ -8,34 +8,50 @@
 
 ## Structure
 ```
-taskmaster/
+taskforge/
 ├─ apps/
-│  ├─ web/     # Next.js App Router (TS), Tailwind, shadcn/ui
+│  ├─ web/     # Next.js App Router (TS), Tailwind, shadcn/ui, Framer Motion
 │  └─ api/     # Express (TS), Prisma, Swagger, Zod
 ├─ packages/shared/        # Shared DTOs/types
 ├─ infra/                  # docker-compose, env templates
 ├─ docs/                   # PRD, agents, ADRs, OpenAPI
 ├─ .github/workflows/ci.yml
 ├─ Makefile
-├─ package.json (workspaces)
+├─ package.json (pnpm workspaces)
 └─ pnpm-workspace.yaml
 ```
 
-## Quickstart
-1. Install deps: `pnpm install` (or npm/yarn workspaces)
-2. Copy envs:
+## Quick Start
+1. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
+2. **Copy environment templates (optional for dev defaults)**
    ```bash
    cp infra/env/api.env.example apps/api/.env
    cp infra/env/web.env.example apps/web/.env
    ```
-3. Start local stack: `make up`
-4. Run dev servers:
+3. **Run static checks**
+   ```bash
+   pnpm lint
+   pnpm typecheck
+   ```
+4. **Start the Docker services (Postgres + MailHog + app containers)**
+   ```bash
+   make up
+   # when finished
+   make down
+   ```
+5. **Run dev servers locally (hot reload)**
    ```bash
    pnpm -C apps/api dev
    pnpm -C apps/web dev
    ```
-5. API Docs (placeholder): `http://localhost:4000/api/taskforge/docs`
-6. Web: `http://localhost:3000`
+6. **Smoke test**
+   - API health: `curl http://localhost:4000/api/taskforge/v1/health`
+   - Web UI: http://localhost:3000
+
+> `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
