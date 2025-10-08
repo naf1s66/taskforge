@@ -94,9 +94,13 @@ enum TaskPriority { LOW MEDIUM HIGH }
 
 ## Milestones (7 days)
 - **Day 1:** Monorepo setup, Tailwind + shadcn/ui, Express + Prisma scaffold, Dockerfiles, compose, CI skeleton.
-- **Day 2:** OAuth (GitHub/Google), protected routes, `/me`.
+- **Day 2:** Frontend OAuth (GitHub/Google) with NextAuth, guarded routes, session UI. `/me` endpoint + JWT bridge lands later.
 - **Day 3:** `/tasks` CRUD + Zod + tests; FE list + dialogs; OpenAPI draft.
 - **Day 4:** Kanban DnD, `/tags`, optimistic UI, `.http` pack.
 - **Day 5:** Search, due filters, priority; email digest (node-cron + Nodemailer).
 - **Day 6:** Helmet/CORS/rate-limit; finalize Swagger; ADRs + README; CI docker build.
 - **Day 7:** Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); smoke test; v1 release.
+
+### Auth Status (Day 2)
+- ✅ Web: NextAuth route at `/api/auth/[...nextauth]`, GitHub + Google providers, custom `/login`, session header, and protected layout redirecting unauthenticated users.
+- ⚙️ Next: issue JWTs for the API, persist users in Prisma, expose `/api/taskforge/v1/me`, and sync sign-out between web + API.
