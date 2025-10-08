@@ -1,0 +1,25 @@
+### Register a new user
+POST http://localhost:4000/api/taskforge/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "password": "Secret123!"
+}
+
+### Login with existing user
+POST http://localhost:4000/api/taskforge/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "password": "Secret123!"
+}
+
+### Fetch current user with token
+GET http://localhost:4000/api/taskforge/v1/auth/me
+Authorization: Bearer {{token}}
+
+### Logout (requires token)
+POST http://localhost:4000/api/taskforge/v1/auth/logout
+Authorization: Bearer {{token}}
