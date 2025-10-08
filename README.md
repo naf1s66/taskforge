@@ -71,6 +71,8 @@ taskforge/
 
 If the secrets are missing, the `/login` page now shows an "OAuth not configured" banner instead of crashing.
 
+> Tip: when you're iterating locally without OAuth apps, use the **Development login** button on `/login` to spawn a temporary session. It is disabled automatically in production builds.
+
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
 - `make migrate` / `make seed` – DB ops (requires Prisma client and seed hooked up).
