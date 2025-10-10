@@ -22,7 +22,35 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use(express.json());
   app.use(cookieParser());
-  app.use(cors({ credentials: true })); // Allow credentials for cookies
+  // Configure CORS to allow credentials with explicit origins
+  app.use(cors({
+    credentials: true,
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Define allowed origins
+      const allowedOrigins = [
+        'http://localhost:3000',  // Web app in development
+        'http://127.0.0.1:3000',  // Alternative localhost
+        'https://taskforge.app',  // Production domain (if applicable)
+      ];
+      
+      // Check if the origin is allowed
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // For development, also allow any localhost origin
+      if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
+        return callback(null, true);
+      }
+      
+      // Reject the request
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+  }));
   app.use(helmet());
   app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
