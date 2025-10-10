@@ -67,9 +67,16 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     await store.create(user);
     const token = await tokens.createToken(user.id);
 
+    // Set HttpOnly cookie for security
+    res.cookie('tf_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     return res.status(201).json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
-      token,
     });
   });
 
@@ -90,13 +97,27 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     }
 
     const token = await tokens.createToken(user.id);
+    
+    // Set HttpOnly cookie for security
+    res.cookie('tf_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+    
     return res.json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
-      token,
     });
   });
 
   router.post('/logout', authMiddleware, (_req, res) => {
+    // Clear the HttpOnly cookie
+    res.clearCookie('tf_session', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
     return res.status(200).json({ success: true });
   });
 

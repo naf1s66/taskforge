@@ -28,6 +28,8 @@ services:
     build:
       context: ../apps/api
     ports: ["4000:4000"]
+    env_file:
+      - ./env/api.env.example
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +40,8 @@ services:
     build:
       context: ../apps/web
     ports: ["3000:3000"]
+    env_file:
+      - ./env/web.env.example
     depends_on: [api]
 
 volumes:

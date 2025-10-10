@@ -19,12 +19,11 @@ export type CredentialsPayload = {
 export type FieldErrors = Record<string, string[]>;
 
 export type AuthActionResult =
-  | { success: true; user: AuthUser; token: string }
+  | { success: true; user: AuthUser }
   | { success: false; message: string; fieldErrors?: FieldErrors };
 
 type AuthContextValue = {
   user: AuthUser | null;
-  token: string | null;
   status: 'loading' | 'authenticated' | 'unauthenticated';
   login: (payload: CredentialsPayload) => Promise<AuthActionResult>;
   register: (payload: CredentialsPayload) => Promise<AuthActionResult>;
@@ -34,36 +33,8 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function readTokenFromDocument(): string | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${SESSION_COOKIE_NAME}=`));
-
-  return match ? decodeURIComponent(match.split('=')[1]) : null;
-}
-
-function setSessionCookie(token: string) {
-  if (typeof document === 'undefined') {
-    return;
-  }
-
-  const maxAgeDays = 7;
-  document.cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${
-    maxAgeDays * 24 * 60 * 60
-  }; SameSite=Lax`;
-}
-
-function clearSessionCookie() {
-  if (typeof document === 'undefined') {
-    return;
-  }
-
-  document.cookie = `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
-}
+// Note: Session cookies are now managed server-side with HttpOnly flag
+// No client-side cookie manipulation needed for security
 
 async function requestWithCredentials(
   endpoint: 'login' | 'register',
@@ -75,6 +46,7 @@ async function requestWithCredentials(
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include', // Include HttpOnly cookies
       body: JSON.stringify(payload),
     });
 
@@ -86,7 +58,7 @@ async function requestWithCredentials(
       return { success: false, message, fieldErrors };
     }
 
-    return { success: true, user: data.user as AuthUser, token: data.token as string };
+    return { success: true, user: data.user as AuthUser };
   } catch (error) {
     console.error(`[auth] Failed to ${endpoint}`, error);
     return { success: false, message: 'Unexpected error. Please try again.' };
@@ -95,46 +67,33 @@ async function requestWithCredentials(
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
 
-  const setSession = useCallback((nextToken: string | null, nextUser: AuthUser | null) => {
-    setToken(nextToken);
+  const setSession = useCallback((nextUser: AuthUser | null) => {
     setUser(nextUser);
-    setStatus(nextToken && nextUser ? 'authenticated' : 'unauthenticated');
+    setStatus(nextUser ? 'authenticated' : 'unauthenticated');
   }, []);
 
   const refresh = useCallback(async () => {
-    const existingToken = readTokenFromDocument();
-
-    if (!existingToken) {
-      setSession(null, null);
-      return;
-    }
-
     try {
       const res = await fetch(`${getApiBaseUrl()}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${existingToken}`,
-        },
+        credentials: 'include', // Include HttpOnly cookies
       });
 
       if (!res.ok) {
-        clearSessionCookie();
-        setSession(null, null);
+        setSession(null);
         return;
       }
 
       const data = (await res.json()) as { user?: AuthUser };
       if (data.user) {
-        setSession(existingToken, data.user);
+        setSession(data.user);
       } else {
-        clearSessionCookie();
-        setSession(null, null);
+        setSession(null);
       }
     } catch (error) {
       console.error('[auth] Failed to refresh session', error);
-      setSession(null, null);
+      setSession(null);
     }
   }, [setSession]);
 
@@ -149,8 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await requestWithCredentials('login', payload);
 
       if (result.success) {
-        setSessionCookie(result.token);
-        setSession(result.token, result.user);
+        setSession(result.user);
       }
 
       return result;
@@ -163,8 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await requestWithCredentials('register', payload);
 
       if (result.success) {
-        setSessionCookie(result.token);
-        setSession(result.token, result.user);
+        setSession(result.user);
       }
 
       return result;
@@ -173,28 +130,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    const activeToken = readTokenFromDocument();
-
     try {
-      if (activeToken) {
-        await fetch(`${getApiBaseUrl()}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${activeToken}`,
-          },
-        });
-      }
+      await fetch(`${getApiBaseUrl()}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include', // Include HttpOnly cookies
+      });
     } catch (error) {
       console.warn('[auth] Logout request failed', error);
     } finally {
-      clearSessionCookie();
-      setSession(null, null);
+      setSession(null);
     }
   }, [setSession]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, status, login, register, logout, refresh }),
-    [login, logout, refresh, register, status, token, user],
+    () => ({ user, status, login, register, logout, refresh }),
+    [login, logout, refresh, register, status, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
