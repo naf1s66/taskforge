@@ -32,6 +32,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const { login } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -42,26 +43,34 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginFormValues) {
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
     setFormError(null);
-    const result = await login(values);
+    
+    try {
+      const result = await login(values);
 
-    if (!result.success) {
-      setFormError(result.message);
-      if (result.fieldErrors) {
-        for (const [field, messages] of Object.entries(result.fieldErrors)) {
-          const message = messages?.[0];
-          if (message && field in values) {
-            form.setError(field as keyof LoginFormValues, { type: 'server', message });
+      if (!result.success) {
+        setFormError(result.message);
+        if (result.fieldErrors) {
+          for (const [field, messages] of Object.entries(result.fieldErrors)) {
+            const message = messages?.[0];
+            if (message && field in values) {
+              form.setError(field as keyof LoginFormValues, { type: 'server', message });
+            }
           }
         }
+        return;
       }
-      return;
-    }
 
-    const from = searchParams?.get('from');
-    const destination = from && from.startsWith('/') ? from : '/dashboard';
-    router.push(destination);
-    router.refresh();
+      const from = searchParams?.get('from');
+      const destination = from && from.startsWith('/') ? from : '/dashboard';
+      router.push(destination);
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -106,8 +115,8 @@ export function LoginForm() {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
       </Form>

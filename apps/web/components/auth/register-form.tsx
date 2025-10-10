@@ -37,6 +37,7 @@ export function RegisterForm() {
   const router = useRouter();
   const { register: registerAccount } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -48,24 +49,32 @@ export function RegisterForm() {
   });
 
   async function onSubmit(values: RegisterFormValues) {
+    if (isSubmitting) return; // Prevent double submission
+    
+    setIsSubmitting(true);
     setFormError(null);
-    const result = await registerAccount({ email: values.email, password: values.password });
+    
+    try {
+      const result = await registerAccount({ email: values.email, password: values.password });
 
-    if (!result.success) {
-      setFormError(result.message);
-      if (result.fieldErrors) {
-        for (const [field, messages] of Object.entries(result.fieldErrors)) {
-          const message = messages?.[0];
-          if (message && (field === 'email' || field === 'password')) {
-            form.setError(field as 'email' | 'password', { type: 'server', message });
+      if (!result.success) {
+        setFormError(result.message);
+        if (result.fieldErrors) {
+          for (const [field, messages] of Object.entries(result.fieldErrors)) {
+            const message = messages?.[0];
+            if (message && (field === 'email' || field === 'password')) {
+              form.setError(field as 'email' | 'password', { type: 'server', message });
+            }
           }
         }
+        return;
       }
-      return;
-    }
 
-    router.push('/dashboard');
-    router.refresh();
+      router.push('/dashboard');
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -123,8 +132,8 @@ export function RegisterForm() {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
+          <Button type="submit" className="w-full" disabled={isSubmitting || form.formState.isSubmitting}>
+            {isSubmitting || form.formState.isSubmitting ? 'Creating account…' : 'Create account'}
           </Button>
         </form>
       </Form>
