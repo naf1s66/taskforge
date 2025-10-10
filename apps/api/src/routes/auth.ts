@@ -15,6 +15,50 @@ const registerSchema = z.object({
 
 const loginSchema = registerSchema;
 
+// Helper function to get cookie domain for cross-subdomain sharing
+function getCookieDomain(): string | undefined {
+  const domain = process.env.COOKIE_DOMAIN;
+  if (domain) {
+    return domain;
+  }
+  
+  // In production, use shared parent domain for cross-subdomain cookies
+  if (process.env.NODE_ENV === 'production') {
+    // Extract domain from API_BASE_URL or use default
+    const apiUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (apiUrl) {
+      try {
+        const url = new URL(apiUrl);
+        const hostname = url.hostname;
+        
+        // If it's a subdomain like api.taskforge.app, return .taskforge.app
+        const parts = hostname.split('.');
+        if (parts.length >= 3) {
+          return '.' + parts.slice(-2).join('.');
+        }
+        // If it's already a root domain, use it as-is
+        return '.' + hostname;
+      } catch {
+        // Fallback if URL parsing fails
+      }
+    }
+  }
+  
+  // For development, don't set domain (defaults to current host)
+  return undefined;
+}
+
+// Helper function to get cookie options
+function getCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    domain: getCookieDomain(),
+  };
+}
+
 export interface AuthRouterOptions {
   userStore?: UserStore;
   passwordHasher?: PasswordHasher;
@@ -67,9 +111,11 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     await store.create(user);
     const token = await tokens.createToken(user.id);
 
+    // Set HttpOnly cookie with shared domain for cross-subdomain access
+    res.cookie('tf_session', token, getCookieOptions());
+
     return res.status(201).json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
-      token,
     });
   });
 
@@ -90,13 +136,21 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     }
 
     const token = await tokens.createToken(user.id);
+    
+    // Set HttpOnly cookie with shared domain for cross-subdomain access
+    res.cookie('tf_session', token, getCookieOptions());
+    
     return res.json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
-      token,
     });
   });
 
   router.post('/logout', authMiddleware, (_req, res) => {
+    // Clear the HttpOnly cookie with same options used to set it
+    const cookieOptions = getCookieOptions();
+    // Remove maxAge for clearing
+    const { maxAge, ...clearOptions } = cookieOptions;
+    res.clearCookie('tf_session', clearOptions);
     return res.status(200).json({ success: true });
   });
 

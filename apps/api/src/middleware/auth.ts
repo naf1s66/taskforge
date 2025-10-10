@@ -10,12 +10,16 @@ export interface AuthMiddlewareOptions {
 
 export function createAuthMiddleware({ tokenService, userStore }: AuthMiddlewareOptions) {
   return async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-    const header = req.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    // Try to get token from HttpOnly cookie first, then fallback to Authorization header
+    let token = req.cookies?.tf_session;
+    
+    if (!token) {
+      const header = req.headers.authorization;
+      if (header && header.startsWith('Bearer ')) {
+        token = header.slice('Bearer '.length).trim();
+      }
     }
-
-    const token = header.slice('Bearer '.length).trim();
+    
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

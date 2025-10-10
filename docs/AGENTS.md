@@ -17,7 +17,7 @@
 
 ## Env Examples
 **API**: `DATABASE_URL`, `JWT_SECRET`, `SMTP_HOST`, `SMTP_PORT`  
-**WEB**: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `GITHUB_ID`, `GITHUB_SECRET`, `GOOGLE_ID`, `GOOGLE_SECRET`, `API_BASE_URL`
+**WEB**: `NEXT_PUBLIC_API_BASE_URL`
 
 ## DoD
 - Day 1–7 done; CI green; `/api/docs` live; deployed FE/BE/DB; README + ADRs present.
