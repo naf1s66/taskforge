@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
@@ -20,7 +21,8 @@ export function createApp(options: CreateAppOptions = {}) {
   const app = express();
 
   app.use(express.json());
-  app.use(cors());
+  app.use(cookieParser());
+  app.use(cors({ credentials: true })); // Allow credentials for cookies
   app.use(helmet());
   app.use(rateLimit({ windowMs: 60_000, max: 120 }));
 
