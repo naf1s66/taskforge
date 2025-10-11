@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -18,8 +19,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useAuth } from './auth-provider';
-
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters long'),
@@ -30,7 +29,6 @@ export type LoginFormValues = z.infer<typeof loginSchema>;
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,17 +47,20 @@ export function LoginForm() {
     setFormError(null);
     
     try {
-      const result = await login(values);
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: values.email,
+        password: values.password,
+      });
 
-      if (!result.success) {
-        setFormError(result.message);
-        if (result.fieldErrors) {
-          for (const [field, messages] of Object.entries(result.fieldErrors)) {
-            const message = messages?.[0];
-            if (message && field in values) {
-              form.setError(field as keyof LoginFormValues, { type: 'server', message });
-            }
-          }
+      if (result?.error) {
+        const message = result.error.replace(/^Error:\s*/i, '').trim() || 'Unable to sign in';
+        setFormError(message);
+        if (message.toLowerCase().includes('email')) {
+          form.setError('email', { type: 'server', message });
+        }
+        if (message.toLowerCase().includes('password')) {
+          form.setError('password', { type: 'server', message });
         }
         return;
       }

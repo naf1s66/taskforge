@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -18,7 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useAuth } from './auth-provider';
+import { getApiBaseUrl } from '@/lib/env';
 
 const registerSchema = z
   .object({
@@ -35,7 +36,6 @@ export type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
-  const { register: registerAccount } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,18 +55,46 @@ export function RegisterForm() {
     setFormError(null);
     
     try {
-      const result = await registerAccount({ email: values.email, password: values.password });
+      const response = await fetch(`${getApiBaseUrl()}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        body: JSON.stringify({ email: values.email, password: values.password }),
+      });
 
-      if (!result.success) {
-        setFormError(result.message);
-        if (result.fieldErrors) {
-          for (const [field, messages] of Object.entries(result.fieldErrors)) {
-            const message = messages?.[0];
-            if (message && (field === 'email' || field === 'password')) {
-              form.setError(field as 'email' | 'password', { type: 'server', message });
-            }
+      if (!response.ok) {
+        let message = 'Unable to create your account';
+        try {
+          const body = await response.json();
+          if (typeof body?.error === 'string') {
+            message = body.error;
           }
+          const emailError = body?.details?.fieldErrors?.email?.[0];
+          if (emailError) {
+            form.setError('email', { type: 'server', message: emailError });
+          }
+          const passwordError = body?.details?.fieldErrors?.password?.[0];
+          if (passwordError) {
+            form.setError('password', { type: 'server', message: passwordError });
+          }
+        } catch {
+          // ignore JSON parse errors
         }
+        setFormError(message);
+        return;
+      }
+
+      const signInResult = await signIn('credentials', {
+        redirect: false,
+        email: values.email,
+        password: values.password,
+      });
+
+      if (signInResult?.error) {
+        const message = signInResult.error.replace(/^Error:\s*/i, '').trim() || 'Unable to sign in';
+        setFormError(message);
         return;
       }
 
