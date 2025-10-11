@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { NextAuthConfig } from 'next-auth';
+import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import Google from 'next-auth/providers/google';
 
@@ -43,8 +44,20 @@ const configuredProviders = [
   createGoogleProvider(),
 ].filter(Boolean) as Array<ReturnType<typeof GitHub> | ReturnType<typeof Google>>;
 
+const developmentFallbackProvider = Credentials({
+  id: 'dev-placeholder',
+  name: 'Development Placeholder',
+  credentials: {},
+  authorize: async () => null,
+});
+
+const providers =
+  configuredProviders.length > 0
+    ? configuredProviders
+    : [developmentFallbackProvider];
+
 export const authConfig = {
-  providers: configuredProviders,
+  providers,
   pages: {
     signIn: '/login',
   },
