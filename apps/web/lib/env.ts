@@ -9,5 +9,3 @@ export function getApiBaseUrl() {
 
   return base.replace(/\/$/, '');
 }
-
-export const SESSION_COOKIE_NAME = 'tf_session';

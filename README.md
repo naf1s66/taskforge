@@ -68,11 +68,18 @@ taskforge/
    ```
 3. **Create an account**
    - Visit `http://localhost:3000/register` to create a user. Client-side validation is powered by Zod and mirrors the API contract.
-   - Successful registration stores the issued JWT in a cookie and redirects to `/dashboard`.
-4. **Sign in**
-   - Navigate to `http://localhost:3000/login` and use the same credentials. Errors from the API appear inline, while success updates the shared auth context and redirects.
-5. **Sign out / reset state**
-   - Use the “Sign out” button in the header or clear the `tf_session` cookie if you need to reset the client state between manual tests.
+   - Successful registration provisions an API token, boots a NextAuth session, and redirects to `/dashboard`.
+4. **Sign in / out**
+   - Navigate to `http://localhost:3000/login` and sign in with your credentials. Errors from the API surface inline via the credentials provider.
+   - The header swaps between a loader, user avatar/email, and a “Sign in” CTA as the session resolves. Use the “Sign out” button in the header to invalidate the NextAuth session and propagate logout to the API.
+5. **Session troubleshooting**
+   - If you need to reset state manually, clear the `next-auth.session-token` cookie (and `next-auth.csrf-token`) in your browser. The API token is refreshed automatically by the credentials flow.
+
+### Protected routes
+- `/dashboard` and any routes nested under `app/(protected)` enforce authentication on the server via NextAuth and immediately redirect unauthenticated visitors to `/login`.
+- The public auth pages (login/register) redirect signed-in users back to `/dashboard` to avoid dead-end flows.
+- A lightweight client gate keeps `/dashboard` content hidden until the session hydrates, preventing flicker after navigation.
+- Fixes #128.
 
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).

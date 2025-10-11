@@ -116,6 +116,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
 
     return res.status(201).json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      token,
     });
   });
 
@@ -142,6 +143,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     
     return res.json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      token,
     });
   });
 

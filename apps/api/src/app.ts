@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 
-import { PrismaUserStore, UserStore } from './auth/user-store';
+import { InMemoryUserStore, PrismaUserStore, UserStore } from './auth/user-store';
 import { openApiDocument } from './openapi';
 import { createAuthRouter } from './routes/auth';
 import { getPrismaClient } from './prisma';
@@ -58,7 +58,9 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  const userStore = options.userStore ?? new PrismaUserStore(getPrismaClient());
+  const useInMemoryStore = process.env.USE_IN_MEMORY_USER_STORE === 'true';
+  const userStore =
+    options.userStore ?? (useInMemoryStore ? new InMemoryUserStore() : new PrismaUserStore(getPrismaClient()));
   const authRouterFactory = createAuthRouter({ jwtSecret: options.jwtSecret, userStore });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 

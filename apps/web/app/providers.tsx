@@ -2,13 +2,14 @@
 
 import type { PropsWithChildren } from 'react';
 import { domAnimation, LazyMotion } from 'framer-motion';
-
-import { AuthProvider } from '@/components/auth/auth-provider';
+import { SessionProvider } from 'next-auth/react';
+import { Toaster } from 'sonner';
 
 export function Providers({ children }: PropsWithChildren) {
   return (
-    <AuthProvider>
+    <SessionProvider refetchOnWindowFocus={false}>
+      <Toaster position="top-center" richColors duration={4000} />
       <LazyMotion features={domAnimation}>{children}</LazyMotion>
-    </AuthProvider>
+    </SessionProvider>
   );
 }

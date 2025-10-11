@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server-auth';
+import { SessionGate } from '@/components/auth/session-gate';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
@@ -28,5 +29,5 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     redirect(`/login?${search.toString()}`);
   }
 
-  return <>{children}</>;
+  return <SessionGate>{children}</SessionGate>;
 }
