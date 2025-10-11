@@ -2,13 +2,19 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
+import { signOut } from 'next-auth/react';
 
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/components/auth/auth-provider';
+import { useAuth } from '@/lib/use-auth';
 
-function UserAvatar({ name, image }: { name?: string | null; image?: string | null }) {
+function UserAvatar({
+  name,
+  image,
+}: {
+  name?: string | null;
+  image?: string | null;
+}) {
   if (image) {
     return (
       <Image
@@ -35,9 +41,10 @@ function UserAvatar({ name, image }: { name?: string | null; image?: string | nu
 }
 
 export function SiteHeader() {
-  const router = useRouter();
-  const { user, status, logout } = useAuth();
+  const { user, status } = useAuth();
   const [isSigningOut, startSignOut] = useTransition();
+
+  const displayName = user?.name || user?.email || 'Account';
 
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 pb-6 md:flex-row md:items-center md:justify-between">
@@ -47,15 +54,13 @@ export function SiteHeader() {
         <p className="text-sm text-muted-foreground">Day 2 · Auth scaffolding ready for OAuth hand-off.</p>
       </div>
       <div className="flex items-center gap-4">
-        {status === 'loading' && (
-          <div className="h-10 w-32 animate-pulse rounded-full bg-border/60" />
-        )}
+        {status === 'loading' && <div className="h-10 w-32 animate-pulse rounded-full bg-border/60" />}
         {status === 'authenticated' && user && (
           <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card/60 px-3 py-2">
-            <UserAvatar name={user.email} image={null} />
+            <UserAvatar name={displayName} image={user.image ?? null} />
             <div className="flex min-w-[8rem] flex-col leading-tight">
-              <span className="text-sm font-medium text-foreground">{user.email.split('@')[0]}</span>
-              <span className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString()}</span>
+              <span className="text-sm font-medium text-foreground">{displayName}</span>
+              {user.email && <span className="text-xs text-muted-foreground">{user.email}</span>}
             </div>
             <Button
               variant="outline"
@@ -63,12 +68,9 @@ export function SiteHeader() {
               className="border-border/60"
               disabled={isSigningOut}
               onClick={() =>
-                startSignOut(() =>
-                  logout().then(() => {
-                    router.push('/login');
-                    router.refresh();
-                  }),
-                )
+                startSignOut(() => {
+                  void signOut({ callbackUrl: '/login' });
+                })
               }
             >
               {isSigningOut ? 'Signing out…' : 'Sign out'}

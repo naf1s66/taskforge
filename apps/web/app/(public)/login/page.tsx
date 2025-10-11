@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { LoginForm } from '@/components/auth/login-form';
 import { Card, CardContent } from '@/components/ui/card';
+import { getAuthProviderSummaries } from '@/lib/auth-config';
 
 export const metadata: Metadata = {
   title: 'Sign in • TaskForge',
@@ -11,6 +12,8 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
+  const providers = getAuthProviderSummaries();
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 rounded-3xl border border-border/60 bg-background/40 p-6 shadow-xl shadow-black/20 backdrop-blur lg:flex-row lg:p-10">
       <aside className="flex flex-1 flex-col justify-between gap-6 rounded-2xl border border-border/50 bg-card/50 p-6 text-sm text-muted-foreground">
@@ -28,7 +31,7 @@ export default function LoginPage() {
         </div>
         <ul className="space-y-2 text-xs">
           <li className="flex items-center gap-2 text-muted-foreground/80">
-            <span className="text-muted-foreground/40">•</span> Secure password-based login powered by our API
+            <span className="text-muted-foreground/40">•</span> OAuth-based sign-in for GitHub and Google out of the box
           </li>
           <li className="flex items-center gap-2 text-muted-foreground/80">
             <span className="text-muted-foreground/40">•</span> Session persists across refreshes for smooth workflows
@@ -40,7 +43,7 @@ export default function LoginPage() {
       </aside>
       <Card className="flex-1 border-border/70 bg-card/80">
         <CardContent className="p-6">
-          <LoginForm />
+          <LoginForm providers={providers} />
         </CardContent>
       </Card>
     </div>

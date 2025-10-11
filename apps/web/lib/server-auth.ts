@@ -1,39 +1,12 @@
 import 'server-only';
 
-import { cookies } from 'next/headers';
+import type { Session } from 'next-auth';
 
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from './env';
+import { auth } from './auth';
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  createdAt: string;
-};
+export type AuthenticatedUser = NonNullable<Session['user']>;
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  const cookieStore = cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const res = await fetch(`${getApiBaseUrl()}/auth/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const data = (await res.json()) as { user?: AuthUser };
-    return data.user ?? null;
-  } catch (error) {
-    console.error('[auth] Failed to load user in server context', error);
-    return null;
-  }
+export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
+  const session = await auth();
+  return session?.user ?? null;
 }

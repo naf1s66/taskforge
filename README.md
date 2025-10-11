@@ -53,26 +53,32 @@ taskforge/
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
-## Running frontend auth
-1. **Set environment variables**
-   - API (`apps/api/.env`): ensure `JWT_SECRET` is set (defaults to `dev-secret`) and configure database credentials if you are not using the in-memory store.
-   - Web (`apps/web/.env` or Docker env):
-     ```bash
-     NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/taskforge/v1
-     ```
-     Adjust the host/port to match where the API server is running.
-2. **Start both servers**
+## Auth Quickstart
+1. **Configure NextAuth secrets** – in `apps/web/.env` (or Docker env), set:
    ```bash
-   pnpm -C apps/api dev
+   NEXTAUTH_URL=http://localhost:3000
+   NEXTAUTH_SECRET=<random-string>
+   ```
+   The default template in `infra/env/web.env.example` provides local-friendly values.
+2. **Optional OAuth providers** – supply any provider keys you have:
+   ```bash
+   GITHUB_ID=<github-client-id>
+   GITHUB_SECRET=<github-client-secret>
+   GOOGLE_ID=<google-oauth-client-id>
+   GOOGLE_SECRET=<google-oauth-client-secret>
+   ```
+   Leaving these blank keeps the login screen in a safe “No providers configured” state for development demos.
+3. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end.
+4. **Run the web app** – launch the Next.js dev server:
+   ```bash
    pnpm -C apps/web dev
    ```
-3. **Create an account**
-   - Visit `http://localhost:3000/register` to create a user. Client-side validation is powered by Zod and mirrors the API contract.
-   - Successful registration stores the issued JWT in a cookie and redirects to `/dashboard`.
-4. **Sign in**
-   - Navigate to `http://localhost:3000/login` and use the same credentials. Errors from the API appear inline, while success updates the shared auth context and redirects.
-5. **Sign out / reset state**
-   - Use the “Sign out” button in the header or clear the `tf_session` cookie if you need to reset the client state between manual tests.
+   Visit `http://localhost:3000/login` to confirm:
+   - With no provider keys, the page renders a friendly callout explaining how to enable OAuth.
+   - With provider keys set, sign-in buttons appear and sessions flow through NextAuth’s `SessionProvider`.
+5. **Access session data** –
+   - Server components use `getCurrentUser()` (`@/lib/server-auth`) to read the active session.
+   - Client components call `useAuth()` (`@/lib/use-auth`) for `{ user, status }`, built on top of `next-auth/react`’s `useSession()` hook.
 
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
