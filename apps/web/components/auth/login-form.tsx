@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -15,12 +16,16 @@ type LoginFormProps = {
 
 export function LoginForm({ providers }: LoginFormProps) {
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   async function handleSignIn(providerId: string) {
     setActiveProvider(providerId);
 
     try {
-      await signIn(providerId, { callbackUrl: '/dashboard' });
+      const from = searchParams?.get('from');
+      const callbackUrl = from && from.startsWith('/') ? from : '/dashboard';
+
+      await signIn(providerId, { callbackUrl });
     } finally {
       setActiveProvider(null);
     }
