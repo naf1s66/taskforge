@@ -1,14 +1,13 @@
 'use client';
 
 import type { PropsWithChildren } from 'react';
+import { SessionProvider } from 'next-auth/react';
 import { domAnimation, LazyMotion } from 'framer-motion';
-
-import { AuthProvider } from '@/components/auth/auth-provider';
 
 export function Providers({ children }: PropsWithChildren) {
   return (
-    <AuthProvider>
+    <SessionProvider>
       <LazyMotion features={domAnimation}>{children}</LazyMotion>
-    </AuthProvider>
+    </SessionProvider>
   );
 }
