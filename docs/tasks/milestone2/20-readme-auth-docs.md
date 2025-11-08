@@ -4,6 +4,8 @@
 - Expand the project README to include setup and usage instructions for the new authentication system.
 - Document environment variables, dev workflows, and testing steps related to auth.
 
+**Status:** Pending — README still lacks JWT, OAuth, and seed-user guidance.
+
 ## Acceptance Criteria
 - [ ] README outlines how to configure JWT secrets and OAuth credentials for local and production environments.
 - [ ] Instructions cover running migrations/seeds and performing basic auth smoke tests.

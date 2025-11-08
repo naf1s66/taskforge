@@ -4,6 +4,8 @@
 - Review PRD and ADR documents to capture the finalized authentication architecture and any deviations from original plans.
 - Update diagrams or decision logs to reflect new flows (JWT, OAuth, NextAuth integration).
 
+**Status:** Pending — PRD/ADR content still reflects pre-integration plans.
+
 ## Acceptance Criteria
 - [ ] `docs/PRD.md` auth sections reflect the implemented features and user journeys.
 - [ ] Relevant ADRs are amended or new ADRs added to document significant decisions.

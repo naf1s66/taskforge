@@ -4,6 +4,8 @@
 - Add Google OAuth 2.0 support to the auth stack (API + NextAuth) to allow social sign-in.
 - Handle account linking between OAuth profiles and existing credential users when emails overlap.
 
+**Status:** Pending � providers are declared but no Google credentials, database adapter, or linking logic is wired.
+
 ## Acceptance Criteria
 - [ ] Google OAuth client credentials are consumed from environment variables and documented.
 - [ ] Users can complete the OAuth login flow end-to-end (frontend → backend → persisted session).

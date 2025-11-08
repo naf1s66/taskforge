@@ -4,6 +4,8 @@
 - Introduce password hashing for credential-based users using bcrypt or argon2.
 - Ensure hashes are applied during registration and verified during login.
 
+**Status:** Completed (merged).
+
 ## Acceptance Criteria
 - [x] Passwords are never stored in plaintext in the database.
 - [x] Registration flow hashes incoming passwords before persistence.

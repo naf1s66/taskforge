@@ -4,6 +4,8 @@
 - Define Zod schemas for auth-related request payloads (register, login, logout, token refresh if applicable).
 - Apply validation middleware to ensure invalid requests return descriptive 4xx responses.
 
+**Status:** Completed (merged).
+
 ## Acceptance Criteria
 - [x] Zod schemas live alongside existing validation utilities in `apps/api/src/schemas` (or a new auth directory).
 - [x] Register/login routes reject malformed payloads with actionable error messages.

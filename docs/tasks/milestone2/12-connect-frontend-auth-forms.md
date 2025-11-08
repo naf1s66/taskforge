@@ -4,6 +4,8 @@
 - Wire login and registration forms to call the backend REST endpoints and handle responses.
 - Persist returned tokens/session data using the chosen auth framework.
 
+**Status:** Pending — UI currently relies on NextAuth OAuth buttons and never calls the API credential endpoints.
+
 ## Acceptance Criteria
 - [ ] Form submissions trigger fetch/Axios calls to `/auth/register` and `/auth/login` endpoints.
 - [ ] Successful responses update client auth state and navigate to the dashboard.

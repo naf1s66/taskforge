@@ -102,5 +102,5 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - **Day 7:** Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); smoke test; v1 release.
 
 ### Auth Status (Day 2)
-- ✅ Web: NextAuth route at `/api/auth/[...nextauth]`, GitHub + Google providers, custom `/login`, session header, and protected layout redirecting unauthenticated users.
-- ⚙️ Next: issue JWTs for the API, persist users in Prisma, expose `/api/taskforge/v1/me`, and sync sign-out between web + API.
+- [Done] Web: NextAuth route at /api/auth/[...nextauth], SessionProvider + useAuth hook, custom /login + /register, protected layout redirects, and Prisma auth models/seed in place.
+- [Open] API /auth/* responses must return JWTs, OAuth logins need Prisma-backed session bridging to issue tf_session, docs require updates, Docker/CI smoke tests are missing, and the UI still needs credential forms plus dashboard data.

@@ -4,9 +4,11 @@
 - Implement a basic dashboard view that requires authentication to access.
 - Display placeholder task data to confirm the protected route wiring works.
 
+**Status:** Pending — route protection works, but the dashboard still shows static placeholder content.
+
 ## Acceptance Criteria
-- [ ] Dashboard route uses server-side or client-side guards to restrict access to authenticated users.
-- [ ] Unauthenticated visitors are redirected to the login page.
+- [x] Dashboard route uses server-side or client-side guards to restrict access to authenticated users.
+- [x] Unauthenticated visitors are redirected to the login page.
 - [ ] Authenticated users see their profile info and/or seeded task overview.
 
 ## Notes

@@ -4,9 +4,11 @@
 - Build REST endpoints for register, login, logout, and current-user retrieval under `/auth/*`.
 - Issue and revoke JWT access/refresh tokens according to the security requirements.
 
+**Status:** Pending — endpoints exist but responses do not return the documented JWTs.
+
 ## Acceptance Criteria
 - [x] `/auth/register`, `/auth/login`, `/auth/logout`, and `/auth/me` routes exist and are wired into the Express router.
-- [x] Successful registration and login return signed JWTs and relevant user payloads.
+- [ ] Successful registration and login return signed JWTs and relevant user payloads.
 - [x] Logout invalidates refresh tokens/server-side session state as required (stateless JWT at present).
 - [x] `/auth/me` returns the authenticated user when provided a valid token and rejects invalid/expired tokens.
 

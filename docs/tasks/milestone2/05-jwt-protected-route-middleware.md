@@ -4,6 +4,8 @@
 - Replace the placeholder auth middleware with JWT verification that decodes and validates tokens on protected routes.
 - Attach the authenticated user context to the request for downstream handlers.
 
+**Status:** Completed (merged).
+
 ## Acceptance Criteria
 - [x] Middleware verifies signature, expiration, and revocation status of incoming tokens.
 - [x] Requests with missing or invalid tokens receive a 401 response with a consistent error body.
