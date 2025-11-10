@@ -102,7 +102,11 @@ export function RegisterForm() {
             }
           }
 
-          const message = (payload && 'error' in payload && payload.error) || 'Unable to create an account right now.';
+          const defaultMessage =
+            response.status >= 500
+              ? 'We could not create your account due to a server issue. Please try again shortly.'
+              : 'Unable to create an account right now.';
+          const message = (payload && 'error' in payload && payload.error) || defaultMessage;
 
           if (response.status === 409) {
             form.setError('email', { message: 'An account with this email already exists.' });
@@ -116,7 +120,7 @@ export function RegisterForm() {
         router.refresh();
       } catch (error) {
         console.error('[auth] Registration request failed', error);
-        setFormError('We could not create your account. Please try again.');
+        setFormError('We could not create your account. Please check your connection and try again.');
       } finally {
         setIsSubmitting(false);
       }
@@ -131,7 +135,12 @@ export function RegisterForm() {
         <p className="text-sm text-muted-foreground">Start planning sprints, managing tasks, and shipping faster.</p>
       </div>
       <Form {...form}>
-        <form className="space-y-4 text-left" onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+        <form
+          className="space-y-4 text-left"
+          onSubmit={form.handleSubmit(handleSubmit)}
+          noValidate
+          aria-busy={isSubmitting}
+        >
           <FormField
             control={form.control}
             name="email"
@@ -182,6 +191,13 @@ export function RegisterForm() {
               </>
             )}
           </Button>
+          <p aria-live="polite" className="sr-only">
+            {isSubmitting
+              ? 'Submitting your registration request.'
+              : formError
+                ? `Registration failed: ${formError}`
+                : 'Registration form ready.'}
+          </p>
         </form>
       </Form>
       {formError && (
