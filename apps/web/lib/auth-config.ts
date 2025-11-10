@@ -84,7 +84,16 @@ export const authConfig = {
       return token;
     },
     async session({ session, user, token }) {
-      const resolvedUserId = user?.id ?? token?.sub ?? session.user?.id;
+      let resolvedUserId = user?.id ?? token?.sub ?? session.user?.id;
+
+      if (!resolvedUserId && session.user?.email) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: session.user.email },
+          select: { id: true },
+        });
+
+        resolvedUserId = existingUser?.id;
+      }
 
       if (session.user && resolvedUserId) {
         session.user.id = resolvedUserId;
