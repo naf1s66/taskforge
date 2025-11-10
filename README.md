@@ -58,8 +58,10 @@ taskforge/
    ```bash
    NEXTAUTH_URL=http://localhost:3000
    NEXTAUTH_SECRET=<random-string>
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
    ```
-   The default template in `infra/env/web.env.example` provides local-friendly values.
+   The default template in `infra/env/web.env.example` now includes `DATABASE_URL`. When running inside Docker Compose, keep the
+   host as `db`; for local `pnpm dev` sessions, point it at your accessible Postgres host (e.g., `localhost`).
 2. **Optional OAuth providers** – supply any provider keys you have:
    ```bash
    GITHUB_ID=<github-client-id>
@@ -68,15 +70,20 @@ taskforge/
    GOOGLE_SECRET=<google-oauth-client-secret>
    ```
    Leaving these blank keeps the login screen in a safe “No providers configured” state for development demos.
-3. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end.
-4. **Run the web app** – launch the Next.js dev server:
+3. **Run Prisma migrations** – make sure the shared database has the auth tables NextAuth expects:
+   ```bash
+   pnpm -C apps/api prisma migrate deploy
+   ```
+   Run this any time the Prisma schema changes (or `prisma migrate dev` when iterating locally).
+4. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end.
+5. **Run the web app** – launch the Next.js dev server:
    ```bash
    pnpm -C apps/web dev
    ```
    Visit `http://localhost:3000/login` to confirm:
    - With no provider keys, the page renders a friendly callout explaining how to enable OAuth.
    - With provider keys set, sign-in buttons appear and sessions flow through NextAuth’s `SessionProvider`.
-5. **Access session data** –
+6. **Access session data** –
    - Server components use `getCurrentUser()` (`@/lib/server-auth`) to read the active session.
    - Client components call `useAuth()` (`@/lib/use-auth`) for `{ user, status }`, built on top of `next-auth/react`’s `useSession()` hook.
 
