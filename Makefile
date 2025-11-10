@@ -47,6 +47,10 @@ up:
 down:
 	cd $(INFRA_DIR) && docker compose down
 
+.PHONY: auth-smoke
+auth-smoke:
+	cd $(INFRA_DIR) && docker compose exec -T web node scripts/docker-auth-smoke.mjs
+
 .PHONY: swagger
 swagger:
 	$(PKG_MGR) -C $(API_DIR) run gen:openapi
