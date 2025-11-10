@@ -45,15 +45,15 @@ up:
 
 .PHONY: down
 down:
-        cd $(INFRA_DIR) && docker compose down
+	cd $(INFRA_DIR) && docker compose down
 
 .PHONY: auth-smoke
 auth-smoke:
-        cd $(INFRA_DIR) && docker compose exec -T web node scripts/docker-auth-smoke.mjs
+	cd $(INFRA_DIR) && docker compose exec -T web node scripts/docker-auth-smoke.mjs
 
 .PHONY: swagger
 swagger:
-        $(PKG_MGR) -C $(API_DIR) run gen:openapi
+	$(PKG_MGR) -C $(API_DIR) run gen:openapi
 
 .PHONY: docs
 docs: swagger
