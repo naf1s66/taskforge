@@ -56,14 +56,7 @@ interface BridgeResponse {
   tokens: { accessToken: string };
 }
 
-export async function ensureApiSessionCookie(user: AuthenticatedUser): Promise<void> {
-  const cookieStore = cookies();
-  const existing = cookieStore.get(SESSION_COOKIE_NAME);
-
-  if (existing) {
-    return;
-  }
-
+async function requestBridgeToken(user: AuthenticatedUser): Promise<string> {
   const secret = getBridgeSecret();
   const bridgeUrl = new URL('auth/session-bridge', `${getApiBaseUrl()}/`).toString();
   const response = await fetch(bridgeUrl, {
@@ -87,8 +80,7 @@ export async function ensureApiSessionCookie(user: AuthenticatedUser): Promise<v
     throw new Error('Bridge response did not include an access token');
   }
 
-  const options = getSessionCookieOptions();
-  cookieStore.set({ ...options, value: payload.tokens.accessToken });
+  return payload.tokens.accessToken;
 }
 
 export function expireApiSessionCookie(): void {
@@ -96,4 +88,15 @@ export function expireApiSessionCookie(): void {
   const options = getSessionCookieOptions();
   cookieStore.set({ ...options, value: '', maxAge: 0 });
   cookieStore.set({ ...options, value: '', expires: new Date(0) });
+}
+
+export async function getBridgedAccessToken(user: AuthenticatedUser): Promise<string> {
+  const cookieStore = cookies();
+  const existing = cookieStore.get(SESSION_COOKIE_NAME);
+
+  if (existing?.value) {
+    return existing.value;
+  }
+
+  return requestBridgeToken(user);
 }

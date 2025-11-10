@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server-auth';
-import { ensureApiSessionCookie } from '@/lib/session-bridge';
+import { SESSION_COOKIE_NAME } from '@/lib/env';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
   const headerList = headers();
@@ -29,12 +29,12 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     redirect(`/login?${search.toString()}`);
   }
 
-  try {
-    await ensureApiSessionCookie(user);
-  } catch (error) {
-    console.error('[auth] Failed to ensure API session', error);
-    const search = new URLSearchParams({ from: fromPath, reason: 'session-bridge' });
-    redirect(`/login?${search.toString()}`);
+  const cookieStore = cookies();
+  const existing = cookieStore.get(SESSION_COOKIE_NAME);
+
+  if (!existing) {
+    const search = new URLSearchParams({ from: fromPath });
+    redirect(`/auth/session-bridge?${search.toString()}`);
   }
 
   return <>{children}</>;
