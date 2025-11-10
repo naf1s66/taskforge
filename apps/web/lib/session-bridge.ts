@@ -90,11 +90,43 @@ export function expireApiSessionCookie(): void {
   cookieStore.set({ ...options, value: '', expires: new Date(0) });
 }
 
+function decodeJwtExpiration(token: string): number | undefined {
+  const parts = token.split('.');
+  if (parts.length < 2) {
+    return undefined;
+  }
+
+  const payloadSegment = parts[1]
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const paddedPayload = payloadSegment.padEnd(Math.ceil(payloadSegment.length / 4) * 4, '=');
+
+  try {
+    const payload = JSON.parse(Buffer.from(paddedPayload, 'base64').toString('utf8'));
+    if (typeof payload?.exp === 'number') {
+      return payload.exp * 1000;
+    }
+  } catch {
+    // ignore parse errors and treat the token as expired
+  }
+
+  return undefined;
+}
+
+export function isSessionTokenExpired(token: string): boolean {
+  const expiration = decodeJwtExpiration(token);
+  if (!expiration) {
+    return true;
+  }
+
+  return expiration <= Date.now();
+}
+
 export async function getBridgedAccessToken(user: AuthenticatedUser): Promise<string> {
   const cookieStore = cookies();
   const existing = cookieStore.get(SESSION_COOKIE_NAME);
 
-  if (existing?.value) {
+  if (existing?.value && !isSessionTokenExpired(existing.value)) {
     return existing.value;
   }
 

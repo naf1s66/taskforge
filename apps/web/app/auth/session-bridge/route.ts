@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { SESSION_COOKIE_NAME } from '@/lib/env';
-import { getBridgedAccessToken, getSessionCookieOptions } from '@/lib/session-bridge';
+import {
+  getBridgedAccessToken,
+  getSessionCookieOptions,
+  isSessionTokenExpired,
+} from '@/lib/session-bridge';
 import { getCurrentUser } from '@/lib/server-auth';
 
 function sanitizeReturnPath(value: string | null): string {
@@ -22,7 +26,9 @@ export async function GET(request: NextRequest) {
   const fromParam = request.nextUrl.searchParams.get('from');
   const fromPath = sanitizeReturnPath(fromParam);
 
-  if (request.cookies.has(SESSION_COOKIE_NAME)) {
+  const existingCookie = request.cookies.get(SESSION_COOKIE_NAME);
+
+  if (existingCookie?.value && !isSessionTokenExpired(existingCookie.value)) {
     return NextResponse.redirect(new URL(fromPath, request.nextUrl.origin));
   }
 
