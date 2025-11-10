@@ -26,7 +26,10 @@ services:
 
   api:
     build:
-      context: ../apps/api
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        DATABASE_URL: postgresql://postgres:postgres@db:5432/taskforge?schema=public
     ports: ["4000:4000"]
     env_file:
       - ./env/api.env.example
@@ -38,11 +41,16 @@ services:
 
   web:
     build:
-      context: ../apps/web
+      context: ..
+      dockerfile: apps/web/Dockerfile
     ports: ["3000:3000"]
     env_file:
       - ./env/web.env.example
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_started
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:

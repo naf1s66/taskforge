@@ -50,6 +50,11 @@ taskforge/
 6. **Smoke test**
    - API health: `curl http://localhost:4000/api/taskforge/v1/health`
    - Web UI: http://localhost:3000
+7. **Docker auth smoke test**
+   ```bash
+   make auth-smoke
+   ```
+   This runs a scripted register/login/bridge check from inside the web container to confirm it can reach the API with the shared `SESSION_BRIDGE_SECRET`.
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
@@ -81,7 +86,7 @@ taskforge/
    pnpm -C apps/api prisma migrate deploy
    ```
    Run this any time the Prisma schema changes (or `prisma migrate dev` when iterating locally).
-4. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end.
+4. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end. When running under Docker Compose the templates already point server-side traffic at `http://api:4000/...` so the web container talks to the API service directly, while browser traffic continues to use `http://localhost:4000/...` for CORS-friendly requests.
 5. **Run the web app** – launch the Next.js dev server:
    ```bash
    pnpm -C apps/web dev
