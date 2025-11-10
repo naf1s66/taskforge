@@ -1,66 +1,100 @@
-'use client';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
-import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { getCurrentUser } from '@/lib/server-auth';
+import { getApiBaseUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 
-import { Button } from '@/components/ui/button';
+import { DashboardContent } from './dashboard-content';
+import type { DashboardTask, DashboardUser } from './types';
 
-const columns = [
-  { title: 'Todo', description: 'Capture ideas and tasks as they arise.' },
-  { title: 'In Progress', description: 'Stay focused with a clear work-in-progress limit.' },
-  { title: 'Done', description: 'Celebrate progress and ship consistently.' },
-];
+import type { TaskPriority, TaskStatus } from '@taskforge/shared';
 
-export default function DashboardPage() {
-  return (
-    <div className="space-y-10">
-      <section className="grid gap-6 md:grid-cols-[2fr,1fr] md:items-center">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="space-y-4"
-        >
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 px-3 py-1 text-xs uppercase tracking-[0.2em] text-primary">
-            <Sparkles className="h-3 w-3" /> Dashboard
-          </span>
-          <h2 className="text-4xl font-semibold leading-tight">Welcome to your TaskForge workspace</h2>
-          <p className="text-lg text-muted-foreground">
-            Tailwind, shadcn/ui, and Framer Motion are wired up so we can focus on building TaskForge without rethinking our design system on every page.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button>
-              Review checklist
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost">View docs</Button>
-          </div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="rounded-2xl border border-border/80 bg-card/40 p-6 shadow-lg shadow-black/20 backdrop-blur"
-        >
-          <p className="text-sm text-muted-foreground">
-            Shared tokens, responsive primitives, and expressive motion are ready across the stack. Import `@taskforge/shared` once it exposes fully typed DTOs.
-          </p>
-        </motion.div>
-      </section>
-      <section className="grid gap-4 md:grid-cols-3">
-        {columns.map((column, index) => (
-          <motion.article
-            key={column.title}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 * index, duration: 0.4 }}
-            className="rounded-xl border border-border/70 bg-card/40 p-5 shadow-sm backdrop-blur"
-          >
-            <h3 className="text-lg font-semibold text-foreground/90">{column.title}</h3>
-            <p className="text-sm text-muted-foreground">{column.description}</p>
-          </motion.article>
-        ))}
-      </section>
-    </div>
-  );
+function isTaskStatus(value: unknown): value is TaskStatus {
+  return value === 'TODO' || value === 'IN_PROGRESS' || value === 'DONE';
+}
+
+function isTaskPriority(value: unknown): value is TaskPriority {
+  return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH';
+}
+
+function parseTask(item: unknown): DashboardTask | null {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+
+  const record = item as Record<string, unknown>;
+  const id = typeof record.id === 'string' ? record.id : null;
+  const title = typeof record.title === 'string' ? record.title : null;
+
+  if (!id || !title) {
+    return null;
+  }
+
+  const description = typeof record.description === 'string' ? record.description : null;
+  const status = isTaskStatus(record.status) ? record.status : 'TODO';
+  const priority = isTaskPriority(record.priority) ? record.priority : 'MEDIUM';
+  const dueDate = typeof record.dueDate === 'string' ? record.dueDate : null;
+
+  return {
+    id,
+    title,
+    description,
+    status,
+    priority,
+    dueDate,
+  } satisfies DashboardTask;
+}
+
+async function getDashboardTasks(): Promise<DashboardTask[]> {
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+
+  if (!sessionCookie?.value) {
+    return [];
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/tasks`, {
+      method: 'GET',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,
+      },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error('Unable to reach the TaskForge API.');
+  }
+
+  if (response.status === 401) {
+    redirect(`/api/auth/signin?callbackUrl=${encodeURIComponent('/dashboard')}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch dashboard tasks (status ${response.status}).`);
+  }
+
+  const payload = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
+  if (!payload?.items?.length) {
+    return [];
+  }
+
+  return payload.items.map(parseTask).filter(Boolean) as DashboardTask[];
+}
+
+export default async function DashboardPage() {
+  const [user, tasks] = await Promise.all([getCurrentUser(), getDashboardTasks()]);
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const dashboardUser: DashboardUser = {
+    id: user.id,
+    name: user.name ?? null,
+    email: user.email ?? null,
+    image: user.image ?? null,
+  };
+
+  return <DashboardContent user={dashboardUser} tasks={tasks} />;
 }
