@@ -235,45 +235,30 @@ export const authConfig = {
       }
 
       const emailVerifiedRaw = typedProfile.email_verified;
-      let isEmailVerified = false;
+      const emailVerified =
+        typeof emailVerifiedRaw === 'boolean'
+          ? emailVerifiedRaw
+          : typeof emailVerifiedRaw === 'string'
+            ? emailVerifiedRaw.toLowerCase() === 'true'
+            : null;
 
       if (account.provider === 'google') {
-        const emailVerified =
-          typeof emailVerifiedRaw === 'boolean'
-            ? emailVerifiedRaw
-            : typeof emailVerifiedRaw === 'string'
-              ? emailVerifiedRaw.toLowerCase() === 'true'
-              : true;
-
-        if (!emailVerified) {
+        if (emailVerified !== true) {
           console.warn('[auth] Google sign-in rejected due to unverified email', {
             email: normalizedEmail,
           });
           return false;
         }
-
-        isEmailVerified = true;
-      } else {
-        const emailVerified =
-          typeof emailVerifiedRaw === 'boolean'
-            ? emailVerifiedRaw
-            : typeof emailVerifiedRaw === 'string'
-              ? emailVerifiedRaw.toLowerCase() === 'true'
-              : null;
-
-        if (emailVerified !== true) {
-          console.warn('[auth] OAuth sign-in rejected due to unverifiable email', {
-            provider: account.provider,
-            email: normalizedEmail,
-          });
-          return false;
-        }
-
-        isEmailVerified = true;
+      } else if (emailVerified === false) {
+        console.warn('[auth] OAuth sign-in rejected due to explicitly unverified email', {
+          provider: account.provider,
+          email: normalizedEmail,
+        });
+        return false;
       }
 
       user.email = normalizedEmail;
-      user.emailVerified = isEmailVerified ? new Date() : null;
+      user.emailVerified = emailVerified ? new Date() : null;
 
       return true;
     },
