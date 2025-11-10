@@ -58,8 +58,10 @@ taskforge/
    ```bash
    NEXTAUTH_URL=http://localhost:3000
    NEXTAUTH_SECRET=<random-string>
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
    ```
-   The default template in `infra/env/web.env.example` provides local-friendly values.
+   The default template in `infra/env/web.env.example` now includes `DATABASE_URL`. When running inside Docker Compose, keep the
+   host as `db`; for local `pnpm dev` sessions, point it at your accessible Postgres host (e.g., `localhost`).
 2. **Optional OAuth providers** – supply any provider keys you have:
    ```bash
    GITHUB_ID=<github-client-id>
