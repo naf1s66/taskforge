@@ -53,28 +53,33 @@ async function getDashboardTasks(): Promise<DashboardTask[]> {
     return [];
   }
 
+  let response: Response;
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/tasks`, {
+    response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/tasks`, {
       method: 'GET',
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,
       },
       cache: 'no-store',
     });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const payload = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
-    if (!payload?.items?.length) {
-      return [];
-    }
-
-    return payload.items.map(parseTask).filter(Boolean) as DashboardTask[];
   } catch {
+    throw new Error('Unable to reach the TaskForge API.');
+  }
+
+  if (response.status === 401) {
+    redirect(`/api/auth/signin?callbackUrl=${encodeURIComponent('/dashboard')}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch dashboard tasks (status ${response.status}).`);
+  }
+
+  const payload = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
+  if (!payload?.items?.length) {
     return [];
   }
+
+  return payload.items.map(parseTask).filter(Boolean) as DashboardTask[];
 }
 
 export default async function DashboardPage() {
