@@ -65,7 +65,7 @@ export async function ensureApiSessionCookie(user: AuthenticatedUser): Promise<v
   }
 
   const secret = getBridgeSecret();
-  const bridgeUrl = `${getApiBaseUrl()}/v1/auth/session-bridge`;
+  const bridgeUrl = new URL('auth/session-bridge', `${getApiBaseUrl()}/`).toString();
   const response = await fetch(bridgeUrl, {
     method: 'POST',
     headers: {
