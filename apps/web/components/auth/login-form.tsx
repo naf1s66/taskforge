@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowRight, Loader2, LogIn } from 'lucide-react';
+import { ArrowRight, Info, Loader2, LogIn } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -58,7 +58,20 @@ export function LoginForm({ providers }: LoginFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fromParam = searchParams?.get('from');
+  const reasonParam = searchParams?.get('reason');
   const redirectPath = useMemo(() => sanitizeReturnPath(fromParam), [fromParam]);
+  const reasonMessage = useMemo(() => {
+    if (!reasonParam) {
+      return null;
+    }
+
+    switch (reasonParam) {
+      case 'session-bridge':
+        return 'Your session expired. Please sign in again to continue where you left off.';
+      default:
+        return null;
+    }
+  }, [reasonParam]);
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -114,6 +127,11 @@ export function LoginForm({ providers }: LoginFormProps) {
 
           const message =
             (payload && 'error' in payload && payload.error) || 'Unable to sign in with the provided credentials.';
+
+          if (response.status === 401) {
+            form.setError('password', { message: 'The email and password combination is incorrect.' });
+          }
+
           setFormError(message);
           return;
         }
@@ -140,6 +158,13 @@ export function LoginForm({ providers }: LoginFormProps) {
       </div>
       <Form {...form}>
         <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+          {reasonMessage && (
+            <Alert>
+              <Info className="h-4 w-4" aria-hidden />
+              <AlertTitle>Please sign in again</AlertTitle>
+              <AlertDescription>{reasonMessage}</AlertDescription>
+            </Alert>
+          )}
           <FormField
             control={form.control}
             name="email"

@@ -103,6 +103,11 @@ export function RegisterForm() {
           }
 
           const message = (payload && 'error' in payload && payload.error) || 'Unable to create an account right now.';
+
+          if (response.status === 409) {
+            form.setError('email', { message: 'An account with this email already exists.' });
+          }
+
           setFormError(message);
           return;
         }
