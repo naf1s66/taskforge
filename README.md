@@ -70,6 +70,12 @@ taskforge/
    GOOGLE_SECRET=<google-oauth-client-secret>
    ```
    Leaving these blank keeps the login screen in a safe “No providers configured” state for development demos.
+   - **Google Cloud setup**
+     1. Create an OAuth consent screen (External) in [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+     2. Add an OAuth 2.0 Client ID (Web application) with authorized origins `http://localhost:3000` and redirect URI `http://localhost:3000/api/auth/callback/google` for local dev.
+     3. Copy the generated **Client ID** and **Client Secret** into the environment variables above. Restart the Next.js server so NextAuth picks up the provider.
+     4. In production, repeat with your deployed domains and update the allowed origins/redirects to match.
+   - Accounts created through Google reuse existing credential users when the email matches, so users can link social login after registering with a password.
 3. **Run Prisma migrations** – make sure the shared database has the auth tables NextAuth expects:
    ```bash
    pnpm -C apps/api prisma migrate deploy
