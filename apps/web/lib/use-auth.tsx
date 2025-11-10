@@ -115,6 +115,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         const status = (fetchError as Error & { status?: number }).status ?? 0;
+
+        if (status === 401) {
+          // A 401 simply means no authenticated user; treat it as an idle session
+          setApiUser(null);
+          setError(null);
+          return;
+        }
+
         const friendlyMessage =
           status >= 500
             ? 'We were unable to confirm your session due to a server issue. Please try again shortly.'
