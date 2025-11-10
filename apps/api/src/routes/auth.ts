@@ -14,6 +14,10 @@ const registerSchema = z.object({
 });
 
 const loginSchema = registerSchema;
+const sessionBridgeSchema = z.object({
+  userId: z.string().min(1),
+  email: z.string().email().optional(),
+});
 
 // Helper function to get cookie domain for cross-subdomain sharing
 function getCookieDomain(): string | undefined {
@@ -65,6 +69,7 @@ export interface AuthRouterOptions {
   tokenService?: TokenService;
   jwtSecret?: string;
   jwtRefreshSecret?: string;
+  sessionBridgeSecret?: string;
   bcryptSaltRounds?: number;
   accessTokenExpiresIn?: string | number;
   refreshTokenExpiresIn?: string | number;
@@ -116,6 +121,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       accessExpiresIn,
       refreshExpiresIn,
     });
+  const bridgeSecret = options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET;
   const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
 
   const router = Router();
@@ -184,6 +190,49 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     const { maxAge, ...clearOptions } = cookieOptions;
     res.clearCookie('tf_session', clearOptions);
     return res.status(200).json({ success: true });
+  });
+
+  router.post('/session-bridge', async (req, res) => {
+    if (!bridgeSecret) {
+      return res.status(503).json({ error: 'Session bridge is not configured' });
+    }
+
+    const providedSecret = req.get('x-session-bridge-secret');
+
+    if (!providedSecret || providedSecret !== bridgeSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parse = sessionBridgeSchema.safeParse(req.body);
+
+    if (!parse.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parse.error.flatten() });
+    }
+
+    const { userId, email } = parse.data;
+
+    let user = await store.findById(userId);
+
+    if (!user && email) {
+      user = await store.findByEmail(email);
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (email && user.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(409).json({ error: 'User email mismatch' });
+    }
+
+    const issuedTokens = await tokens.issueTokens(user.id);
+
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
+
+    return res.json({
+      user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
+    });
   });
 
   router.get('/me', authMiddleware, (_req, res) => {

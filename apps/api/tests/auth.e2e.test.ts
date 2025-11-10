@@ -14,9 +14,10 @@ function uniqueEmail(prefix = 'user'): string {
 describe('Auth API', () => {
   let agent: SuperTest<Test>;
   let userStore: InMemoryUserStore;
+  const sessionBridgeSecret = 'test-bridge-secret';
 
   beforeEach(() => {
-    const context = createTestAgent();
+    const context = createTestAgent({ sessionBridgeSecret });
     agent = context.agent;
     userStore = context.userStore;
   });
@@ -30,6 +31,12 @@ describe('Auth API', () => {
       .post('/api/taskforge/v1/auth/register')
       .send({ email, password })
       .expect(201);
+
+  const bridgeSession = (payload: { userId: string; email?: string }) =>
+    agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send(payload);
 
   it('registers a user, returns tokens, and issues a session cookie', async () => {
     const response = await register();
@@ -166,5 +173,39 @@ describe('Auth API', () => {
     expect(logout.headers['set-cookie']).toEqual(
       expect.arrayContaining([expect.stringContaining('tf_session=;')]),
     );
+  });
+
+  it('issues a session cookie through the bridge when authorized', async () => {
+    const { body } = await register();
+
+    const response = await bridgeSession({ userId: body.user.id, email: body.user.email });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        user: expect.objectContaining({ id: body.user.id, email: body.user.email }),
+        tokens: expect.objectContaining({ accessToken: expect.any(String) }),
+      }),
+    );
+    expect(response.headers['set-cookie']).toEqual(
+      expect.arrayContaining([expect.stringContaining('tf_session=')]),
+    );
+  });
+
+  it('rejects bridge attempts with an invalid secret', async () => {
+    const { body } = await register();
+
+    const response = await agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', 'not-the-secret')
+      .send({ userId: body.user.id, email: body.user.email });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects bridge attempts for unknown users', async () => {
+    const response = await bridgeSession({ userId: randomUUID(), email: uniqueEmail('ghost') });
+
+    expect(response.status).toBe(404);
   });
 });

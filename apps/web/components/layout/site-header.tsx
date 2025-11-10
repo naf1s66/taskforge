@@ -69,7 +69,20 @@ export function SiteHeader() {
               disabled={isSigningOut}
               onClick={() =>
                 startSignOut(() => {
-                  void signOut({ callbackUrl: '/login' });
+                  void (async () => {
+                    try {
+                      await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+                        credentials: 'include',
+                        body: JSON.stringify({}),
+                      });
+                    } catch (error) {
+                      console.error('[auth] Failed to clear API session', error);
+                    } finally {
+                      await signOut({ callbackUrl: '/login' });
+                    }
+                  })();
                 })
               }
             >

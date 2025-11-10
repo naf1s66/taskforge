@@ -15,6 +15,7 @@ import { router as taskRoutes } from './routes/tasks';
 export interface CreateAppOptions {
   jwtSecret?: string;
   userStore?: UserStore;
+  sessionBridgeSecret?: string;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -59,7 +60,11 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
   const userStore = options.userStore ?? new PrismaUserStore(getPrismaClient());
-  const authRouterFactory = createAuthRouter({ jwtSecret: options.jwtSecret, userStore });
+  const authRouterFactory = createAuthRouter({
+    jwtSecret: options.jwtSecret,
+    userStore,
+    sessionBridgeSecret: options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET,
+  });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 
   app.use(authRouterFactory.authMiddleware);
