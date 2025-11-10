@@ -11,6 +11,7 @@ export interface TestAgentContext {
 export interface CreateTestAgentOptions {
   jwtSecret?: string;
   userStore?: InMemoryUserStore;
+  sessionBridgeSecret?: string;
 }
 
 export function createTestAgent(
@@ -18,7 +19,7 @@ export function createTestAgent(
 ): TestAgentContext {
   const userStore = options.userStore ?? new InMemoryUserStore();
   const jwtSecret = options.jwtSecret ?? 'test-secret';
-  const app = createApp({ jwtSecret, userStore });
+  const app = createApp({ jwtSecret, userStore, sessionBridgeSecret: options.sessionBridgeSecret });
 
   return { agent: request(app), userStore };
 }
