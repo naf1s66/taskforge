@@ -12,7 +12,7 @@ WORKDIR /workspace
 # Copy workspace manifests first to leverage Docker layer caching
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
-COPY packages/shared/package.json packages/shared/package.json 2>/dev/null || true
+COPY packages/shared/package.json packages/shared/package.json
 
 # Install only the dependencies needed for the API workspace
 RUN pnpm install --filter @taskforge/api... --frozen-lockfile

@@ -9,7 +9,7 @@ WORKDIR /workspace
 # Copy workspace manifests for dependency installation caching
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/package.json
-COPY packages/shared/package.json packages/shared/package.json 2>/dev/null || true
+COPY packages/shared/package.json packages/shared/package.json
 
 RUN pnpm install --filter @taskforge/web... --frozen-lockfile
 
