@@ -25,7 +25,7 @@ export function createAuthMiddleware({ tokenService, userStore }: AuthMiddleware
     }
 
     try {
-      const payload = await tokenService.verifyToken(token);
+      const payload = await tokenService.verifyAccessToken(token);
       const user = await userStore.findById(payload.sub);
       if (!user) {
         return res.status(401).json({ error: 'Unauthorized' });
