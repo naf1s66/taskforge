@@ -64,7 +64,10 @@ export interface AuthRouterOptions {
   passwordHasher?: PasswordHasher;
   tokenService?: TokenService;
   jwtSecret?: string;
+  jwtRefreshSecret?: string;
   bcryptSaltRounds?: number;
+  accessTokenExpiresIn?: string | number;
+  refreshTokenExpiresIn?: string | number;
 }
 
 function resolveSaltRounds(explicit?: number): number {
@@ -80,12 +83,39 @@ function resolveSaltRounds(explicit?: number): number {
   return 10;
 }
 
+function resolveExpiresIn(value?: string | number, envKey?: string, fallback?: string | number) {
+  if (value) return value;
+  if (envKey) {
+    const fromEnv = process.env[envKey];
+    if (fromEnv) return fromEnv;
+  }
+  return fallback;
+}
+
 export function createAuthRouter(options: AuthRouterOptions = {}) {
   const store = options.userStore ?? new InMemoryUserStore();
   const saltRounds = resolveSaltRounds(options.bcryptSaltRounds);
   const hasher = options.passwordHasher ?? createPasswordHasher(saltRounds);
   const secret = options.jwtSecret ?? process.env.JWT_SECRET ?? 'dev-secret';
-  const tokens = options.tokenService ?? createTokenService(secret);
+  const refreshSecret = options.jwtRefreshSecret ?? process.env.JWT_REFRESH_SECRET;
+  const accessExpiresIn = resolveExpiresIn(
+    options.accessTokenExpiresIn,
+    'JWT_ACCESS_TOKEN_EXPIRES_IN',
+    '1h',
+  );
+  const refreshExpiresIn = resolveExpiresIn(
+    options.refreshTokenExpiresIn,
+    'JWT_REFRESH_TOKEN_EXPIRES_IN',
+    '7d',
+  );
+  const tokens =
+    options.tokenService ??
+    createTokenService({
+      accessSecret: secret,
+      refreshSecret: refreshSecret ?? undefined,
+      accessExpiresIn,
+      refreshExpiresIn,
+    });
   const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
 
   const router = Router();
@@ -109,13 +139,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     };
 
     await store.create(user);
-    const token = await tokens.createToken(user.id);
+    const issuedTokens = await tokens.issueTokens(user.id);
 
     // Set HttpOnly cookie with shared domain for cross-subdomain access
-    res.cookie('tf_session', token, getCookieOptions());
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
 
     return res.status(201).json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
     });
   });
 
@@ -135,13 +166,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = await tokens.createToken(user.id);
-    
+    const issuedTokens = await tokens.issueTokens(user.id);
+
     // Set HttpOnly cookie with shared domain for cross-subdomain access
-    res.cookie('tf_session', token, getCookieOptions());
-    
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
+
     return res.json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
     });
   });
 

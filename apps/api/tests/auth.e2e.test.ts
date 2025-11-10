@@ -20,7 +20,13 @@ describe('Auth API', () => {
     expect(response.body).toEqual(
       expect.objectContaining({
         user: expect.objectContaining({ email: 'new-user@example.com' }),
-        token: expect.any(String),
+        tokens: expect.objectContaining({
+          accessToken: expect.any(String),
+          refreshToken: expect.any(String),
+          tokenType: 'Bearer',
+          accessTokenExpiresAt: expect.any(String),
+          refreshTokenExpiresAt: expect.any(String),
+        }),
       }),
     );
   });
@@ -57,7 +63,11 @@ describe('Auth API', () => {
     expect(login.body).toEqual(
       expect.objectContaining({
         user: expect.objectContaining({ email: 'login@example.com' }),
-        token: expect.any(String),
+        tokens: expect.objectContaining({
+          accessToken: expect.any(String),
+          refreshToken: expect.any(String),
+          tokenType: 'Bearer',
+        }),
       }),
     );
   });
@@ -86,7 +96,7 @@ describe('Auth API', () => {
 
     const profile = await agent
       .get('/api/taskforge/v1/auth/me')
-      .set('Authorization', `Bearer ${body.token}`)
+      .set('Authorization', `Bearer ${body.tokens.accessToken}`)
       .expect(200);
 
     expect(profile.body).toEqual(

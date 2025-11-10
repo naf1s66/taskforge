@@ -33,6 +33,18 @@ const authUser: OpenAPIV3.SchemaObject = {
   required: ['id', 'email', 'createdAt'],
 };
 
+const authTokens: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    tokenType: { type: 'string', enum: ['Bearer'] },
+    accessToken: { type: 'string', description: 'Short-lived JWT used for API requests.' },
+    refreshToken: { type: 'string', description: 'Long-lived JWT used to request new access tokens.' },
+    accessTokenExpiresAt: { type: 'string', format: 'date-time' },
+    refreshTokenExpiresAt: { type: 'string', format: 'date-time' },
+  },
+  required: ['tokenType', 'accessToken', 'refreshToken', 'accessTokenExpiresAt', 'refreshTokenExpiresAt'],
+};
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -51,13 +63,14 @@ export const openApiDocument: OpenAPIV3.Document = {
     },
     schemas: {
       AuthCredentials: authCredentials,
+      AuthTokens: authTokens,
       AuthSuccessResponse: {
         type: 'object',
         properties: {
-          token: { type: 'string', description: 'Bearer token for authenticated requests.' },
+          tokens: { $ref: '#/components/schemas/AuthTokens' },
           user: authUser,
         },
-        required: ['token', 'user'],
+        required: ['tokens', 'user'],
       },
       AuthMeResponse: {
         type: 'object',
