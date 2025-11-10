@@ -58,7 +58,7 @@ interface BridgeResponse {
 
 async function requestBridgeToken(user: AuthenticatedUser): Promise<string> {
   const secret = getBridgeSecret();
-  const bridgeUrl = new URL('auth/session-bridge', `${getApiBaseUrl()}/`).toString();
+  const bridgeUrl = new URL('v1/auth/session-bridge', `${getApiBaseUrl()}/`).toString();
   const response = await fetch(bridgeUrl, {
     method: 'POST',
     headers: {
