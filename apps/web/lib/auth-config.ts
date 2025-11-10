@@ -92,6 +92,39 @@ function mapAccountToPrisma(account: AdapterAccount) {
 async function ensureAccountLink(account: AdapterAccount) {
   const data = mapAccountToPrisma(account);
 
+  const update: Parameters<typeof prisma.account.upsert>[0]['update'] = {
+    userId: data.userId,
+    type: data.type,
+  };
+
+  if (typeof account.refresh_token !== 'undefined') {
+    update.refreshToken = data.refreshToken;
+  }
+
+  if (typeof account.access_token !== 'undefined') {
+    update.accessToken = data.accessToken;
+  }
+
+  if (typeof account.expires_at !== 'undefined') {
+    update.expiresAt = data.expiresAt;
+  }
+
+  if (typeof account.token_type !== 'undefined') {
+    update.tokenType = data.tokenType;
+  }
+
+  if (typeof account.scope !== 'undefined') {
+    update.scope = data.scope;
+  }
+
+  if (typeof account.id_token !== 'undefined') {
+    update.idToken = data.idToken;
+  }
+
+  if (typeof account.session_state !== 'undefined') {
+    update.sessionState = data.sessionState;
+  }
+
   return prisma.account.upsert({
     where: {
       provider_providerAccountId: {
@@ -100,17 +133,7 @@ async function ensureAccountLink(account: AdapterAccount) {
       },
     },
     create: data,
-    update: {
-      userId: data.userId,
-      type: data.type,
-      refreshToken: data.refreshToken,
-      accessToken: data.accessToken,
-      expiresAt: data.expiresAt,
-      tokenType: data.tokenType,
-      scope: data.scope,
-      idToken: data.idToken,
-      sessionState: data.sessionState,
-    },
+    update,
   });
 }
 
