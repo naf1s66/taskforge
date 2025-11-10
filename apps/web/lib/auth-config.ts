@@ -117,7 +117,7 @@ async function ensureAccountLink(account: AdapterAccount) {
 async function resolveUserForOAuth(user: AdapterUser) {
   const normalizedEmail = normalizeEmail(user.email ?? null);
 
-  if (!normalizedEmail) {
+  if (!normalizedEmail || !user.emailVerified) {
     return null;
   }
 
@@ -234,8 +234,10 @@ export const authConfig = {
         return false;
       }
 
+      const emailVerifiedRaw = typedProfile.email_verified;
+      let isEmailVerified = false;
+
       if (account.provider === 'google') {
-        const emailVerifiedRaw = typedProfile.email_verified;
         const emailVerified =
           typeof emailVerifiedRaw === 'boolean'
             ? emailVerifiedRaw
@@ -249,9 +251,29 @@ export const authConfig = {
           });
           return false;
         }
+
+        isEmailVerified = true;
+      } else {
+        const emailVerified =
+          typeof emailVerifiedRaw === 'boolean'
+            ? emailVerifiedRaw
+            : typeof emailVerifiedRaw === 'string'
+              ? emailVerifiedRaw.toLowerCase() === 'true'
+              : null;
+
+        if (emailVerified !== true) {
+          console.warn('[auth] OAuth sign-in rejected due to unverifiable email', {
+            provider: account.provider,
+            email: normalizedEmail,
+          });
+          return false;
+        }
+
+        isEmailVerified = true;
       }
 
       user.email = normalizedEmail;
+      user.emailVerified = isEmailVerified ? new Date() : null;
 
       return true;
     },
