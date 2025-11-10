@@ -125,8 +125,11 @@ export function LoginForm({ providers }: LoginFormProps) {
             }
           }
 
-          const message =
-            (payload && 'error' in payload && payload.error) || 'Unable to sign in with the provided credentials.';
+          const defaultMessage =
+            response.status >= 500
+              ? 'We ran into a server issue while signing you in. Please try again in a moment.'
+              : 'Unable to sign in with the provided credentials.';
+          const message = (payload && 'error' in payload && payload.error) || defaultMessage;
 
           if (response.status === 401) {
             form.setError('password', { message: 'The email and password combination is incorrect.' });
@@ -140,7 +143,7 @@ export function LoginForm({ providers }: LoginFormProps) {
         router.refresh();
       } catch (error) {
         console.error('[auth] Login request failed', error);
-        setFormError('Something went wrong while signing you in. Please try again.');
+        setFormError('Something went wrong while signing you in. Please check your connection and try again.');
       } finally {
         setIsSubmitting(false);
       }
@@ -157,7 +160,7 @@ export function LoginForm({ providers }: LoginFormProps) {
         <p className="text-sm text-muted-foreground">Enter your credentials to access your TaskForge workspace.</p>
       </div>
       <Form {...form}>
-        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+        <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)} noValidate aria-busy={isSubmitting}>
           {reasonMessage && (
             <Alert>
               <Info className="h-4 w-4" aria-hidden />
@@ -202,6 +205,13 @@ export function LoginForm({ providers }: LoginFormProps) {
               </>
             )}
           </Button>
+          <p aria-live="polite" className="sr-only">
+            {isSubmitting
+              ? 'Submitting your sign-in request.'
+              : formError
+                ? `Sign-in failed: ${formError}`
+                : 'Sign-in form ready.'}
+          </p>
         </form>
       </Form>
       {formError && (
