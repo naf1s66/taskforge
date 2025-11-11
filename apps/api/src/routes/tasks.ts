@@ -17,6 +17,10 @@ const TaskListQuerySchema = z
   })
   .passthrough();
 
+const TaskIdParamSchema = z.object({
+  id: z.string().trim().min(1, 'Task id is required'),
+});
+
 export function createTaskRouter(taskRepository?: TaskRepository) {
   const repository = taskRepository ?? createTaskRepository(getPrismaClient());
   const router = Router();
@@ -65,6 +69,11 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
   });
 
   router.patch('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: params.error.flatten() });
+    }
+
     const parsed = TaskUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
@@ -77,11 +86,13 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
       }
 
       const payload: TaskUpdateInput = parsed.data;
-      const updated = await repository.updateTask(user.id, req.params.id, payload);
+      const updated = await repository.updateTask(user.id, params.data.id, payload);
       if (!updated) {
         return res.status(404).json({ error: 'Not found' });
       }
 
+      console.info('task.updated', { userId: user.id, taskId: updated.id });
+      // TODO: Emit structured audit log event once the audit pipeline is available.
       res.json(updated);
     } catch (error) {
       next(error);
@@ -89,18 +100,25 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
   });
 
   router.delete('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: params.error.flatten() });
+    }
+
     try {
       const user = res.locals.user;
       if (!user) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const deleted = await repository.deleteTask(user.id, req.params.id);
+      const deleted = await repository.deleteTask(user.id, params.data.id);
       if (!deleted) {
         return res.status(404).json({ error: 'Not found' });
       }
 
-      res.json(deleted);
+      console.info('task.deleted', { userId: user.id, taskId: deleted.id });
+      // TODO: Emit structured audit log event once the audit pipeline is available.
+      res.json({ id: deleted.id, status: 'deleted' });
     } catch (error) {
       next(error);
     }

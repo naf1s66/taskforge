@@ -345,6 +345,55 @@
           "dueDate": "2024-07-05T15:00:00.000Z"
         }
       },
+      "TaskUpdateInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "TODO",
+              "IN_PROGRESS",
+              "DONE"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "status": "IN_PROGRESS",
+          "priority": "HIGH",
+          "tags": [
+            "planning",
+            "proposal"
+          ]
+        }
+      },
       "TaskListResponse": {
         "type": "object",
         "properties": {
@@ -408,6 +457,29 @@
           "page": 1,
           "pageSize": 20,
           "total": 2
+        }
+      },
+      "TaskDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "example": {
+          "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
+          "status": "deleted"
         }
       }
     }
@@ -1033,8 +1105,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true
+                "$ref": "#/components/schemas/TaskUpdateInput"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "status": "IN_PROGRESS",
+                    "priority": "HIGH",
+                    "tags": [
+                      "planning",
+                      "proposal"
+                    ]
+                  }
+                }
               }
             }
           }
@@ -1045,8 +1128,25 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/TaskRecord"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
+                      "title": "Draft project brief",
+                      "description": "Summarize goals and milestones for the release",
+                      "status": "IN_PROGRESS",
+                      "priority": "HIGH",
+                      "dueDate": "2024-07-10T16:00:00.000Z",
+                      "tags": [
+                        "planning",
+                        "product"
+                      ],
+                      "createdAt": "2024-06-01T12:00:00.000Z",
+                      "updatedAt": "2024-06-03T09:30:00.000Z"
+                    }
+                  }
                 }
               }
             }
@@ -1057,6 +1157,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1067,6 +1182,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
                 }
               }
             }
@@ -1077,6 +1199,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Not found"
+                    }
+                  }
                 }
               }
             }
@@ -1109,8 +1238,40 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/TaskDeleteResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
+                      "status": "deleted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid identifier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1121,6 +1282,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
                 }
               }
             }
@@ -1131,6 +1299,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "Not found"
+                    }
+                  }
                 }
               }
             }
