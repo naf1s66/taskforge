@@ -61,9 +61,16 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  const prisma = getPrismaClient();
-  const userStore = options.userStore ?? new PrismaUserStore(prisma);
-  const taskRepository = options.taskRepository ?? createTaskRepository(prisma);
+  let prisma: ReturnType<typeof getPrismaClient> | undefined;
+  const getOrCreatePrisma = (): ReturnType<typeof getPrismaClient> => {
+    if (!prisma) {
+      prisma = getPrismaClient();
+    }
+    return prisma;
+  };
+
+  const userStore = options.userStore ?? new PrismaUserStore(getOrCreatePrisma());
+  const taskRepository = options.taskRepository ?? createTaskRepository(getOrCreatePrisma());
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,
     userStore,

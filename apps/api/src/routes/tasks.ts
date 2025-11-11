@@ -9,9 +9,8 @@ import {
   type TaskUpdateInput,
 } from '../repositories/task-repository';
 
-export function createTaskRouter(
-  taskRepository: TaskRepository = createTaskRepository(getPrismaClient()),
-) {
+export function createTaskRouter(taskRepository?: TaskRepository) {
+  const repository = taskRepository ?? createTaskRepository(getPrismaClient());
   const router = Router();
 
   router.get('/', async (req, res, next) => {
@@ -21,7 +20,7 @@ export function createTaskRouter(
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const tasks = await taskRepository.listTasks(user.id);
+      const tasks = await repository.listTasks(user.id);
       res.json({ items: tasks });
     } catch (error) {
       next(error);
@@ -41,7 +40,7 @@ export function createTaskRouter(
       }
 
       const payload: TaskCreateInput = parsed.data;
-      const task = await taskRepository.createTask(user.id, payload);
+      const task = await repository.createTask(user.id, payload);
       res.status(201).json(task);
     } catch (error) {
       next(error);
@@ -61,7 +60,7 @@ export function createTaskRouter(
       }
 
       const payload: TaskUpdateInput = parsed.data;
-      const updated = await taskRepository.updateTask(user.id, req.params.id, payload);
+      const updated = await repository.updateTask(user.id, req.params.id, payload);
       if (!updated) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -79,7 +78,7 @@ export function createTaskRouter(
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const deleted = await taskRepository.deleteTask(user.id, req.params.id);
+      const deleted = await repository.deleteTask(user.id, req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -92,5 +91,3 @@ export function createTaskRouter(
 
   return router;
 }
-
-export const router = createTaskRouter();
