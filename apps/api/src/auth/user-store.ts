@@ -40,11 +40,6 @@ export class InMemoryUserStore implements UserStore {
   }
 }
 
-/* eslint-disable
-  @typescript-eslint/no-unsafe-assignment,
-  @typescript-eslint/no-unsafe-call,
-  @typescript-eslint/no-unsafe-member-access
-*/
 export class PrismaUserStore implements UserStore {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -85,10 +80,4 @@ export class PrismaUserStore implements UserStore {
     };
   }
 }
-/* eslint-enable
-  @typescript-eslint/no-unsafe-assignment,
-  @typescript-eslint/no-unsafe-call,
-  @typescript-eslint/no-unsafe-member-access
-*/
-
 type PrismaUserRecord = NonNullable<Awaited<ReturnType<PrismaClient['user']['findUnique']>>>;
