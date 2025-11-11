@@ -101,6 +101,84 @@ const authSuccessResponseExample = {
   value: authSuccessExample,
 } satisfies OpenAPIV3.ExampleObject;
 
+const taskRecord: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    title: { type: 'string' },
+    description: { type: 'string', nullable: true },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    tags: { type: 'array', items: { type: 'string' } },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+  required: ['id', 'title', 'status', 'priority', 'tags', 'createdAt', 'updatedAt'],
+  example: {
+    id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    title: 'Draft project brief',
+    description: 'Summarize goals and milestones for the release',
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    dueDate: '2024-07-10T16:00:00.000Z',
+    tags: ['planning', 'product'],
+    createdAt: '2024-06-01T12:00:00.000Z',
+    updatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const taskCreateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    description: { type: 'string', minLength: 1 },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time' },
+    tags: {
+      type: 'array',
+      items: { type: 'string', minLength: 1 },
+    },
+  },
+  required: ['title'],
+  example: {
+    title: 'Book product sync',
+    description: 'Coordinate roadmap review with stakeholders',
+    priority: 'HIGH',
+    tags: ['planning'],
+    dueDate: '2024-07-05T15:00:00.000Z',
+  },
+};
+
+const taskListResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TaskRecord' },
+    },
+    page: { type: 'integer', minimum: 1 },
+    pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+    total: { type: 'integer', minimum: 0 },
+  },
+  required: ['items', 'page', 'pageSize', 'total'],
+  example: {
+    items: [taskRecord.example, taskRecord.example],
+    page: 1,
+    pageSize: 20,
+    total: 2,
+  },
+};
+
+const taskCreatedExample = {
+  value: taskRecord.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskListExample = {
+  value: taskListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -150,6 +228,9 @@ export const openApiDocument: OpenAPIV3.Document = {
         example: logoutSuccessExample.value,
       },
       ErrorResponse: errorResponse,
+      TaskRecord: taskRecord,
+      TaskCreateInput: taskCreateInput,
+      TaskListResponse: taskListResponse,
     },
   },
   paths: {
@@ -378,23 +459,28 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ['Tasks'],
         summary: 'List tasks for the authenticated user',
         security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'page',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+            description: 'Page number (1-indexed).',
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            description: 'Number of tasks per page.',
+          },
+        ],
         responses: {
           '200': {
             description: 'Task collection',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    items: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        additionalProperties: true,
-                      },
-                    },
-                  },
-                  required: ['items'],
+                schema: { $ref: '#/components/schemas/TaskListResponse' },
+                examples: {
+                  default: taskListExample,
                 },
               },
             },
@@ -404,6 +490,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -417,9 +506,9 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TaskCreateInput' },
+              examples: {
+                default: { value: taskCreateInput.example as Record<string, unknown> },
               },
             },
           },
@@ -429,9 +518,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Task created',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskCreatedExample,
                 },
               },
             },
@@ -441,6 +530,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
               },
             },
           },
@@ -449,6 +541,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },

@@ -23,8 +23,18 @@ export interface TaskCreateInput {
 
 export type TaskUpdateInput = Partial<TaskCreateInput>;
 
+export interface TaskListOptions {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface TaskListResult {
+  items: TaskRecordDTO[];
+  total: number;
+}
+
 export interface TaskRepository {
-  listTasks(userId: string): Promise<TaskRecordDTO[]>;
+  listTasks(userId: string, options?: TaskListOptions): Promise<TaskListResult>;
   createTask(userId: string, input: TaskCreateInput): Promise<TaskRecordDTO>;
   updateTask(
     userId: string,
@@ -36,14 +46,26 @@ export interface TaskRepository {
 
 export function createTaskRepository(prisma: PrismaClient): TaskRepository {
   return {
-    async listTasks(userId) {
-      const tasks = await prisma.task.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'asc' },
-        include: taskWithTagsInclude,
-      });
+    async listTasks(userId, options) {
+      const page = Math.max(1, options?.page ?? 1);
+      const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 20));
+      const skip = (page - 1) * pageSize;
 
-      return tasks.map(toTaskRecordDTO);
+      const [tasks, total] = await prisma.$transaction([
+        prisma.task.findMany({
+          where: { userId },
+          orderBy: { updatedAt: 'desc' },
+          include: taskWithTagsInclude,
+          skip,
+          take: pageSize,
+        }),
+        prisma.task.count({ where: { userId } }),
+      ]);
+
+      return {
+        items: tasks.map(toTaskRecordDTO),
+        total,
+      };
     },
 
     async createTask(userId, input) {

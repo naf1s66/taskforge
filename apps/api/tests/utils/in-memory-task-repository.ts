@@ -4,6 +4,8 @@ import type { TaskRecordDTO } from '@taskforge/shared';
 
 import {
   type TaskCreateInput,
+  type TaskListOptions,
+  type TaskListResult,
   type TaskRepository,
   type TaskUpdateInput,
 } from '../../src/repositories/task-repository';
@@ -16,11 +18,19 @@ interface StoredTask extends TaskRecordDTO {
 export class InMemoryTaskRepository implements TaskRepository {
   private readonly tasks = new Map<string, StoredTask>();
 
-  async listTasks(userId: string): Promise<TaskRecordDTO[]> {
-    return Array.from(this.tasks.values())
+  async listTasks(userId: string, options?: TaskListOptions): Promise<TaskListResult> {
+    const page = Math.max(1, options?.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 20));
+
+    const all = Array.from(this.tasks.values())
       .filter(task => task.userId === userId)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map(task => ({ ...task }));
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+    const total = all.length;
+    const start = (page - 1) * pageSize;
+    const paginated = all.slice(start, start + pageSize).map(({ userId: _userId, ...task }) => ({ ...task }));
+
+    return { items: paginated, total };
   }
 
   async createTask(userId: string, input: TaskCreateInput): Promise<TaskRecordDTO> {
@@ -39,7 +49,8 @@ export class InMemoryTaskRepository implements TaskRepository {
     };
 
     this.tasks.set(task.id, task);
-    return { ...task };
+    const { userId: _userId, ...dto } = task;
+    return { ...dto };
   }
 
   async updateTask(
@@ -72,7 +83,8 @@ export class InMemoryTaskRepository implements TaskRepository {
     }
 
     existing.updatedAt = new Date().toISOString();
-    return { ...existing };
+    const { userId: _userId, ...dto } = existing;
+    return { ...dto };
   }
 
   async deleteTask(userId: string, taskId: string): Promise<TaskRecordDTO | null> {
@@ -82,6 +94,7 @@ export class InMemoryTaskRepository implements TaskRepository {
     }
 
     this.tasks.delete(taskId);
-    return { ...existing };
+    const { userId: _userId, ...dto } = existing;
+    return { ...dto };
   }
 }
