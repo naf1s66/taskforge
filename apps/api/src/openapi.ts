@@ -85,6 +85,12 @@ const invalidPayloadExample = {
   value: errorResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const invalidIdentifierExample = {
+  value: { error: 'Invalid identifier' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const notFoundExample = { value: { error: 'Not found' } } satisfies OpenAPIV3.ExampleObject;
+
 const logoutSuccessExample = { value: { success: true } } satisfies OpenAPIV3.ExampleObject;
 
 const authMeSuccessExample = {
@@ -151,6 +157,24 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
   },
 };
 
+const taskUpdateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    description: { type: 'string', minLength: 1 },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time' },
+    tags: { type: 'array', items: { type: 'string', minLength: 1 } },
+  },
+  additionalProperties: false,
+  example: {
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    tags: ['planning', 'proposal'],
+  },
+};
+
 const taskListResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -177,6 +201,27 @@ const taskCreatedExample = {
 
 const taskListExample = {
   value: taskListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskDeletedResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    status: { type: 'string', enum: ['deleted'] },
+  },
+  required: ['id', 'status'],
+  example: {
+    id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    status: 'deleted',
+  },
+};
+
+const taskUpdateExample = {
+  value: taskUpdateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskDeletedExample = {
+  value: taskDeletedResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
 export const openApiDocument: OpenAPIV3.Document = {
@@ -230,7 +275,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       ErrorResponse: errorResponse,
       TaskRecord: taskRecord,
       TaskCreateInput: taskCreateInput,
+      TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
+      TaskDeleteResponse: taskDeletedResponse,
     },
   },
   paths: {
@@ -560,16 +607,16 @@ export const openApiDocument: OpenAPIV3.Document = {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            schema: { type: 'string', format: 'uuid' },
           },
         ],
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TaskUpdateInput' },
+              examples: {
+                default: taskUpdateExample,
               },
             },
           },
@@ -579,9 +626,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Task updated',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskCreatedExample,
                 },
               },
             },
@@ -591,6 +638,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                  invalidIdentifier: invalidIdentifierExample,
+                },
               },
             },
           },
@@ -599,6 +650,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -607,6 +661,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
               },
             },
           },
@@ -621,7 +678,7 @@ export const openApiDocument: OpenAPIV3.Document = {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            schema: { type: 'string', format: 'uuid' },
           },
         ],
         responses: {
@@ -629,9 +686,20 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Task removed',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TaskDeleteResponse' },
+                examples: {
+                  default: taskDeletedExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid identifier',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidIdentifier: invalidIdentifierExample,
                 },
               },
             },
@@ -641,6 +709,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -649,6 +720,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
               },
             },
           },

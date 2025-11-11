@@ -18,3 +18,20 @@ Cookie: tf_session={{accessToken}}
   "tags": ["work","docs"],
   "dueDate": "2025-10-08T10:00:00.000Z"
 }
+
+###
+PATCH http://localhost:4000/api/taskforge/v1/tasks/{{taskId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{accessToken}}
+
+{
+  "status": "IN_PROGRESS",
+  "tags": ["planning", "docs"],
+  "dueDate": "2025-11-01T17:00:00.000Z"
+}
+
+###
+DELETE http://localhost:4000/api/taskforge/v1/tasks/{{taskId}}
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{accessToken}}

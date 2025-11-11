@@ -94,6 +94,114 @@ describe('Tasks API', () => {
     );
   });
 
+  it('updates a task and returns the fresh record', async () => {
+    const { accessToken, userId } = await register();
+    const created = await taskRepository.createTask(userId, {
+      title: 'Draft proposal',
+      status: 'TODO',
+      tags: ['initial'],
+    });
+
+    await sleep(10);
+
+    const response = await agent
+      .patch(`/api/taskforge/v1/tasks/${created.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'IN_PROGRESS', tags: ['planning', 'proposal'] })
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        id: created.id,
+        status: 'IN_PROGRESS',
+        title: 'Draft proposal',
+        tags: ['planning', 'proposal'],
+        updatedAt: expect.any(String),
+      }),
+    );
+
+    expect(new Date(response.body.updatedAt).getTime()).toBeGreaterThan(
+      new Date(created.updatedAt).getTime(),
+    );
+  });
+
+  it('returns 400 when updating with an invalid task id', async () => {
+    const { accessToken } = await register();
+
+    const response = await agent
+      .patch('/api/taskforge/v1/tasks/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ title: 'Renamed' })
+      .expect(400);
+
+    expect(response.body).toEqual({ error: 'Invalid identifier' });
+  });
+
+  it("returns 404 when attempting to update another user's task", async () => {
+    const { accessToken } = await register();
+    const someoneElse = await taskRepository.createTask('another-user', { title: 'Secret task' });
+
+    await agent
+      .patch(`/api/taskforge/v1/tasks/${someoneElse.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ title: 'Hacked' })
+      .expect(404);
+  });
+
+  it('returns validation errors for malformed updates', async () => {
+    const { accessToken, userId } = await register();
+    const created = await taskRepository.createTask(userId, { title: 'Fix lint' });
+
+    const response = await agent
+      .patch(`/api/taskforge/v1/tasks/${created.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ dueDate: 'not-a-date' })
+      .expect(400);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: 'Invalid payload',
+        details: expect.any(Object),
+      }),
+    );
+  });
+
+  it('deletes a task and returns a confirmation payload', async () => {
+    const { accessToken, userId } = await register();
+    const created = await taskRepository.createTask(userId, { title: 'Archive me' });
+
+    const response = await agent
+      .delete(`/api/taskforge/v1/tasks/${created.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(response.body).toEqual({ id: created.id, status: 'deleted' });
+
+    const remaining = await taskRepository.listTasks(userId);
+    expect(remaining.total).toBe(0);
+  });
+
+  it('returns 400 when deleting with an invalid task id', async () => {
+    const { accessToken } = await register();
+
+    const response = await agent
+      .delete('/api/taskforge/v1/tasks/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    expect(response.body).toEqual({ error: 'Invalid identifier' });
+  });
+
+  it("returns 404 when attempting to delete another user's task", async () => {
+    const { accessToken } = await register();
+    const someoneElse = await taskRepository.createTask('another-user', { title: 'Keep out' });
+
+    await agent
+      .delete(`/api/taskforge/v1/tasks/${someoneElse.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404);
+  });
+
   it('rejects invalid payloads with the standard error envelope', async () => {
     const { accessToken } = await register();
 
