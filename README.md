@@ -132,6 +132,28 @@ Running the seed multiple times is safe—it upserts the user and respects `SEED
 
 Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
 
+## Tasks API
+The task routes live under `/api/taskforge/v1/tasks` and require the authenticated user's JWT. You can supply the token either as a Bearer header or via the shared `tf_session` cookie issued during login/registration.
+
+```bash
+# 1) Start the API locally
+pnpm -C apps/api dev
+
+# 2) Authenticate (see apps/api/tests/auth.http for detailed flows)
+
+# 3) List the first page of tasks (defaults: page=1, pageSize=20)
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "http://localhost:4000/api/taskforge/v1/tasks?page=1&pageSize=10"
+
+# 4) Create a task for the signed-in user
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Draft release notes","tags":["docs"]}' \
+  http://localhost:4000/api/taskforge/v1/tasks
+```
+
+Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
   migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.

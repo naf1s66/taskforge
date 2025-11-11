@@ -1,13 +1,17 @@
 GET http://localhost:4000/api/taskforge/v1/health
 
 ###
-GET http://localhost:4000/api/taskforge/v1/tasks
-Authorization: Bearer demo
+# Replace {{accessToken}} with the tf_session cookie value returned by auth.http flows.
+
+GET http://localhost:4000/api/taskforge/v1/tasks?page=1&pageSize=10
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{accessToken}}
 
 ###
 POST http://localhost:4000/api/taskforge/v1/tasks
 Content-Type: application/json
-Authorization: Bearer demo
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{accessToken}}
 
 {
   "title": "Write docs",
