@@ -71,8 +71,8 @@ Keep `.env` files in sync with the templates in `infra/env/`. The table below hi
 | `NEXTAUTH_SECRET` | `apps/web/.env` | `changeme` | Random 32+ character string generated with `openssl rand -hex 32`. In production this must be rotated and stored securely. |
 | `NEXTAUTH_URL` | `apps/web/.env` | `http://localhost:3000` | Match the public URL serving the Next.js app. When deploying, update to `https://<your-domain>`. |
 | `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
-| `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Point at your production API when deployed. |
-| `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000` | Browser fetches to the Express API. Keep protocol/host accessible from the browser—the app appends `/api/taskforge/v1`. |
+| `API_BASE_URL` | `apps/web/.env` | `http://api:4000` | Server-side (Next.js) requests to the Express API. The code appends `/api/taskforge/v1`, so keep this host-only (e.g., `https://api.example.com`). |
+| `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000` | Browser fetches to the Express API. Match the public host and remember the client also appends `/api/taskforge/v1`. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
 | `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen + redirect URIs to match `NEXTAUTH_URL`. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
