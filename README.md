@@ -58,45 +58,76 @@ taskforge/
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
-## Auth Quickstart
-1. **Configure NextAuth secrets** – in `apps/web/.env` (or Docker env), set:
+## Authentication Reference
+> For deeper architectural decisions see [ADR 0001 – Auth strategy](docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md) and the [PRD auth section](docs/PRD.md#authentication).
+
+### Environment variables
+Keep `.env` files in sync with the templates in `infra/env/`. The table below highlights auth-related variables and how to adjust them between local development and production deployments.
+
+| Variable | Scope | Dev default | Notes |
+| --- | --- | --- | --- |
+| `JWT_SECRET` | `apps/api/.env` | `dev-secret` | Rotate per environment; used to sign access tokens for `/api/auth/*` routes. Set `JWT_REFRESH_SECRET` if refresh tokens are enabled. |
+| `SESSION_BRIDGE_SECRET` | `apps/api/.env`, `apps/web/.env` | `dev-bridge-secret` | Shared secret that allows the Next.js app to exchange a NextAuth session for API JWTs via `/session-bridge`. Required for Docker to pass API cookies back to the browser. |
+| `NEXTAUTH_SECRET` | `apps/web/.env` | `changeme` | Random 32+ character string generated with `openssl rand -hex 32`. In production this must be rotated and stored securely. |
+| `NEXTAUTH_URL` | `apps/web/.env` | `http://localhost:3000` | Match the public URL serving the Next.js app. When deploying, update to `https://<your-domain>`. |
+| `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
+| `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Point at your production API when deployed. |
+| `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge/v1` | Browser fetches to the Express API. Keep protocol/host accessible from the browser. |
+| `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
+| `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen + redirect URIs to match `NEXTAUTH_URL`. |
+| `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
+| `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if you need parity with production infrastructure. |
+
+> **Production tip:** uncomment `COOKIE_DOMAIN` in both `.env` files when deploying across subdomains (for example `api.taskforge.app` and `app.taskforge.app`) so session cookies are shared correctly.
+
+### Local vs. Docker setup
+1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
+2. Update the secrets listed above. For Docker-based workflows keep the Postgres host as `db`; when running the dev servers directly (`pnpm -C apps/* dev`) point `DATABASE_URL` at `localhost` or your cloud instance.
+3. Restart the affected service after changing secrets (e.g., `pnpm -C apps/web dev` or `make up`).
+
+### OAuth providers
+- Configure any provider credentials you have. Leaving the variables blank keeps the login screen in a safe “No providers configured” state.
+- **Google Cloud**
+  1. Create an OAuth consent screen (External) in [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+  2. Add an OAuth 2.0 Client ID (Web application) with authorized origins `http://localhost:3000` and redirect URI `http://localhost:3000/api/auth/callback/google` for local development.
+  3. Repeat the setup with your production domains and update `NEXTAUTH_URL` plus redirect URIs to match.
+- **GitHub** – create an OAuth app at <https://github.com/settings/developers>. Use the same callback pattern `http://localhost:3000/api/auth/callback/github` while testing locally.
+- Accounts created through Google or GitHub reuse existing credential users when the email matches, letting teammates link social login after registering with a password.
+
+### Database migrations and seed user
+Run Prisma migrations whenever the schema changes:
+
+```bash
+pnpm -C apps/api prisma migrate deploy
+```
+
+Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
+
+```bash
+pnpm -C apps/api tsx prisma/seed.ts
+# or
+make seed
+```
+
+Running the seed multiple times is safe—it upserts the user and respects `SEED_USER_PASSWORD` if provided. The seed user surfaces in both the API JWT flow and the NextAuth login page.
+
+### Auth smoke tests
+1. **API-only JWT flow**
    ```bash
-   NEXTAUTH_URL=http://localhost:3000
-   NEXTAUTH_SECRET=<random-string>
-   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
+   pnpm -C apps/api dev
+   # in another shell (use curl if you do not have HTTPie installed)
+   http POST :4000/api/taskforge/v1/auth/login email=demo@taskforge.dev password=Demo1234!
+   http GET :4000/api/taskforge/v1/auth/me "Authorization:Bearer <token>"
    ```
-   The default template in `infra/env/web.env.example` now includes `DATABASE_URL`. When running inside Docker Compose, keep the
-   host as `db`; for local `pnpm dev` sessions, point it at your accessible Postgres host (e.g., `localhost`).
-2. **Optional OAuth providers** – supply any provider keys you have:
-   ```bash
-   GITHUB_ID=<github-client-id>
-   GITHUB_SECRET=<github-client-secret>
-   GOOGLE_ID=<google-oauth-client-id>
-   GOOGLE_SECRET=<google-oauth-client-secret>
-   ```
-   Leaving these blank keeps the login screen in a safe “No providers configured” state for development demos.
-   - **Google Cloud setup**
-     1. Create an OAuth consent screen (External) in [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-     2. Add an OAuth 2.0 Client ID (Web application) with authorized origins `http://localhost:3000` and redirect URI `http://localhost:3000/api/auth/callback/google` for local dev.
-     3. Copy the generated **Client ID** and **Client Secret** into the environment variables above. Restart the Next.js server so NextAuth picks up the provider.
-     4. In production, repeat with your deployed domains and update the allowed origins/redirects to match.
-   - Accounts created through Google reuse existing credential users when the email matches, so users can link social login after registering with a password.
-3. **Run Prisma migrations** – make sure the shared database has the auth tables NextAuth expects:
-   ```bash
-   pnpm -C apps/api prisma migrate deploy
-   ```
-   Run this any time the Prisma schema changes (or `prisma migrate dev` when iterating locally).
-4. **Backend linkage (optional)** – `API_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` remain available if you need to hydrate UI from the Express API while OAuth is being integrated end-to-end. When running under Docker Compose the templates already point server-side traffic at `http://api:4000/...` so the web container talks to the API service directly, while browser traffic continues to use `http://localhost:4000/...` for CORS-friendly requests.
-5. **Run the web app** – launch the Next.js dev server:
-   ```bash
-   pnpm -C apps/web dev
-   ```
-   Visit `http://localhost:3000/login` to confirm:
-   - With no provider keys, the page renders a friendly callout explaining how to enable OAuth.
-   - With provider keys set, sign-in buttons appear and sessions flow through NextAuth’s `SessionProvider`.
-6. **Access session data** –
-   - Server components use `getCurrentUser()` (`@/lib/server-auth`) to read the active session.
-   - Client components call `useAuth()` (`@/lib/use-auth`) for `{ user, status }`, built on top of `next-auth/react`’s `useSession()` hook.
+   Replace `<token>` with the `accessToken` returned from the login response.
+2. **Docker bridge test** – `make up` then run `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
+3. **NextAuth UI** – start the web app (`pnpm -C apps/web dev`) and visit [`http://localhost:3000/login`](http://localhost:3000/login). With provider credentials in place you should see GitHub/Google buttons; otherwise a helper callout explains how to enable them. After signing in you are redirected to the dashboard which confirms session state in the header.
+
+Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
+
+### Accessing session state in code
+- Server components read the active session via `getCurrentUser()` (`apps/web/lib/server-auth.ts`).
+- Client components use `useAuth()` (`apps/web/lib/use-auth.ts`), a thin wrapper around `next-auth/react`’s `useSession()` hook.
 
 ## Scripts
 - `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
