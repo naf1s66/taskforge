@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
@@ -42,18 +42,22 @@ function getCookieOptions() {
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
 
-const authAttemptLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: req => req.ip ?? req.socket.remoteAddress ?? 'global',
-  handler: (_req, res) => {
-    res
-      .status(429)
-      .json({ error: 'Too many authentication attempts. Please try again later.' });
-  },
-});
+const noopLimiter: RequestHandler = (_req, _res, next) => next();
+const authAttemptLimiter: RequestHandler =
+  process.env.NODE_ENV === 'test'
+    ? noopLimiter
+    : rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 5,
+        standardHeaders: true,
+        legacyHeaders: false,
+        keyGenerator: req => req.ip ?? req.socket.remoteAddress ?? 'global',
+        handler: (_req, res) => {
+          res
+            .status(429)
+            .json({ error: 'Too many authentication attempts. Please try again later.' });
+        },
+      });
 
 export interface AuthRouterOptions {
   userStore?: UserStore;
