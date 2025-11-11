@@ -18,7 +18,10 @@ const TaskListQuerySchema = z
   .passthrough();
 
 const TaskIdParamSchema = z.object({
-  id: z.string().trim().min(1, 'Task id is required'),
+  id: z
+    .string({ required_error: 'Task id is required', invalid_type_error: 'Invalid identifier' })
+    .trim()
+    .uuid({ message: 'Invalid identifier' }),
 });
 
 export function createTaskRouter(taskRepository?: TaskRepository) {
@@ -71,7 +74,7 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
   router.patch('/:id', async (req, res, next) => {
     const params = TaskIdParamSchema.safeParse(req.params);
     if (!params.success) {
-      return res.status(400).json({ error: 'Invalid payload', details: params.error.flatten() });
+      return res.status(400).json({ error: 'Invalid identifier' });
     }
 
     const parsed = TaskUpdateSchema.safeParse(req.body);
@@ -85,8 +88,9 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
+      const { id } = params.data;
       const payload: TaskUpdateInput = parsed.data;
-      const updated = await repository.updateTask(user.id, params.data.id, payload);
+      const updated = await repository.updateTask(user.id, id, payload);
       if (!updated) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -102,7 +106,7 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
   router.delete('/:id', async (req, res, next) => {
     const params = TaskIdParamSchema.safeParse(req.params);
     if (!params.success) {
-      return res.status(400).json({ error: 'Invalid payload', details: params.error.flatten() });
+      return res.status(400).json({ error: 'Invalid identifier' });
     }
 
     try {
@@ -111,7 +115,8 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const deleted = await repository.deleteTask(user.id, params.data.id);
+      const { id } = params.data;
+      const deleted = await repository.deleteTask(user.id, id);
       if (!deleted) {
         return res.status(404).json({ error: 'Not found' });
       }

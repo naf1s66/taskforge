@@ -125,6 +125,18 @@ describe('Tasks API', () => {
     );
   });
 
+  it('returns 400 when updating with an invalid task id', async () => {
+    const { accessToken } = await register();
+
+    const response = await agent
+      .patch('/api/taskforge/v1/tasks/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ title: 'Renamed' })
+      .expect(400);
+
+    expect(response.body).toEqual({ error: 'Invalid identifier' });
+  });
+
   it("returns 404 when attempting to update another user's task", async () => {
     const { accessToken } = await register();
     const someoneElse = await taskRepository.createTask('another-user', { title: 'Secret task' });
@@ -167,6 +179,17 @@ describe('Tasks API', () => {
 
     const remaining = await taskRepository.listTasks(userId);
     expect(remaining.total).toBe(0);
+  });
+
+  it('returns 400 when deleting with an invalid task id', async () => {
+    const { accessToken } = await register();
+
+    const response = await agent
+      .delete('/api/taskforge/v1/tasks/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    expect(response.body).toEqual({ error: 'Invalid identifier' });
   });
 
   it("returns 404 when attempting to delete another user's task", async () => {
