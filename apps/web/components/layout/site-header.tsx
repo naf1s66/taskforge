@@ -2,9 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useTransition } from 'react';
+import { useCallback, useMemo, useTransition } from 'react';
 import { signOut } from 'next-auth/react';
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/use-auth';
 
@@ -41,10 +42,29 @@ function UserAvatar({
 }
 
 export function SiteHeader() {
-  const { user, status } = useAuth();
+  const { user, status, error, isLoading, refresh } = useAuth();
   const [isSigningOut, startSignOut] = useTransition();
 
   const displayName = user?.name || user?.email || 'Account';
+  const retryDisabled = isLoading;
+  const statusMessage = useMemo(() => {
+    switch (status) {
+      case 'loading':
+        return 'Checking your session status.';
+      case 'authenticated':
+        return `Signed in as ${displayName}.`;
+      case 'error':
+        return error ?? 'We could not verify your session.';
+      default:
+        return 'You are not signed in.';
+    }
+  }, [displayName, error, status]);
+
+  const handleRetry = useCallback(() => {
+    if (!retryDisabled) {
+      refresh();
+    }
+  }, [refresh, retryDisabled]);
 
   return (
     <header className="flex flex-col gap-4 border-b border-border/60 pb-6 md:flex-row md:items-center md:justify-between">
@@ -52,6 +72,9 @@ export function SiteHeader() {
         <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">TaskForge</div>
         <h1 className="text-3xl font-semibold text-foreground">Plan. Execute. Ship.</h1>
         <p className="text-sm text-muted-foreground">Day 2 · Auth scaffolding ready for OAuth hand-off.</p>
+        <p aria-live="polite" className="sr-only">
+          {statusMessage}
+        </p>
       </div>
       <div className="flex items-center gap-4">
         {status === 'loading' && <div className="h-10 w-32 animate-pulse rounded-full bg-border/60" />}
@@ -69,7 +92,20 @@ export function SiteHeader() {
               disabled={isSigningOut}
               onClick={() =>
                 startSignOut(() => {
-                  void signOut({ callbackUrl: '/login' });
+                  void (async () => {
+                    try {
+                      await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+                        credentials: 'include',
+                        body: JSON.stringify({}),
+                      });
+                    } catch (error) {
+                      console.error('[auth] Failed to clear API session', error);
+                    } finally {
+                      await signOut({ callbackUrl: '/login' });
+                    }
+                  })();
                 })
               }
             >
@@ -77,7 +113,23 @@ export function SiteHeader() {
             </Button>
           </div>
         )}
-        {status !== 'loading' && status !== 'authenticated' && (
+        {status === 'error' && (
+          <div className="flex w-full max-w-xs flex-col gap-3" aria-live="assertive">
+            <Alert variant="destructive">
+              <AlertTitle>Session error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={handleRetry} disabled={retryDisabled}>
+                {retryDisabled ? 'Retrying…' : 'Retry'}
+              </Button>
+              <Button asChild size="sm" className="rounded-full">
+                <Link href="/login">Sign in</Link>
+              </Button>
+            </div>
+          </div>
+        )}
+        {status === 'idle' && (
           <Button asChild size="sm" className="rounded-full">
             <Link href="/login">Sign in</Link>
           </Button>

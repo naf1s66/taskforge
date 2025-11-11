@@ -9,3 +9,26 @@ export interface TaskDTO {
   dueDate?: string;
   tags?: string[];
 }
+
+export interface AuthUserDTO {
+  id: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface AuthTokensDTO {
+  tokenType: 'Bearer';
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresAt: string;
+  refreshTokenExpiresAt: string;
+}
+
+export interface AuthSuccessResponseDTO {
+  user: AuthUserDTO;
+  tokens: AuthTokensDTO;
+}
+
+export interface AuthMeResponseDTO {
+  user: AuthUserDTO | null;
+}

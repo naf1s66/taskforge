@@ -14,6 +14,10 @@ const registerSchema = z.object({
 });
 
 const loginSchema = registerSchema;
+const sessionBridgeSchema = z.object({
+  userId: z.string().min(1),
+  email: z.string().email().optional(),
+});
 
 // Helper function to get cookie domain for cross-subdomain sharing
 function getCookieDomain(): string | undefined {
@@ -64,7 +68,11 @@ export interface AuthRouterOptions {
   passwordHasher?: PasswordHasher;
   tokenService?: TokenService;
   jwtSecret?: string;
+  jwtRefreshSecret?: string;
+  sessionBridgeSecret?: string;
   bcryptSaltRounds?: number;
+  accessTokenExpiresIn?: string | number;
+  refreshTokenExpiresIn?: string | number;
 }
 
 function resolveSaltRounds(explicit?: number): number {
@@ -80,12 +88,40 @@ function resolveSaltRounds(explicit?: number): number {
   return 10;
 }
 
+function resolveExpiresIn(value?: string | number, envKey?: string, fallback?: string | number) {
+  if (value) return value;
+  if (envKey) {
+    const fromEnv = process.env[envKey];
+    if (fromEnv) return fromEnv;
+  }
+  return fallback;
+}
+
 export function createAuthRouter(options: AuthRouterOptions = {}) {
   const store = options.userStore ?? new InMemoryUserStore();
   const saltRounds = resolveSaltRounds(options.bcryptSaltRounds);
   const hasher = options.passwordHasher ?? createPasswordHasher(saltRounds);
   const secret = options.jwtSecret ?? process.env.JWT_SECRET ?? 'dev-secret';
-  const tokens = options.tokenService ?? createTokenService(secret);
+  const refreshSecret = options.jwtRefreshSecret ?? process.env.JWT_REFRESH_SECRET;
+  const accessExpiresIn = resolveExpiresIn(
+    options.accessTokenExpiresIn,
+    'JWT_ACCESS_TOKEN_EXPIRES_IN',
+    '1h',
+  );
+  const refreshExpiresIn = resolveExpiresIn(
+    options.refreshTokenExpiresIn,
+    'JWT_REFRESH_TOKEN_EXPIRES_IN',
+    '7d',
+  );
+  const tokens =
+    options.tokenService ??
+    createTokenService({
+      accessSecret: secret,
+      refreshSecret: refreshSecret ?? undefined,
+      accessExpiresIn,
+      refreshExpiresIn,
+    });
+  const bridgeSecret = options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET;
   const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
 
   const router = Router();
@@ -109,13 +145,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     };
 
     await store.create(user);
-    const token = await tokens.createToken(user.id);
+    const issuedTokens = await tokens.issueTokens(user.id);
 
     // Set HttpOnly cookie with shared domain for cross-subdomain access
-    res.cookie('tf_session', token, getCookieOptions());
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
 
     return res.status(201).json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
     });
   });
 
@@ -135,13 +172,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = await tokens.createToken(user.id);
-    
+    const issuedTokens = await tokens.issueTokens(user.id);
+
     // Set HttpOnly cookie with shared domain for cross-subdomain access
-    res.cookie('tf_session', token, getCookieOptions());
-    
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
+
     return res.json({
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
     });
   });
 
@@ -152,6 +190,49 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     const { maxAge, ...clearOptions } = cookieOptions;
     res.clearCookie('tf_session', clearOptions);
     return res.status(200).json({ success: true });
+  });
+
+  router.post('/session-bridge', async (req, res) => {
+    if (!bridgeSecret) {
+      return res.status(503).json({ error: 'Session bridge is not configured' });
+    }
+
+    const providedSecret = req.get('x-session-bridge-secret');
+
+    if (!providedSecret || providedSecret !== bridgeSecret) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parse = sessionBridgeSchema.safeParse(req.body);
+
+    if (!parse.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parse.error.flatten() });
+    }
+
+    const { userId, email } = parse.data;
+
+    let user = await store.findById(userId);
+
+    if (!user && email) {
+      user = await store.findByEmail(email);
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (email && user.email.toLowerCase() !== email.toLowerCase()) {
+      return res.status(409).json({ error: 'User email mismatch' });
+    }
+
+    const issuedTokens = await tokens.issueTokens(user.id);
+
+    res.cookie('tf_session', issuedTokens.accessToken, getCookieOptions());
+
+    return res.json({
+      user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
+      tokens: issuedTokens,
+    });
   });
 
   router.get('/me', authMiddleware, (_req, res) => {

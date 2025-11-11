@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { RegisterForm } from '@/components/auth/register-form';
 import { Card, CardContent } from '@/components/ui/card';
 
 export const metadata: Metadata = {
@@ -22,7 +21,7 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold text-foreground">Everything you need to start shipping</h2>
               <p>
-                Create an account with your preferred identity provider to unlock kanban boards, keyboard shortcuts, and a focused space for your team&apos;s deliverables.
+                Create an account with secure credentials to unlock kanban boards, keyboard shortcuts, and a focused space for your team&apos;s deliverables.
               </p>
             </div>
           </div>
@@ -40,19 +39,8 @@ export default function RegisterPage() {
         </CardContent>
       </Card>
       <Card className="flex-1 border-border/70 bg-card/80">
-        <CardContent className="flex h-full flex-col justify-center gap-6 p-6 text-center">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold text-foreground">Sign up through your provider</h1>
-            <p className="text-sm text-muted-foreground">
-              TaskForge relies on OAuth providers configured for NextAuth. Head to the sign-in page to choose GitHub, Google, or any provider you enable in your environment variables.
-            </p>
-          </div>
-          <Button asChild className="mx-auto w-full max-w-xs">
-            <Link href="/login">View sign-in options</Link>
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Missing buttons on the login screen? Double-check your <code>NEXTAUTH_SECRET</code> and provider keys in <code>.env.local</code>.
-          </p>
+        <CardContent className="flex h-full flex-col justify-center p-6">
+          <RegisterForm />
         </CardContent>
       </Card>
     </div>
