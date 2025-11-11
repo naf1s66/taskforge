@@ -1,59 +1,93 @@
 import { Router } from 'express';
 
-import type { TaskDTO, TaskPriority, TaskStatus } from '@taskforge/shared';
-
+import { getPrismaClient } from '../prisma';
 import { TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
+import {
+  createTaskRepository,
+  type TaskCreateInput,
+  type TaskRepository,
+  type TaskUpdateInput,
+} from '../repositories/task-repository';
 
-export const router = Router();
+export function createTaskRouter(taskRepository?: TaskRepository) {
+  const repository = taskRepository ?? createTaskRepository(getPrismaClient());
+  const router = Router();
 
-type TaskRecord = TaskDTO & {
-  id: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-};
+  router.get('/', async (req, res, next) => {
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-const tasks: TaskRecord[] = [];
+      const tasks = await repository.listTasks(user.id);
+      res.json({ items: tasks });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-router.get('/', (_req, res) => {
-  res.json({ items: tasks });
-});
+  router.post('/', async (req, res, next) => {
+    const parsed = TaskCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error);
+    }
 
-router.post('/', (req, res) => {
-  const parsed = TaskCreateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-  const task: TaskRecord = {
-    id: String(Date.now()),
-    status: parsed.data.status ?? 'TODO',
-    priority: parsed.data.priority ?? 'MEDIUM',
-    ...parsed.data,
-  };
+      const payload: TaskCreateInput = parsed.data;
+      const task = await repository.createTask(user.id, payload);
+      res.status(201).json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
 
-  tasks.push(task);
-  res.status(201).json(task);
-});
+  router.patch('/:id', async (req, res, next) => {
+    const parsed = TaskUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error);
+    }
 
-router.patch('/:id', (req, res) => {
-  const parsed = TaskUpdateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-  const index = tasks.findIndex(task => task.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: 'Not found' });
+      const payload: TaskUpdateInput = parsed.data;
+      const updated = await repository.updateTask(user.id, req.params.id, payload);
+      if (!updated) {
+        return res.status(404).json({ error: 'Not found' });
+      }
 
-  tasks[index] = {
-    ...tasks[index],
-    ...parsed.data,
-    status: parsed.data.status ?? tasks[index].status,
-    priority: parsed.data.priority ?? tasks[index].priority,
-  };
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
 
-  res.json(tasks[index]);
-});
+  router.delete('/:id', async (req, res, next) => {
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-router.delete('/:id', (req, res) => {
-  const index = tasks.findIndex(task => task.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: 'Not found' });
+      const deleted = await repository.deleteTask(user.id, req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Not found' });
+      }
 
-  const [deleted] = tasks.splice(index, 1);
-  res.json(deleted);
-});
+      res.json(deleted);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}
