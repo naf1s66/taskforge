@@ -1096,7 +1096,8 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1159,7 +1160,7 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "invalid": {
+                  "invalidPayload": {
                     "value": {
                       "error": "Invalid payload",
                       "details": {
@@ -1170,6 +1171,11 @@
                         },
                         "formErrors": []
                       }
+                    }
+                  },
+                  "invalidIdentifier": {
+                    "value": {
+                      "error": "Invalid identifier"
                     }
                   }
                 }
@@ -1228,7 +1234,8 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -1259,17 +1266,9 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "invalid": {
+                  "invalidIdentifier": {
                     "value": {
-                      "error": "Invalid payload",
-                      "details": {
-                        "fieldErrors": {
-                          "email": [
-                            "Invalid email address"
-                          ]
-                        },
-                        "formErrors": []
-                      }
+                      "error": "Invalid identifier"
                     }
                   }
                 }

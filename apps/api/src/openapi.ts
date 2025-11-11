@@ -85,6 +85,10 @@ const invalidPayloadExample = {
   value: errorResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const invalidIdentifierExample = {
+  value: { error: 'Invalid identifier' },
+} satisfies OpenAPIV3.ExampleObject;
+
 const notFoundExample = { value: { error: 'Not found' } } satisfies OpenAPIV3.ExampleObject;
 
 const logoutSuccessExample = { value: { success: true } } satisfies OpenAPIV3.ExampleObject;
@@ -603,7 +607,7 @@ export const openApiDocument: OpenAPIV3.Document = {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            schema: { type: 'string', format: 'uuid' },
           },
         ],
         requestBody: {
@@ -635,7 +639,8 @@ export const openApiDocument: OpenAPIV3.Document = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 examples: {
-                  invalid: invalidPayloadExample,
+                  invalidPayload: invalidPayloadExample,
+                  invalidIdentifier: invalidIdentifierExample,
                 },
               },
             },
@@ -673,7 +678,7 @@ export const openApiDocument: OpenAPIV3.Document = {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            schema: { type: 'string', format: 'uuid' },
           },
         ],
         responses: {
@@ -694,7 +699,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 examples: {
-                  invalid: invalidPayloadExample,
+                  invalidIdentifier: invalidIdentifierExample,
                 },
               },
             },
