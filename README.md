@@ -31,26 +31,31 @@ taskforge/
    cp infra/env/api.env.example apps/api/.env
    cp infra/env/web.env.example apps/web/.env
    ```
-3. **Run static checks**
+3. **Apply Prisma migrations (required for the task repository)**
+   ```bash
+   pnpm -C apps/api prisma migrate dev
+   ```
+   Re-run this whenever the Prisma schema changes to keep your local database aligned.
+4. **Run static checks**
    ```bash
    pnpm lint
    pnpm typecheck
    ```
-4. **Start the Docker services (Postgres + MailHog + app containers)**
+5. **Start the Docker services (Postgres + MailHog + app containers)**
    ```bash
    make up
    # when finished
    make down
    ```
-5. **Run dev servers locally (hot reload)**
+6. **Run dev servers locally (hot reload)**
    ```bash
    pnpm -C apps/api dev
    pnpm -C apps/web dev
    ```
-6. **Smoke test**
+7. **Smoke test**
    - API health: `curl http://localhost:4000/api/taskforge/v1/health`
    - Web UI: http://localhost:3000
-7. **Docker auth smoke test**
+8. **Docker auth smoke test**
    ```bash
    make auth-smoke
    ```
@@ -98,8 +103,10 @@ Keep `.env` files in sync with the templates in `infra/env/`. The table below hi
 Run Prisma migrations whenever the schema changes:
 
 ```bash
-pnpm -C apps/api prisma migrate deploy
+pnpm -C apps/api prisma migrate dev
 ```
+
+Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
 
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 
@@ -148,4 +155,4 @@ Screenshots of the login flow and protected dashboard live in the design referen
 - DB: Neon or Supabase
 - Email (dev): MailHog; (prod) any free SMTP (e.g., Brevo, Resend, Postmark trial)
 
-**Note:** This scaffold uses an in-memory store in the API for now—wire up Prisma (see PRD) before production.
+**Note:** Task data (including tag assignments) now persists through Prisma. Run `pnpm -C apps/api prisma migrate dev` before exercising the API locally to ensure the task repository has the required tables.

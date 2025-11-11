@@ -10,12 +10,14 @@ import { openApiDocument } from './openapi';
 import { createAuthRouter } from './routes/auth';
 import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
-import { router as taskRoutes } from './routes/tasks';
+import { createTaskRouter } from './routes/tasks';
+import { createTaskRepository, type TaskRepository } from './repositories/task-repository';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
   userStore?: UserStore;
   sessionBridgeSecret?: string;
+  taskRepository?: TaskRepository;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -59,7 +61,9 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use('/api/taskforge/docs', swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-  const userStore = options.userStore ?? new PrismaUserStore(getPrismaClient());
+  const prisma = getPrismaClient();
+  const userStore = options.userStore ?? new PrismaUserStore(prisma);
+  const taskRepository = options.taskRepository ?? createTaskRepository(prisma);
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,
     userStore,
@@ -68,7 +72,7 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 
   app.use(authRouterFactory.authMiddleware);
-  app.use('/api/taskforge/v1/tasks', taskRoutes);
+  app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
   app.use('/api/taskforge/v1/tags', tagRoutes);
   app.get('/api/taskforge/v1/me', (_req, res) => {
     const user = res.locals.user as
