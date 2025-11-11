@@ -49,10 +49,12 @@ export class PrismaUserStore implements UserStore {
   constructor(private readonly prisma: PrismaClient) {}
 
   async create(user: StoredUser): Promise<void> {
+    const normalizedEmail = user.email.toLowerCase();
+
     await this.prisma.user.create({
       data: {
         id: user.id,
-        email: user.email,
+        email: normalizedEmail,
         passwordHash: user.passwordHash,
         createdAt: user.createdAt,
       },
@@ -60,7 +62,8 @@ export class PrismaUserStore implements UserStore {
   }
 
   async findByEmail(email: string): Promise<StoredUser | undefined> {
-    const record = await this.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = email.toLowerCase();
+    const record = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     return record ? this.toStoredUser(record) : undefined;
   }
 
