@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { getCurrentUser } from '@/lib/server-auth';
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from '@/lib/env';
+import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 
 import { DashboardContent } from './dashboard-content';
 import type { DashboardTask, DashboardUser } from './types';
@@ -55,7 +55,7 @@ async function getDashboardTasks(): Promise<DashboardTask[]> {
 
   let response: Response;
   try {
-    response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/tasks`, {
+    response = await fetch(getApiUrl('v1/tasks'), {
       method: 'GET',
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,

@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { getApiBaseUrl } from '@/lib/env';
+import { getApiUrl } from '@/lib/env';
 import type { AuthProviderSummary } from '@/lib/auth-config';
 
 const loginSchema = z.object({
@@ -100,7 +100,7 @@ export function LoginForm({ providers }: LoginFormProps) {
       setIsSubmitting(true);
 
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/auth/login`, {
+        const response = await fetch(getApiUrl('v1/auth/login'), {
           method: 'POST',
           headers: {
             'content-type': 'application/json',

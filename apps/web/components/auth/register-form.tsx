@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { getApiBaseUrl } from '@/lib/env';
+import { getApiUrl } from '@/lib/env';
 
 const registerSchema = z
   .object({
@@ -76,7 +76,7 @@ export function RegisterForm() {
       const payloadToSend = { email: values.email, password: values.password };
 
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/auth/register`, {
+        const response = await fetch(getApiUrl('v1/auth/register'), {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
