@@ -63,19 +63,11 @@ export function createTokenService(options: TokenServiceOptions): TokenService {
         tokenType: 'Bearer',
       };
     },
-    verifyAccessToken(token) {
-      try {
-        return Promise.resolve(verifyToken(token, options.accessSecret));
-      } catch (error) {
-        return Promise.reject(error);
-      }
+    async verifyAccessToken(token) {
+      return verifyToken(token, options.accessSecret);
     },
-    verifyRefreshToken(token) {
-      try {
-        return Promise.resolve(verifyToken(token, refreshSecret));
-      } catch (error) {
-        return Promise.reject(error);
-      }
+    async verifyRefreshToken(token) {
+      return verifyToken(token, refreshSecret);
     },
   };
 }

@@ -6,6 +6,7 @@ const config: Config = {
   roots: ['<rootDir>/tests'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '@taskforge/shared': '<rootDir>/../../packages/shared/src',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   transform: {

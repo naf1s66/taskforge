@@ -1,5 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 
+import { getSessionCookieName } from '@taskforge/shared';
+
 import type { TokenService } from '../auth/token';
 import type { UserStore } from '../auth/user-store';
 
@@ -9,9 +11,10 @@ export interface AuthMiddlewareOptions {
 }
 
 export function createAuthMiddleware({ tokenService, userStore }: AuthMiddlewareOptions) {
+  const sessionCookieName = getSessionCookieName();
   return async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     // Try to get token from HttpOnly cookie first, then fallback to Authorization header
-    let token = req.cookies?.tf_session;
+    let token = req.cookies?.[sessionCookieName];
     
     if (!token) {
       const header = req.headers.authorization;

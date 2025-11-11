@@ -32,3 +32,5 @@ export interface AuthSuccessResponseDTO {
 export interface AuthMeResponseDTO {
   user: AuthUserDTO | null;
 }
+
+export { resolveCookieDomain, getSessionCookieName } from './auth/cookies';

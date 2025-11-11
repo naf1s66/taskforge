@@ -1,3 +1,5 @@
+import { getSessionCookieName } from '@taskforge/shared';
+
 export function getApiBaseUrl() {
   const fromPublic = process.env.NEXT_PUBLIC_API_BASE_URL;
   const fromServer = process.env.API_BASE_URL;
@@ -15,4 +17,4 @@ export function getApiUrl(path: string) {
   return `${getApiBaseUrl()}/${normalizedPath}`;
 }
 
-export const SESSION_COOKIE_NAME = 'tf_session';
+export const SESSION_COOKIE_NAME = getSessionCookieName();

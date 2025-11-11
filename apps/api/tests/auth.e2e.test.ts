@@ -102,6 +102,37 @@ describe('Auth API', () => {
     );
   });
 
+  it('exchanges a refresh token for a new access token', async () => {
+    const email = uniqueEmail('refresh');
+    const { body } = await register(email);
+
+    const response = await agent
+      .post('/api/taskforge/v1/auth/refresh')
+      .send({ refreshToken: body.tokens.refreshToken })
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        user: expect.objectContaining({ email }),
+        tokens: expect.objectContaining({
+          accessToken: expect.any(String),
+          refreshToken: expect.any(String),
+        }),
+      }),
+    );
+
+    expect(response.headers['set-cookie']).toEqual(
+      expect.arrayContaining([expect.stringContaining('tf_session=')]),
+    );
+  });
+
+  it('rejects invalid refresh tokens', async () => {
+    await agent
+      .post('/api/taskforge/v1/auth/refresh')
+      .send({ refreshToken: 'not-a-real-token' })
+      .expect(401);
+  });
+
   it('rejects login attempts for unknown users', async () => {
     await agent
       .post('/api/taskforge/v1/auth/login')

@@ -2,36 +2,21 @@ import 'server-only';
 
 import { cookies } from 'next/headers';
 
-import { getApiUrl, SESSION_COOKIE_NAME } from './env';
+import { getSessionCookieName, resolveCookieDomain } from '@taskforge/shared';
+
+import { getApiUrl } from './env';
 import type { AuthenticatedUser } from './server-auth';
 
-function resolveCookieDomain(): string | undefined {
-  const explicit = process.env.COOKIE_DOMAIN;
-  if (explicit) {
-    return explicit;
-  }
-
-  if (process.env.NODE_ENV === 'production') {
-    const apiUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (apiUrl) {
-      try {
-        const url = new URL(apiUrl);
-        const hostname = url.hostname;
-        const parts = hostname.split('.');
-        if (parts.length >= 3) {
-          return `.${parts.slice(-2).join('.')}`;
-        }
-        return `.${hostname}`;
-      } catch {
-        // ignore parse errors
-      }
-    }
-  }
-
-  return undefined;
-}
+const SESSION_COOKIE_NAME = getSessionCookieName();
 
 export function getSessionCookieOptions() {
+  const domain = resolveCookieDomain({
+    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
+    NODE_ENV: process.env.NODE_ENV,
+    API_BASE_URL: process.env.API_BASE_URL,
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  });
+
   return {
     name: SESSION_COOKIE_NAME,
     httpOnly: true,
@@ -39,7 +24,7 @@ export function getSessionCookieOptions() {
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 7 * 24 * 60 * 60,
-    domain: resolveCookieDomain(),
+    domain,
   } as const;
 }
 
