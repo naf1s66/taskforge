@@ -24,12 +24,19 @@ const sessionBridgeSchema = z.object({
 
 // Helper function to get cookie options
 function getCookieOptions() {
+  const domain = resolveCookieDomain({
+    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
+    NODE_ENV: process.env.NODE_ENV,
+    API_BASE_URL: process.env.API_BASE_URL,
+    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  });
+
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    domain: resolveCookieDomain(process.env),
+    domain,
   };
 }
 
