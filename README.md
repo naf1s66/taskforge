@@ -125,6 +125,14 @@ Running the seed multiple times is safe—it upserts the user and respects `SEED
 
 Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
 
+## Continuous Integration
+- The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
+  migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.
+- Frontend auth tests should be exposed through `pnpm test` in `apps/web`; the CI job runs that script automatically when it is
+  present so browser coverage can gate merges alongside the API checks.
+- Configure repository secrets (`CI_JWT_SECRET`, `CI_JWT_REFRESH_SECRET`, `CI_SESSION_BRIDGE_SECRET`, `CI_NEXTAUTH_SECRET`) to
+  override the CI-safe defaults used in the workflow when running against staging infrastructure.
+
 ### Accessing session state in code
 - Server components read the active session via `getCurrentUser()` (`apps/web/lib/server-auth.ts`).
 - Client components use `useAuth()` (`apps/web/lib/use-auth.ts`), a thin wrapper around `next-auth/react`’s `useSession()` hook.
