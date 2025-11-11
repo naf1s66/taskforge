@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from '@/lib/env';
+import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 
 interface ApiMeResponse {
   user: { id: string; email: string | null; createdAt?: string } | null;
@@ -16,7 +16,7 @@ export async function GET() {
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/me`, {
+    const response = await fetch(getApiUrl('v1/me'), {
       method: 'GET',
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,

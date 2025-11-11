@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cookies } from 'next/headers';
 
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from './env';
+import { getApiUrl, SESSION_COOKIE_NAME } from './env';
 import type { AuthenticatedUser } from './server-auth';
 
 function resolveCookieDomain(): string | undefined {
@@ -58,7 +58,7 @@ interface BridgeResponse {
 
 async function requestBridgeToken(user: AuthenticatedUser): Promise<string> {
   const secret = getBridgeSecret();
-  const bridgeUrl = new URL('v1/auth/session-bridge', `${getApiBaseUrl()}/`).toString();
+  const bridgeUrl = getApiUrl('v1/auth/session-bridge');
   const response = await fetch(bridgeUrl, {
     method: 'POST',
     headers: {

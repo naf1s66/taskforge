@@ -4,7 +4,7 @@ import type { Session } from 'next-auth';
 import { cookies } from 'next/headers';
 
 import { auth } from './auth';
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from './env';
+import { getApiUrl, SESSION_COOKIE_NAME } from './env';
 
 export type AuthenticatedUser = NonNullable<Session['user']>;
 
@@ -17,7 +17,7 @@ async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/me`, {
+    const response = await fetch(getApiUrl('v1/me'), {
       method: 'GET',
       headers: {
         cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}`,

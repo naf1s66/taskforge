@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getApiBaseUrl, SESSION_COOKIE_NAME } from '@/lib/env';
+import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 import { expireApiSessionCookie, getSessionCookieOptions } from '@/lib/session-bridge';
 
 function isSameOrigin(request: NextRequest): boolean {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   if (cookieHeader?.includes(`${SESSION_COOKIE_NAME}=`)) {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/taskforge/v1/auth/logout`, {
+      const response = await fetch(getApiUrl('v1/auth/logout'), {
         method: 'POST',
         headers: {
           cookie: cookieHeader,

@@ -10,4 +10,9 @@ export function getApiBaseUrl() {
   return base.replace(/\/$/, '');
 }
 
+export function getApiUrl(path: string) {
+  const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${getApiBaseUrl()}/${normalizedPath}`;
+}
+
 export const SESSION_COOKIE_NAME = 'tf_session';
