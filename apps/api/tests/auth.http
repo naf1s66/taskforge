@@ -1,0 +1,106 @@
+### Register a new user
+# @name register
+POST http://localhost:4000/api/taskforge/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "smoke-{{$timestamp}}@example.com",
+  "password": "Secret123!"
+}
+
+> {%
+client.test('register returns tokens', () => {
+  client.assert(response.status === 201, 'expected 201 Created');
+  client.assert(response.body.user.email.includes('@example.com'), 'email is echoed back');
+  client.assert(response.body.tokens.accessToken, 'access token is present');
+  client.assert(response.body.tokens.refreshToken, 'refresh token is present');
+  client.global.set('accessToken', response.body.tokens.accessToken);
+  client.global.set('smokeEmail', response.body.user.email);
+  client.global.set('smokePassword', 'Secret123!');
+});
+%}
+
+### Login with existing user
+# @name login
+POST http://localhost:4000/api/taskforge/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{smokeEmail}}",
+  "password": "{{smokePassword}}"
+}
+
+> {%
+client.test('login succeeds and refreshes tokens', () => {
+  client.assert(response.status === 200, 'expected 200 OK');
+  client.assert(response.body.tokens.accessToken, 'access token is present');
+  client.assert(response.body.tokens.refreshToken, 'refresh token is present');
+  client.global.set('accessToken', response.body.tokens.accessToken);
+});
+%}
+
+### Login with wrong password should fail
+# @name loginFailure
+POST http://localhost:4000/api/taskforge/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{smokeEmail}}",
+  "password": "WrongPassword1"
+}
+
+> {%
+client.test('login fails with 401', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+  client.assert(response.body.error === 'Invalid credentials', 'invalid credentials error message');
+});
+%}
+
+### Fetch current user with token
+# @name me
+GET http://localhost:4000/api/taskforge/v1/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test('me endpoint returns authenticated user', () => {
+  client.assert(response.status === 200, 'expected 200 OK');
+  client.assert(response.body.user.email === client.global.get('smokeEmail'), 'returned email matches login');
+});
+%}
+
+### Logout (requires token)
+# @name logout
+POST http://localhost:4000/api/taskforge/v1/auth/logout
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test('logout clears session cookie', () => {
+  client.assert(response.status === 200, 'expected 200 OK');
+  const cookies = response.headers['set-cookie'];
+  client.assert(Array.isArray(cookies) && cookies.some(cookie => cookie.includes('tf_session=')), 'session cookie is returned');
+  client.assert(cookies.some(cookie => cookie.includes('tf_session=;')), 'session cookie is cleared');
+});
+%}
+
+### Access protected tasks endpoint with token
+# @name tasks
+GET http://localhost:4000/api/taskforge/v1/tasks
+Authorization: Bearer {{accessToken}}
+
+> {%
+client.test('tasks endpoint responds for authenticated user', () => {
+  client.assert(response.status === 200, 'expected 200 OK');
+  client.assert(Array.isArray(response.body.items), 'returns items array');
+});
+%}
+
+### Access protected tasks endpoint without token should fail
+# @name tasksUnauthorized
+GET http://localhost:4000/api/taskforge/v1/tasks
+
+> {%
+client.test('tasks endpoint rejects unauthenticated user', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+  client.assert(response.body.error === 'Unauthorized', 'unauthorized error message');
+});
+%}

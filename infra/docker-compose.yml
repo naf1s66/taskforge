@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   db:
     image: postgres:16
@@ -6,10 +5,17 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: taskmaster
+      POSTGRES_DB: taskforge
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: "--auth-host=md5 --auth-local=trust"
     ports: ["5432:5432"]
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taskforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
@@ -20,19 +26,31 @@ services:
 
   api:
     build:
-      context: ../apps/api
+      context: ..
+      dockerfile: apps/api/Dockerfile
+      args:
+        DATABASE_URL: postgresql://postgres:postgres@db:5432/taskforge?schema=public
     ports: ["4000:4000"]
     env_file:
       - ./env/api.env.example
-    depends_on: [db, mailhog]
+    depends_on:
+      db:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
 
   web:
     build:
-      context: ../apps/web
+      context: ..
+      dockerfile: apps/web/Dockerfile
     ports: ["3000:3000"]
     env_file:
       - ./env/web.env.example
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_started
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:

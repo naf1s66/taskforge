@@ -3,11 +3,36 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - 'milestone*'
 
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: taskforge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d taskforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
+      JWT_SECRET: ${{ secrets.CI_JWT_SECRET || 'test-jwt-secret' }}
+      JWT_REFRESH_SECRET: ${{ secrets.CI_JWT_REFRESH_SECRET || 'test-jwt-refresh-secret' }}
+      SESSION_BRIDGE_SECRET: ${{ secrets.CI_SESSION_BRIDGE_SECRET || 'test-bridge-secret' }}
+      NEXTAUTH_SECRET: ${{ secrets.CI_NEXTAUTH_SECRET || 'test-nextauth-secret' }}
+      NEXTAUTH_URL: http://localhost:3000
+      API_BASE_URL: http://localhost:4000/api/taskforge
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/taskforge
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -15,8 +40,16 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-      - run: pnpm install
-      - run: make lint || true
-      - run: make typecheck || true
-      - run: make test
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @taskforge/api exec prisma generate
+      - name: Apply database migrations
+        run: pnpm --filter @taskforge/api exec prisma migrate deploy
+      - run: make lint
+      - run: make typecheck
+      - name: Run API tests
+        run: pnpm -C apps/api test
+      - name: Run frontend tests
+        working-directory: apps/web
+        run: pnpm test --if-present
       - run: make build

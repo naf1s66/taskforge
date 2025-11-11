@@ -1,0 +1,18 @@
+# Task: Implement JWT authentication endpoints
+
+## Summary
+- Build REST endpoints for register, login, logout, and current-user retrieval under `/auth/*`.
+- Issue and revoke JWT access/refresh tokens according to the security requirements.
+
+**Status:** Completed (API responses now return signed JWTs and set the shared `tf_session` cookie).
+
+## Acceptance Criteria
+- [x] `/auth/register`, `/auth/login`, `/auth/logout`, and `/auth/me` routes exist and are wired into the Express router.
+- [x] Successful registration and login return signed JWTs and relevant user payloads.
+- [x] Logout invalidates refresh tokens/server-side session state as required (stateless JWT at present).
+- [x] `/auth/me` returns the authenticated user when provided a valid token and rejects invalid/expired tokens.
+
+## Notes
+- Ensure parity with the frontend auth flow (NextAuth/custom client) and document the response shapes in shared DTOs.
+- Use environment-provided secrets for token signing; avoid hard-coded secrets in code.
+- `apps/api/src/routes/auth.ts` now drives register/login/logout/session-bridge endpoints via `createTokenService` plus the shared cookie helper so responses match the documented payloads.
