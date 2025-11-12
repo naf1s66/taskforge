@@ -8,7 +8,7 @@
 6. 06-api-task-test-fixtures.md – Build Jest/Supertest harness + factories for tasks.
 7. 07-api-task-crud-tests.md – Write CRUD/filter tests leveraging the harness.
 8. 08-frontend-task-api-client.md – Ship typed HTTP client for task endpoints.
-9. 09-frontend-task-query-hooks.md – Wrap the client with React Query/SWR hooks + mutations.
+9. 09-frontend-task-query-hooks.md – Wrap the client with React Query hooks + mutations (`apps/web/lib/tasks-hooks.ts`, demo at `/tasks/hooks-demo`).
 10. 10-frontend-task-list-ui.md – Render the authenticated task list using the new hooks.
 11. 11-frontend-task-filters-empty-states.md – Add filter controls + empty-state UX tied to hook params.
 12. 12-frontend-task-create-dialog.md – Build the create-task dialog powered by the create mutation.
