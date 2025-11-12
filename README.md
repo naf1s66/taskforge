@@ -145,6 +145,10 @@ pnpm -C apps/api dev
 curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
   "http://localhost:4000/api/taskforge/v1/tasks?page=1&pageSize=10"
 
+# 3b) Filter high priority in-progress docs tasks due this quarter
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "http://localhost:4000/api/taskforge/v1/tasks?q=release&status=IN_PROGRESS&priority=HIGH&tag=docs&dueFrom=2024-01-01T00:00:00.000Z&dueTo=2024-03-31T23:59:59.999Z"
+
 # 4) Create a task for the signed-in user
 curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
@@ -152,7 +156,7 @@ curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:4000/api/taskforge/v1/tasks
 ```
 
-Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
+Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. The list endpoint accepts optional `status`, `priority`, repeated `tag` parameters, free-text search via `q`, and ISO `dueFrom`/`dueTo` ranges that map directly to repository-level filters. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
 
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies

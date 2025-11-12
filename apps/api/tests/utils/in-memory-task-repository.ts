@@ -22,8 +22,58 @@ export class InMemoryTaskRepository implements TaskRepository {
     const page = Math.max(1, options?.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 20));
 
+    const status = options?.status;
+    const priority = options?.priority;
+    const tags = options?.tags;
+    const search = options?.search;
+    const dueFrom = options?.dueFrom;
+    const dueTo = options?.dueTo;
+
     const all = Array.from(this.tasks.values())
       .filter(task => task.userId === userId)
+      .filter(task => {
+        if (status && task.status !== status) {
+          return false;
+        }
+        if (priority && task.priority !== priority) {
+          return false;
+        }
+
+        if (tags?.length) {
+          const taskTags = task.tags.map(label => label.toLowerCase());
+          const requiredTags = tags.map(label => label.toLowerCase());
+          if (!requiredTags.every(label => taskTags.includes(label))) {
+            return false;
+          }
+        }
+
+        if (search) {
+          const haystack = `${task.title} ${task.description ?? ''}`.toLowerCase();
+          if (!haystack.includes(search.toLowerCase())) {
+            return false;
+          }
+        }
+
+        if (dueFrom) {
+          if (!task.dueDate) {
+            return false;
+          }
+          if (new Date(task.dueDate).getTime() < dueFrom.getTime()) {
+            return false;
+          }
+        }
+
+        if (dueTo) {
+          if (!task.dueDate) {
+            return false;
+          }
+          if (new Date(task.dueDate).getTime() > dueTo.getTime()) {
+            return false;
+          }
+        }
+
+        return true;
+      })
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
     const total = all.length;

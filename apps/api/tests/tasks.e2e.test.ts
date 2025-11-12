@@ -72,6 +72,60 @@ describe('Tasks API', () => {
     );
   });
 
+  it('supports filtering by status, priority, tag, search, and due date range', async () => {
+    const { accessToken, userId } = await register();
+
+    const earlyDue = new Date('2024-01-01T10:00:00.000Z');
+    const targetDue = new Date('2024-01-10T10:00:00.000Z');
+
+    await taskRepository.createTask(userId, {
+      title: 'Plan kickoff',
+      description: 'Kickoff with stakeholders',
+      status: 'TODO',
+      priority: 'LOW',
+      dueDate: earlyDue.toISOString(),
+      tags: ['planning'],
+    });
+
+    await taskRepository.createTask(userId, {
+      title: 'Publish release notes',
+      description: 'Write docs for the Q1 release',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      dueDate: targetDue.toISOString(),
+      tags: ['docs', 'release'],
+    });
+
+    await taskRepository.createTask(userId, {
+      title: 'File expenses',
+      description: 'Submit reimbursements',
+      status: 'DONE',
+      priority: 'MEDIUM',
+      tags: ['finance'],
+    });
+
+    const response = await agent
+      .get(
+        '/api/taskforge/v1/tasks?page=1&pageSize=10&status=IN_PROGRESS&priority=HIGH&tag=docs&q=release&dueFrom=2024-01-05T00:00:00.000Z&dueTo=2024-01-15T23:59:59.999Z',
+      )
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        total: 1,
+        items: [
+          expect.objectContaining({
+            title: 'Publish release notes',
+            tags: ['docs', 'release'],
+            status: 'IN_PROGRESS',
+            priority: 'HIGH',
+          }),
+        ],
+      }),
+    );
+  });
+
   it('creates a task with defaults and returns the record', async () => {
     const { accessToken } = await register();
 
@@ -230,5 +284,18 @@ describe('Tasks API', () => {
     expect(response.body).toEqual(
       expect.objectContaining({ error: 'Invalid payload' }),
     );
+  });
+
+  it('rejects invalid due date ranges', async () => {
+    const { accessToken } = await register();
+
+    const response = await agent
+      .get(
+        '/api/taskforge/v1/tasks?dueFrom=2025-01-10T00:00:00.000Z&dueTo=2025-01-01T00:00:00.000Z',
+      )
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    expect(response.body).toEqual(expect.objectContaining({ error: 'Invalid payload' }));
   });
 });

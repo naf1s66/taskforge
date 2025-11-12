@@ -519,6 +519,45 @@ export const openApiDocument: OpenAPIV3.Document = {
             schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
             description: 'Number of tasks per page.',
           },
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+            description: 'Filter tasks by workflow status.',
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            description: 'Filter tasks by priority.',
+          },
+          {
+            name: 'tag',
+            in: 'query',
+            style: 'form',
+            explode: true,
+            schema: { type: 'array', items: { type: 'string' } },
+            description:
+              'Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
+          },
+          {
+            name: 'q',
+            in: 'query',
+            schema: { type: 'string', minLength: 1 },
+            description: 'Case-insensitive search over the title and description.',
+          },
+          {
+            name: 'dueFrom',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return tasks due on or after this ISO timestamp.',
+          },
+          {
+            name: 'dueTo',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return tasks due on or before this ISO timestamp.',
+          },
         ],
         responses: {
           '200': {

@@ -8,6 +8,13 @@ Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 ###
+# Filtered search: high priority docs tasks due in Q1
+
+GET http://localhost:4000/api/taskforge/v1/tasks?q=release&status=IN_PROGRESS&priority=HIGH&tag=docs&dueFrom=2024-01-01T00:00:00.000Z&dueTo=2024-03-31T23:59:59.999Z
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{accessToken}}
+
+###
 POST http://localhost:4000/api/taskforge/v1/tasks
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
