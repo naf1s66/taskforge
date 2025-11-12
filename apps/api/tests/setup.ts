@@ -10,6 +10,9 @@ const appRoot = process.cwd();
 
 loadEnv({ node_env: 'test', path: appRoot });
 
+const DEFAULT_TEST_DB_URL =
+  'postgresql://postgres:postgres@localhost:5432/taskforge_test?schema=public';
+
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
@@ -38,7 +41,16 @@ let prisma: PrismaClient;
 let container: StartedPostgreSqlContainer | undefined;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL) {
+  const shouldStartContainer = () => {
+    const dbUrl = process.env.DATABASE_URL?.trim();
+    if (!dbUrl) {
+      return true;
+    }
+
+    return dbUrl === DEFAULT_TEST_DB_URL;
+  };
+
+  if (shouldStartContainer()) {
     container = await new PostgreSqlContainer('postgres:16-alpine')
       .withTmpFs('/var/lib/postgresql/data')
       .start();
