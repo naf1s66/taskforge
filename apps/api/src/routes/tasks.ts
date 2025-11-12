@@ -9,13 +9,33 @@ import {
   type TaskRepository,
   type TaskUpdateInput,
 } from '../repositories/task-repository';
+import { normalizeTagLabels } from '../repositories/task-mapper';
 
 const TaskListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(20),
+    status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
+    q: z.string().trim().min(1).optional(),
+    dueFrom: z.string().datetime().optional(),
+    dueTo: z.string().datetime().optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.dueFrom && data.dueTo) {
+      const from = new Date(data.dueFrom);
+      const to = new Date(data.dueTo);
+      if (from.getTime() > to.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo',
+        });
+      }
+    }
+  });
 
 const TaskIdParamSchema = z.object({
   id: z
@@ -42,8 +62,22 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const { page, pageSize } = parseQuery.data;
-      const { items, total } = await repository.listTasks(user.id, { page, pageSize });
+      const { page, pageSize, status, priority, tag, q, dueFrom, dueTo } = parseQuery.data;
+
+      const normalizedTags = normalizeTagLabels(
+        Array.isArray(tag) ? tag : tag ? [tag] : undefined,
+      );
+
+      const { items, total } = await repository.listTasks(user.id, {
+        page,
+        pageSize,
+        status,
+        priority,
+        tags: normalizedTags.length ? normalizedTags : undefined,
+        search: q,
+        dueFrom: dueFrom ? new Date(dueFrom) : undefined,
+        dueTo: dueTo ? new Date(dueTo) : undefined,
+      });
       res.json({ items, page, pageSize, total });
     } catch (error) {
       next(error);

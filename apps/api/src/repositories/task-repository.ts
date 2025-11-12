@@ -26,6 +26,12 @@ export type TaskUpdateInput = Partial<TaskCreateInput>;
 export interface TaskListOptions {
   page?: number;
   pageSize?: number;
+  status?: SharedTaskStatus;
+  priority?: SharedTaskPriority;
+  tags?: string[];
+  search?: string;
+  dueFrom?: Date;
+  dueTo?: Date;
 }
 
 export interface TaskListResult {
@@ -51,15 +57,59 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
       const pageSize = Math.min(100, Math.max(1, options?.pageSize ?? 20));
       const skip = (page - 1) * pageSize;
 
+      const andFilters: Prisma.TaskWhereInput[] = [];
+
+      if (options?.tags?.length) {
+        for (const label of options.tags) {
+          andFilters.push({
+            TaskTag: {
+              some: {
+                tag: {
+                  label: {
+                    equals: label,
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+          });
+        }
+      }
+
+      if (options?.search) {
+        andFilters.push({
+          OR: [
+            { title: { contains: options.search, mode: 'insensitive' } },
+            { description: { contains: options.search, mode: 'insensitive' } },
+          ],
+        });
+      }
+
+      if (options?.dueFrom || options?.dueTo) {
+        andFilters.push({
+          dueDate: {
+            ...(options?.dueFrom ? { gte: options.dueFrom } : {}),
+            ...(options?.dueTo ? { lte: options.dueTo } : {}),
+          },
+        });
+      }
+
+      const where: Prisma.TaskWhereInput = {
+        userId,
+        ...(options?.status ? { status: options.status as PrismaTaskStatus } : {}),
+        ...(options?.priority ? { priority: options.priority as PrismaTaskPriority } : {}),
+        ...(andFilters.length ? { AND: andFilters } : {}),
+      };
+
       const [tasks, total] = await prisma.$transaction([
         prisma.task.findMany({
-          where: { userId },
+          where,
           orderBy: { updatedAt: 'desc' },
           include: taskWithTagsInclude,
           skip,
           take: pageSize,
         }),
-        prisma.task.count({ where: { userId } }),
+        prisma.task.count({ where }),
       ]);
 
       return {
