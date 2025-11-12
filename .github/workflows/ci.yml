@@ -25,6 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      # API test harness configuration (mirrors tests/setup.ts defaults)
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
       JWT_SECRET: ${{ secrets.CI_JWT_SECRET || 'test-jwt-secret' }}
       JWT_REFRESH_SECRET: ${{ secrets.CI_JWT_REFRESH_SECRET || 'test-jwt-refresh-secret' }}

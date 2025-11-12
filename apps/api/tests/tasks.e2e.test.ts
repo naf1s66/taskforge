@@ -1,46 +1,28 @@
-import { randomUUID } from 'node:crypto';
-
 import type { SuperTest, Test } from 'supertest';
 
-import { InMemoryUserStore } from '../src/auth/user-store';
-import { type TaskRepository } from '../src/repositories/task-repository';
+import type { TaskRepository } from '../src/repositories/task-repository';
+
 import { createTestAgent } from './utils/test-app';
-
-const defaultPassword = 'Secret123!';
-
-function uniqueEmail(prefix = 'user'): string {
-  return `${prefix}-${randomUUID()}@example.com`;
-}
+import { registerTestUser } from './utils/auth';
+import { createUser, defaultPassword } from './utils/factories';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 describe('Tasks API', () => {
   let agent: SuperTest<Test>;
-  let userStore: InMemoryUserStore;
   let taskRepository: TaskRepository;
 
   beforeEach(() => {
     const context = createTestAgent({ sessionBridgeSecret: 'test-bridge-secret' });
     agent = context.agent;
-    userStore = context.userStore;
     taskRepository = context.taskRepository;
   });
 
-  afterEach(async () => {
-    await userStore.clear();
-  });
-
   async function register() {
-    const email = uniqueEmail('tasks');
-    const response = await agent
-      .post('/api/taskforge/v1/auth/register')
-      .send({ email, password: defaultPassword })
-      .expect(201);
-
+    const registered = await registerTestUser(agent, { email: 'tasks-user@example.com', password: defaultPassword });
     return {
-      email,
-      accessToken: response.body.tokens.accessToken as string,
-      userId: response.body.user.id as string,
+      accessToken: registered.tokens.accessToken,
+      userId: registered.user.id,
     };
   }
 
@@ -52,7 +34,9 @@ describe('Tasks API', () => {
     await taskRepository.createTask(userId, { title: 'Second' });
     await sleep(2);
     await taskRepository.createTask(userId, { title: 'Third' });
-    await taskRepository.createTask('someone-else', { title: 'Should not appear' });
+
+    const other = await createUser({ email: 'other-user@example.com' });
+    await taskRepository.createTask(other.user.id, { title: 'Should not appear' });
 
     const response = await agent
       .get('/api/taskforge/v1/tasks?page=1&pageSize=2')
@@ -193,10 +177,11 @@ describe('Tasks API', () => {
 
   it("returns 404 when attempting to update another user's task", async () => {
     const { accessToken } = await register();
-    const someoneElse = await taskRepository.createTask('another-user', { title: 'Secret task' });
+    const someoneElse = await createUser({ email: 'someone-else@example.com' });
+    const foreignTask = await taskRepository.createTask(someoneElse.user.id, { title: 'Secret task' });
 
     await agent
-      .patch(`/api/taskforge/v1/tasks/${someoneElse.id}`)
+      .patch(`/api/taskforge/v1/tasks/${foreignTask.id}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ title: 'Hacked' })
       .expect(404);
@@ -248,10 +233,11 @@ describe('Tasks API', () => {
 
   it("returns 404 when attempting to delete another user's task", async () => {
     const { accessToken } = await register();
-    const someoneElse = await taskRepository.createTask('another-user', { title: 'Keep out' });
+    const someoneElse = await createUser({ email: 'delete-other@example.com' });
+    const foreignTask = await taskRepository.createTask(someoneElse.user.id, { title: 'Keep out' });
 
     await agent
-      .delete(`/api/taskforge/v1/tasks/${someoneElse.id}`)
+      .delete(`/api/taskforge/v1/tasks/${foreignTask.id}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(404);
   });
