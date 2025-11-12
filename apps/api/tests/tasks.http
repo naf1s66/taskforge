@@ -21,9 +21,11 @@ Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 {
-  "title": "Write docs",
-  "tags": ["work","docs"],
-  "dueDate": "2025-10-08T10:00:00.000Z"
+  "title": "Write API docs",
+  "description": "Outline request/response examples",
+  "priority": "HIGH",
+  "tags": ["api", "docs", "work"],
+  "dueDate": "2024-03-01T09:30:00.000Z"
 }
 
 ###
@@ -33,9 +35,12 @@ Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 {
+  "title": "Draft proposal v2",
+  "description": "Expanded with metrics",
   "status": "IN_PROGRESS",
-  "tags": ["planning", "docs"],
-  "dueDate": "2025-11-01T17:00:00.000Z"
+  "priority": "HIGH",
+  "tags": ["planning", "proposal"],
+  "dueDate": "2024-04-05T15:00:00.000Z"
 }
 
 ###

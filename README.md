@@ -63,6 +63,12 @@ taskforge/
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
 
+## Testing
+
+- **API integration tests** – `pnpm -C apps/api test`
+  - Spins up a disposable Postgres instance, applies Prisma migrations, then runs the Jest/Supertest suite that exercises auth plus the task CRUD/filter flows (tags, cross-user guards, pagination, validation).
+  - The same command runs in CI via `make test` / `make ci`, so keep it green before opening pull requests.
+
 ## Authentication Reference
 > For deeper architectural decisions see [ADR 0001 – Auth strategy](docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md) and the [PRD auth section](docs/PRD.md#authentication).
 
