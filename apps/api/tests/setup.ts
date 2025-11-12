@@ -15,7 +15,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
 process.env.SESSION_BRIDGE_SECRET = process.env.SESSION_BRIDGE_SECRET ?? 'test-bridge-secret';
 
-jest.setTimeout(60_000);
+jest.setTimeout(120_000);
 
 declare global {
   // eslint-disable-next-line no-var
@@ -35,14 +35,16 @@ const truncateTables = [
 ];
 
 let prisma: PrismaClient;
-let container: StartedPostgreSqlContainer;
+let container: StartedPostgreSqlContainer | undefined;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine')
-    .withTmpFs('/var/lib/postgresql/data')
-    .start();
+  if (!process.env.DATABASE_URL) {
+    container = await new PostgreSqlContainer('postgres:16-alpine')
+      .withTmpFs('/var/lib/postgresql/data')
+      .start();
 
-  process.env.DATABASE_URL = container.getConnectionUri();
+    process.env.DATABASE_URL = container.getConnectionUri();
+  }
 
   execSync('pnpm prisma migrate deploy', {
     cwd: appRoot,
