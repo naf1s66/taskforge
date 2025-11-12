@@ -35,14 +35,16 @@ const truncateTables = [
 ];
 
 let prisma: PrismaClient;
-let container: StartedPostgreSqlContainer;
+let container: StartedPostgreSqlContainer | undefined;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:16-alpine')
-    .withTmpFs('/var/lib/postgresql/data')
-    .start();
+  if (!process.env.DATABASE_URL) {
+    container = await new PostgreSqlContainer('postgres:16-alpine')
+      .withTmpFs('/var/lib/postgresql/data')
+      .start();
 
-  process.env.DATABASE_URL = container.getConnectionUri();
+    process.env.DATABASE_URL = container.getConnectionUri();
+  }
 
   execSync('pnpm prisma migrate deploy', {
     cwd: appRoot,
