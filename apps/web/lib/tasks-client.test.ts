@@ -83,6 +83,21 @@ describe('tasks-client', () => {
       expect(headers.get('content-type')).toBeNull();
     });
 
+    it('supports relative base URLs on the server', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete (globalThis as Record<string, unknown>).window;
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ items: [], page: 1, pageSize: 20, total: 0 }));
+
+      await listTasks(undefined, { baseUrl: '/api/taskforge', fetchImpl: fetchMock });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url] = fetchMock.mock.calls[0];
+      expect(url).toBe('/api/taskforge/v1/tasks');
+    });
+
     it('throws a validation error when filters are invalid', async () => {
       await expect(
         listTasks(

@@ -353,10 +353,10 @@ function toQueryRecord(query?: NormalizedTaskListQuery): Record<string, string |
 
 function buildUrl(baseUrl: string, path: string, query?: Record<string, string | string[]>): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const url = new URL(`${baseUrl}${normalizedPath}`);
+  let url = `${baseUrl}${normalizedPath}`;
 
   if (query) {
-    const params = url.searchParams;
+    const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
       if (Array.isArray(value)) {
         value.forEach((entry) => {
@@ -366,9 +366,14 @@ function buildUrl(baseUrl: string, path: string, query?: Record<string, string |
         params.append(key, value);
       }
     });
+
+    const queryString = params.toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
   }
 
-  return url.toString();
+  return url;
 }
 
 async function applyAuth(headers: Headers, options?: TaskClientRequestOptions): Promise<RequestCredentials | undefined> {
