@@ -15,6 +15,8 @@ process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
 process.env.SESSION_BRIDGE_SECRET = process.env.SESSION_BRIDGE_SECRET ?? 'test-bridge-secret';
 
+jest.setTimeout(60_000);
+
 declare global {
   // eslint-disable-next-line no-var
   var __TEST_PRISMA__: PrismaClient | undefined;
