@@ -1,35 +1,34 @@
 import request, { type SuperTest, type Test } from 'supertest';
 
-import { InMemoryUserStore } from '../../src/auth/user-store';
+import { PrismaUserStore, type UserStore } from '../../src/auth/user-store';
 import { createApp } from '../../src/app';
-import type { TaskRepository } from '../../src/repositories/task-repository';
-import { InMemoryTaskRepository } from './in-memory-task-repository';
+import { createTaskRepository, type TaskRepository } from '../../src/repositories/task-repository';
+import { getTestPrisma, type PrismaClient } from './prisma';
 
 export interface TestAgentContext {
   agent: SuperTest<Test>;
-  userStore: InMemoryUserStore;
+  prisma: PrismaClient;
+  userStore: UserStore;
   taskRepository: TaskRepository;
 }
 
 export interface CreateTestAgentOptions {
   jwtSecret?: string;
-  userStore?: InMemoryUserStore;
   sessionBridgeSecret?: string;
+  userStore?: UserStore;
   taskRepository?: TaskRepository;
 }
 
-export function createTestAgent(
-  options: CreateTestAgentOptions = {},
-): TestAgentContext {
-  const userStore = options.userStore ?? new InMemoryUserStore();
-  const taskRepository = options.taskRepository ?? new InMemoryTaskRepository();
-  const jwtSecret = options.jwtSecret ?? 'test-secret';
+export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgentContext {
+  const prisma = getTestPrisma();
+  const userStore = options.userStore ?? new PrismaUserStore(prisma);
+  const taskRepository = options.taskRepository ?? createTaskRepository(prisma);
   const app = createApp({
-    jwtSecret,
+    jwtSecret: options.jwtSecret ?? process.env.JWT_SECRET ?? 'test-secret',
+    sessionBridgeSecret: options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET,
     userStore,
-    sessionBridgeSecret: options.sessionBridgeSecret,
     taskRepository,
   });
 
-  return { agent: request(app), userStore, taskRepository };
+  return { agent: request(app), prisma, userStore, taskRepository };
 }

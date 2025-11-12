@@ -2,35 +2,19 @@ import { randomUUID } from 'node:crypto';
 
 import type { SuperTest, Test } from 'supertest';
 
-import { InMemoryUserStore } from '../src/auth/user-store';
+import { getSessionCookieName } from '@taskforge/shared';
+
 import { createTestAgent } from './utils/test-app';
-
-const defaultPassword = 'Secret123!';
-
-function uniqueEmail(prefix = 'user'): string {
-  return `${prefix}-${randomUUID()}@example.com`;
-}
+import { loginTestUser, registerTestUser, extractSessionCookie } from './utils/auth';
 
 describe('Auth API', () => {
   let agent: SuperTest<Test>;
-  let userStore: InMemoryUserStore;
   const sessionBridgeSecret = 'test-bridge-secret';
 
   beforeEach(() => {
     const context = createTestAgent({ sessionBridgeSecret });
     agent = context.agent;
-    userStore = context.userStore;
   });
-
-  afterEach(async () => {
-    await userStore.clear();
-  });
-
-  const register = async (email = uniqueEmail('user'), password = defaultPassword) =>
-    agent
-      .post('/api/taskforge/v1/auth/register')
-      .send({ email, password })
-      .expect(201);
 
   const bridgeSession = (payload: { userId: string; email?: string }) =>
     agent
@@ -39,23 +23,23 @@ describe('Auth API', () => {
       .send(payload);
 
   it('registers a user, returns tokens, and issues a session cookie', async () => {
-    const response = await register();
+    const result = await registerTestUser(agent);
 
-    expect(response.body).toEqual(
+    expect(result.user).toEqual(
       expect.objectContaining({
-        user: expect.objectContaining({ email: expect.stringContaining('@example.com') }),
-        tokens: expect.objectContaining({
-          accessToken: expect.any(String),
-          refreshToken: expect.any(String),
-          tokenType: 'Bearer',
-          accessTokenExpiresAt: expect.any(String),
-          refreshTokenExpiresAt: expect.any(String),
-        }),
+        id: expect.any(String),
+        email: expect.stringContaining('@example.com'),
+        createdAt: expect.any(String),
       }),
     );
-    expect(response.headers['set-cookie']).toEqual(
-      expect.arrayContaining([expect.stringContaining('tf_session=')]),
+    expect(result.tokens).toEqual(
+      expect.objectContaining({
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String),
+        tokenType: 'Bearer',
+      }),
     );
+    expect(extractSessionCookie(result.cookies)).toBeDefined();
   });
 
   it('rejects invalid registration payloads', async () => {
@@ -64,66 +48,58 @@ describe('Auth API', () => {
       .send({ email: 'not-an-email', password: 'short' })
       .expect(400);
 
-    expect(invalid.body).toEqual(
-      expect.objectContaining({ error: 'Invalid payload' }),
-    );
+    expect(invalid.body).toEqual(expect.objectContaining({ error: 'Invalid payload' }));
   });
 
   it('prevents duplicate registrations', async () => {
-    const email = uniqueEmail('dupe');
-    await register(email);
+    const existing = await registerTestUser(agent, { email: 'dupe@example.com' });
 
     const duplicate = await agent
       .post('/api/taskforge/v1/auth/register')
-      .send({ email, password: defaultPassword })
+      .send({ email: existing.credentials.email, password: existing.credentials.password })
       .expect(409);
 
     expect(duplicate.body).toEqual(expect.objectContaining({ error: 'User already exists' }));
   });
 
   it('logs in an existing user and returns a new token set', async () => {
-    const email = uniqueEmail('login');
-    await register(email);
+    const registered = await registerTestUser(agent, { email: 'login@example.com' });
 
-    const login = await agent
-      .post('/api/taskforge/v1/auth/login')
-      .send({ email, password: defaultPassword })
-      .expect(200);
+    const login = await loginTestUser(agent, {
+      credentials: {
+        email: registered.credentials.email,
+        password: registered.credentials.password,
+      },
+    });
 
-    expect(login.body).toEqual(
+    expect(login.user).toEqual(expect.objectContaining({ email: registered.credentials.email }));
+    expect(login.tokens).toEqual(
       expect.objectContaining({
-        user: expect.objectContaining({ email }),
-        tokens: expect.objectContaining({
-          accessToken: expect.any(String),
-          refreshToken: expect.any(String),
-          tokenType: 'Bearer',
-        }),
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String),
+        tokenType: 'Bearer',
       }),
     );
   });
 
   it('exchanges a refresh token for a new access token', async () => {
-    const email = uniqueEmail('refresh');
-    const { body } = await register(email);
+    const registered = await registerTestUser(agent, { email: 'refresh@example.com' });
 
     const response = await agent
       .post('/api/taskforge/v1/auth/refresh')
-      .send({ refreshToken: body.tokens.refreshToken })
+      .send({ refreshToken: registered.tokens.refreshToken })
       .expect(200);
 
     expect(response.body).toEqual(
       expect.objectContaining({
-        user: expect.objectContaining({ email }),
+        user: expect.objectContaining({ email: registered.credentials.email }),
         tokens: expect.objectContaining({
           accessToken: expect.any(String),
           refreshToken: expect.any(String),
         }),
       }),
     );
-
-    expect(response.headers['set-cookie']).toEqual(
-      expect.arrayContaining([expect.stringContaining('tf_session=')]),
-    );
+    expect(extractSessionCookie(response.headers['set-cookie'])).toBeDefined();
   });
 
   it('rejects invalid refresh tokens', async () => {
@@ -136,42 +112,40 @@ describe('Auth API', () => {
   it('rejects login attempts for unknown users', async () => {
     await agent
       .post('/api/taskforge/v1/auth/login')
-      .send({ email: uniqueEmail('missing'), password: defaultPassword })
+      .send({ email: 'missing@example.com', password: 'Secret123!' })
       .expect(401);
   });
 
   it('rejects invalid login attempts', async () => {
-    const email = uniqueEmail('invalid');
-    await register(email);
+    const registered = await registerTestUser(agent, { email: 'invalid@example.com' });
 
     await agent
       .post('/api/taskforge/v1/auth/login')
-      .send({ email, password: 'WrongPassword1' })
+      .send({ email: registered.credentials.email, password: 'WrongPassword1' })
       .expect(401);
   });
 
   it('returns the authenticated user for /auth/me', async () => {
-    const email = uniqueEmail('profile');
-    const { body } = await register(email);
+    const registered = await registerTestUser(agent, { email: 'profile@example.com' });
 
     const profile = await agent
       .get('/api/taskforge/v1/auth/me')
-      .set('Authorization', `Bearer ${body.tokens.accessToken}`)
+      .set('Authorization', `Bearer ${registered.tokens.accessToken}`)
       .expect(200);
 
     expect(profile.body).toEqual(
       expect.objectContaining({
-        user: expect.objectContaining({ email }),
+        user: expect.objectContaining({ email: registered.credentials.email }),
       }),
     );
   });
 
   it('allows access to tasks when authenticated', async () => {
-    const { body } = await register();
+    const registered = await registerTestUser(agent, { email: 'tasks@example.com' });
 
     const tasks = await agent
       .get('/api/taskforge/v1/tasks')
-      .set('Authorization', `Bearer ${body.tokens.accessToken}`)
+      .set('Authorization', `Bearer ${registered.tokens.accessToken}`)
       .expect(200);
 
     expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
@@ -183,8 +157,8 @@ describe('Auth API', () => {
   });
 
   it('rejects protected requests with a malformed token', async () => {
-    const { body } = await register();
-    const invalidToken = `${body.tokens.accessToken}tampered`;
+    const registered = await registerTestUser(agent, { email: 'malformed@example.com' });
+    const invalidToken = `${registered.tokens.accessToken}tampered`;
 
     await agent
       .get('/api/taskforge/v1/auth/me')
@@ -193,49 +167,48 @@ describe('Auth API', () => {
   });
 
   it('logs out the user and clears the session cookie', async () => {
-    const { body } = await register();
+    const registered = await registerTestUser(agent, { email: 'logout@example.com' });
 
     const logout = await agent
       .post('/api/taskforge/v1/auth/logout')
-      .set('Authorization', `Bearer ${body.tokens.accessToken}`)
+      .set('Authorization', `Bearer ${registered.tokens.accessToken}`)
       .expect(200);
 
     expect(logout.body).toEqual({ success: true });
+    const cookieName = getSessionCookieName();
     expect(logout.headers['set-cookie']).toEqual(
-      expect.arrayContaining([expect.stringContaining('tf_session=;')]),
+      expect.arrayContaining([expect.stringContaining(`${cookieName}=;`)]),
     );
   });
 
   it('issues a session cookie through the bridge when authorized', async () => {
-    const { body } = await register();
+    const registered = await registerTestUser(agent, { email: 'bridge@example.com' });
 
-    const response = await bridgeSession({ userId: body.user.id, email: body.user.email });
+    const response = await bridgeSession({ userId: registered.user.id, email: registered.user.email });
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(
       expect.objectContaining({
-        user: expect.objectContaining({ id: body.user.id, email: body.user.email }),
+        user: expect.objectContaining({ id: registered.user.id, email: registered.user.email }),
         tokens: expect.objectContaining({ accessToken: expect.any(String) }),
       }),
     );
-    expect(response.headers['set-cookie']).toEqual(
-      expect.arrayContaining([expect.stringContaining('tf_session=')]),
-    );
+    expect(extractSessionCookie(response.headers['set-cookie'])).toBeDefined();
   });
 
   it('rejects bridge attempts with an invalid secret', async () => {
-    const { body } = await register();
+    const registered = await registerTestUser(agent, { email: 'bridge-invalid@example.com' });
 
     const response = await agent
       .post('/api/taskforge/v1/auth/session-bridge')
       .set('x-session-bridge-secret', 'not-the-secret')
-      .send({ userId: body.user.id, email: body.user.email });
+      .send({ userId: registered.user.id, email: registered.user.email });
 
     expect(response.status).toBe(401);
   });
 
   it('rejects bridge attempts for unknown users', async () => {
-    const response = await bridgeSession({ userId: randomUUID(), email: uniqueEmail('ghost') });
+    const response = await bridgeSession({ userId: randomUUID(), email: 'ghost@example.com' });
 
     expect(response.status).toBe(404);
   });
