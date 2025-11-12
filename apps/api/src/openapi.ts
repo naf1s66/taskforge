@@ -220,6 +220,7 @@ const taskUpdatedRecordExample = {
     status: 'DONE',
     priority: 'MEDIUM',
     tags: ['planning', 'product', 'retro'],
+    dueDate: '2024-07-12T20:00:00.000Z',
     updatedAt: '2024-06-05T18:15:00.000Z',
   },
 } satisfies OpenAPIV3.ExampleObject;
