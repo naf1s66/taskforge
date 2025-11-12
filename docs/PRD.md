@@ -80,13 +80,14 @@ enum TaskPriority { LOW MEDIUM HIGH }
 ## API (v1)
 - `GET /api/v1/health`
 - `GET /api/v1/me`
-- `GET /api/v1/tasks?status=&tag=&q=&dueFrom=&dueTo=`
+- `GET /api/v1/tasks?status=&priority=&tag=&q=&dueFrom=&dueTo=&page=&pageSize=`
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/:id`
 - `DELETE /api/v1/tasks/:id`
 - `GET /api/v1/tags`
 - `POST /api/v1/tags`
 - Docs: `GET /api/taskforge/docs`
+- OpenAPI reference: [`docs/openapi.json`](./openapi.json)
 
 ## ADR Summary
 - Auth: NextAuth + backend JWT verification with dedicated session bridge and shared Prisma adapter.

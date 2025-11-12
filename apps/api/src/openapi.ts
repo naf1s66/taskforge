@@ -151,6 +151,7 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
   example: {
     title: 'Book product sync',
     description: 'Coordinate roadmap review with stakeholders',
+    status: 'TODO',
     priority: 'HIGH',
     tags: ['planning'],
     dueDate: '2024-07-05T15:00:00.000Z',
@@ -170,7 +171,8 @@ const taskUpdateInput: OpenAPIV3.SchemaObject = {
   additionalProperties: false,
   example: {
     status: 'IN_PROGRESS',
-    priority: 'HIGH',
+    priority: 'MEDIUM',
+    dueDate: '2024-07-12T20:00:00.000Z',
     tags: ['planning', 'proposal'],
   },
 };
@@ -188,7 +190,20 @@ const taskListResponse: OpenAPIV3.SchemaObject = {
   },
   required: ['items', 'page', 'pageSize', 'total'],
   example: {
-    items: [taskRecord.example, taskRecord.example],
+    items: [
+      taskRecord.example,
+      {
+        id: '14377d29-0a0f-4b26-8b6d-60406ad3f7c1',
+        title: 'Follow up with design partners',
+        description: 'Confirm handoff expectations and surface risks early.',
+        status: 'TODO',
+        priority: 'MEDIUM',
+        dueDate: '2024-07-18T15:00:00.000Z',
+        tags: ['customer', 'outreach'],
+        createdAt: '2024-06-02T14:22:00.000Z',
+        updatedAt: '2024-06-04T11:10:00.000Z',
+      },
+    ],
     page: 1,
     pageSize: 20,
     total: 2,
@@ -199,8 +214,30 @@ const taskCreatedExample = {
   value: taskRecord.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const taskUpdatedRecordExample = {
+  value: {
+    ...(taskRecord.example as Record<string, unknown>),
+    status: 'DONE',
+    priority: 'MEDIUM',
+    tags: ['planning', 'product', 'retro'],
+    updatedAt: '2024-06-05T18:15:00.000Z',
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
 const taskListExample = {
   value: taskListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskListInvalidFiltersExample = {
+  value: {
+    error: 'Invalid payload',
+    details: {
+      fieldErrors: {
+        dueFrom: ['dueFrom must be earlier than or equal to dueTo'],
+      },
+      formErrors: [],
+    },
+  },
 } satisfies OpenAPIV3.ExampleObject;
 
 const taskDeletedResponse: OpenAPIV3.SchemaObject = {
@@ -238,6 +275,13 @@ export const openApiDocument: OpenAPIV3.Document = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
+      },
+      sessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'tf_session',
+        description:
+          'HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication.',
       },
     },
     schemas: {
@@ -442,7 +486,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Auth'],
         summary: 'Retrieve the authenticated user',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Current user',
@@ -473,7 +519,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Auth'],
         summary: 'Alias for the authenticated user endpoint',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Current user or null when not authenticated',
@@ -505,7 +553,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Tasks'],
         summary: 'List tasks for the authenticated user',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Returns a paginated collection of the signed-in user\'s tasks. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         parameters: [
           {
             name: 'page',
@@ -571,6 +621,17 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidFilters: taskListInvalidFiltersExample,
+                },
+              },
+            },
+          },
           '401': {
             description: 'Unauthorized',
             content: {
@@ -587,7 +648,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Tasks'],
         summary: 'Create a task',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Creates a new task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         requestBody: {
           required: true,
           content: {
@@ -640,7 +703,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       patch: {
         tags: ['Tasks'],
         summary: 'Update a task',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Partially updates a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         parameters: [
           {
             name: 'id',
@@ -667,7 +732,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               'application/json': {
                 schema: { $ref: '#/components/schemas/TaskRecord' },
                 examples: {
-                  default: taskCreatedExample,
+                  default: taskUpdatedRecordExample,
                 },
               },
             },
@@ -711,7 +776,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       delete: {
         tags: ['Tasks'],
         summary: 'Delete a task',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Deletes a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         parameters: [
           {
             name: 'id',
@@ -772,7 +839,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Tags'],
         summary: 'List tags',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Retrieves all tag labels created by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Tag collection',
@@ -798,7 +867,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Tags'],
         summary: 'Create a tag',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Creates a new tag for the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         requestBody: {
           required: true,
           content: {

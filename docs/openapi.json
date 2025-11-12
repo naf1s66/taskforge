@@ -11,6 +11,12 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "tf_session",
+        "description": "HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication."
       }
     },
     "schemas": {
@@ -338,6 +344,7 @@
         "example": {
           "title": "Book product sync",
           "description": "Coordinate roadmap review with stakeholders",
+          "status": "TODO",
           "priority": "HIGH",
           "tags": [
             "planning"
@@ -387,7 +394,8 @@
         "additionalProperties": false,
         "example": {
           "status": "IN_PROGRESS",
-          "priority": "HIGH",
+          "priority": "MEDIUM",
+          "dueDate": "2024-07-12T20:00:00.000Z",
           "tags": [
             "planning",
             "proposal"
@@ -440,18 +448,18 @@
               "updatedAt": "2024-06-03T09:30:00.000Z"
             },
             {
-              "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
-              "title": "Draft project brief",
-              "description": "Summarize goals and milestones for the release",
-              "status": "IN_PROGRESS",
-              "priority": "HIGH",
-              "dueDate": "2024-07-10T16:00:00.000Z",
+              "id": "14377d29-0a0f-4b26-8b6d-60406ad3f7c1",
+              "title": "Follow up with design partners",
+              "description": "Confirm handoff expectations and surface risks early.",
+              "status": "TODO",
+              "priority": "MEDIUM",
+              "dueDate": "2024-07-18T15:00:00.000Z",
               "tags": [
-                "planning",
-                "product"
+                "customer",
+                "outreach"
               ],
-              "createdAt": "2024-06-01T12:00:00.000Z",
-              "updatedAt": "2024-06-03T09:30:00.000Z"
+              "createdAt": "2024-06-02T14:22:00.000Z",
+              "updatedAt": "2024-06-04T11:10:00.000Z"
             }
           ],
           "page": 1,
@@ -764,9 +772,13 @@
           "Auth"
         ],
         "summary": "Retrieve the authenticated user",
+        "description": "Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "responses": {
@@ -817,9 +829,13 @@
           "Auth"
         ],
         "summary": "Alias for the authenticated user endpoint",
+        "description": "Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "responses": {
@@ -875,9 +891,13 @@
           "Tasks"
         ],
         "summary": "List tasks for the authenticated user",
+        "description": "Returns a paginated collection of the signed-in user's tasks. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "parameters": [
@@ -901,6 +921,72 @@
               "default": 20
             },
             "description": "Number of tasks per page."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TODO",
+                "IN_PROGRESS",
+                "DONE"
+              ]
+            },
+            "description": "Filter tasks by workflow status."
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LOW",
+                "MEDIUM",
+                "HIGH"
+              ]
+            },
+            "description": "Filter tasks by priority."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Case-insensitive search over the title and description."
+          },
+          {
+            "name": "dueFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Only return tasks due on or after this ISO timestamp."
+          },
+          {
+            "name": "dueTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Only return tasks due on or before this ISO timestamp."
           }
         ],
         "responses": {
@@ -930,23 +1016,48 @@
                           "updatedAt": "2024-06-03T09:30:00.000Z"
                         },
                         {
-                          "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
-                          "title": "Draft project brief",
-                          "description": "Summarize goals and milestones for the release",
-                          "status": "IN_PROGRESS",
-                          "priority": "HIGH",
-                          "dueDate": "2024-07-10T16:00:00.000Z",
+                          "id": "14377d29-0a0f-4b26-8b6d-60406ad3f7c1",
+                          "title": "Follow up with design partners",
+                          "description": "Confirm handoff expectations and surface risks early.",
+                          "status": "TODO",
+                          "priority": "MEDIUM",
+                          "dueDate": "2024-07-18T15:00:00.000Z",
                           "tags": [
-                            "planning",
-                            "product"
+                            "customer",
+                            "outreach"
                           ],
-                          "createdAt": "2024-06-01T12:00:00.000Z",
-                          "updatedAt": "2024-06-03T09:30:00.000Z"
+                          "createdAt": "2024-06-02T14:22:00.000Z",
+                          "updatedAt": "2024-06-04T11:10:00.000Z"
                         }
                       ],
                       "page": 1,
                       "pageSize": 20,
                       "total": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidFilters": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "dueFrom": [
+                            "dueFrom must be earlier than or equal to dueTo"
+                          ]
+                        },
+                        "formErrors": []
+                      }
                     }
                   }
                 }
@@ -977,9 +1088,13 @@
           "Tasks"
         ],
         "summary": "Create a task",
+        "description": "Creates a new task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "requestBody": {
@@ -994,6 +1109,7 @@
                   "value": {
                     "title": "Book product sync",
                     "description": "Coordinate roadmap review with stakeholders",
+                    "status": "TODO",
                     "priority": "HIGH",
                     "tags": [
                       "planning"
@@ -1085,9 +1201,13 @@
           "Tasks"
         ],
         "summary": "Update a task",
+        "description": "Partially updates a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "parameters": [
@@ -1112,7 +1232,8 @@
                 "default": {
                   "value": {
                     "status": "IN_PROGRESS",
-                    "priority": "HIGH",
+                    "priority": "MEDIUM",
+                    "dueDate": "2024-07-12T20:00:00.000Z",
                     "tags": [
                       "planning",
                       "proposal"
@@ -1137,15 +1258,16 @@
                       "id": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
                       "title": "Draft project brief",
                       "description": "Summarize goals and milestones for the release",
-                      "status": "IN_PROGRESS",
-                      "priority": "HIGH",
+                      "status": "DONE",
+                      "priority": "MEDIUM",
                       "dueDate": "2024-07-10T16:00:00.000Z",
                       "tags": [
                         "planning",
-                        "product"
+                        "product",
+                        "retro"
                       ],
                       "createdAt": "2024-06-01T12:00:00.000Z",
-                      "updatedAt": "2024-06-03T09:30:00.000Z"
+                      "updatedAt": "2024-06-05T18:15:00.000Z"
                     }
                   }
                 }
@@ -1223,9 +1345,13 @@
           "Tasks"
         ],
         "summary": "Delete a task",
+        "description": "Deletes a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "parameters": [
@@ -1318,9 +1444,13 @@
           "Tags"
         ],
         "summary": "List tags",
+        "description": "Retrieves all tag labels created by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "responses": {
@@ -1352,9 +1482,13 @@
           "Tags"
         ],
         "summary": "Create a tag",
+        "description": "Creates a new tag for the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "requestBody": {
