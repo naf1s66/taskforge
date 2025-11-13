@@ -542,12 +542,10 @@ export function useCreateTask(
       variables: CreateTaskInput,
       onMutateResult?: TaskMutationContext,
     ) => {
-      if (!onMutateResult) {
-        return;
-      }
-
-      for (const [key, snapshot] of onMutateResult.touchedQueries) {
-        queryClient.setQueryData(key, snapshot);
+      if (onMutateResult) {
+        for (const [key, snapshot] of onMutateResult.touchedQueries) {
+          queryClient.setQueryData(key, snapshot);
+        }
       }
 
       options?.onError?.(error, variables, onMutateResult);
