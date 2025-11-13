@@ -5,10 +5,11 @@ import { redirect } from 'next/navigation';
 import { isSessionTokenExpired } from '@/lib/session-bridge';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  if (process.env.ALLOW_UNAUTHENTICATED_PREVIEW === 'true') {
-    if (process.env.NODE_ENV !== 'production') {
-      console.info('[protected-layout] Bypassing auth guard for preview.');
-    }
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.ALLOW_UNAUTHENTICATED_PREVIEW === 'true'
+  ) {
+    console.info('[protected-layout] Bypassing auth guard for preview.');
     return <>{children}</>;
   }
 
