@@ -200,7 +200,7 @@ export function TaskListView({ onCreateTask, onEditTask }: TaskListViewProps) {
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            Monitor the work flowing through your workspace, refine priorities, and open dialogs to create or edit tasks.
+            Monitor the work flowing through your workspace, refine priorities, and keep momentum across every project.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -214,9 +214,11 @@ export function TaskListView({ onCreateTask, onEditTask }: TaskListViewProps) {
             {tasksQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
-          <Button type="button" onClick={onCreateTask} data-testid="task-list-create-button">
-            <Plus className="h-4 w-4" /> New task
-          </Button>
+          {onCreateTask ? (
+            <Button type="button" onClick={onCreateTask} data-testid="task-list-create-button">
+              <Plus className="h-4 w-4" /> New task
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -377,9 +379,11 @@ function EmptyState({ onCreateTask }: { onCreateTask?: () => void }) {
           When tasks are created they will appear here automatically. Use the composer to get started.
         </p>
       </div>
-      <Button type="button" onClick={onCreateTask} variant="secondary">
-        <Plus className="h-4 w-4" /> Create your first task
-      </Button>
+      {onCreateTask ? (
+        <Button type="button" onClick={onCreateTask} variant="secondary">
+          <Plus className="h-4 w-4" /> Create your first task
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -465,18 +469,20 @@ function TaskCard({ task, onEditTask }: { task: TaskListItem; onEditTask?: (task
           ))}
         </div>
       ) : null}
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="px-2"
-          onClick={() => onEditTask?.(task.id)}
-          data-testid="task-card-edit"
-        >
-          Edit task
-        </Button>
-      </div>
+      {onEditTask ? (
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            onClick={() => onEditTask(task.id)}
+            data-testid="task-card-edit"
+          >
+            Edit task
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -514,11 +520,13 @@ function TaskRow({ task, onEditTask }: { task: TaskListItem; onEditTask?: (taskI
           </div>
         ) : null}
       </div>
-      <div className="flex items-center gap-2 self-start md:self-center">
-        <Button type="button" variant="outline" size="sm" onClick={() => onEditTask?.(task.id)}>
-          Edit task
-        </Button>
-      </div>
+      {onEditTask ? (
+        <div className="flex items-center gap-2 self-start md:self-center">
+          <Button type="button" variant="outline" size="sm" onClick={() => onEditTask(task.id)}>
+            Edit task
+          </Button>
+        </div>
+      ) : null}
     </article>
   );
 }
