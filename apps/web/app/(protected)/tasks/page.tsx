@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import { TaskListView } from '@/components/tasks/task-list-view';
+import TaskListContent from './task-list-content';
 
 export const metadata = {
   title: 'Tasks',
@@ -23,7 +23,7 @@ export default function TasksPage() {
   return (
     <div className="container mx-auto max-w-6xl space-y-8 py-10">
       <Suspense fallback={<TaskListSkeleton />}>
-        <TaskListView />
+        <TaskListContent />
       </Suspense>
     </div>
   );
