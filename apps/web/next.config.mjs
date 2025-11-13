@@ -3,10 +3,12 @@ const config = {
   experimental: {
     esmExternals: 'loose',
   },
-  webpack: (webpackConfig) => {
+  webpack: (webpackConfig, { isServer }) => {
     webpackConfig.resolve = webpackConfig.resolve ?? {};
     webpackConfig.resolve.alias = webpackConfig.resolve.alias ?? {};
-    webpackConfig.resolve.alias['node:async_hooks'] = false;
+    if (!isServer) {
+      webpackConfig.resolve.alias['node:async_hooks'] = false;
+    }
     return webpackConfig;
   },
 };
