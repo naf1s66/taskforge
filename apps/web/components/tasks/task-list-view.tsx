@@ -113,8 +113,11 @@ function sortTasks(tasks: TaskListItem[], option: SortOption): TaskListItem[] {
   const next = [...tasks];
   return next.sort((a, b) => {
     if (option === 'due-asc' || option === 'due-desc') {
-      const aDue = a.dueDate ? Date.parse(a.dueDate) : Number.POSITIVE_INFINITY;
-      const bDue = b.dueDate ? Date.parse(b.dueDate) : Number.POSITIVE_INFINITY;
+      const fallback = option === 'due-desc' ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+      const aDueParsed = a.dueDate ? Date.parse(a.dueDate) : NaN;
+      const bDueParsed = b.dueDate ? Date.parse(b.dueDate) : NaN;
+      const aDue = Number.isNaN(aDueParsed) ? fallback : aDueParsed;
+      const bDue = Number.isNaN(bDueParsed) ? fallback : bDueParsed;
       if (aDue === bDue) {
         return a.title.localeCompare(b.title);
       }
