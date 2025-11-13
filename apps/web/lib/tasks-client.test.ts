@@ -41,8 +41,7 @@ describe('tasks-client', () => {
     if (originalWindow) {
       globalThis.window = originalWindow;
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete (globalThis as Record<string, unknown>).window;
+      Reflect.deleteProperty(globalThis as Record<string, unknown>, 'window');
     }
   });
 
@@ -84,8 +83,7 @@ describe('tasks-client', () => {
     });
 
     it('supports relative base URLs on the server', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete (globalThis as Record<string, unknown>).window;
+      Reflect.deleteProperty(globalThis as Record<string, unknown>, 'window');
 
       const fetchMock = vi
         .fn()
@@ -115,7 +113,6 @@ describe('tasks-client', () => {
       await expect(
         createTask(
           {
-            // @ts-expect-error intentionally invalid title
             title: '   ',
           },
           { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },
@@ -125,8 +122,7 @@ describe('tasks-client', () => {
 
     it('sends the session cookie when running on the server', async () => {
       // Simulate server environment
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete (globalThis as Record<string, unknown>).window;
+      Reflect.deleteProperty(globalThis as Record<string, unknown>, 'window');
 
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sampleTask));
       await createTask(
@@ -193,8 +189,7 @@ describe('tasks-client', () => {
 
   describe('withTaskClientAuth', () => {
     it('binds the session cookie to nested requests on the server', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete (globalThis as Record<string, unknown>).window;
+      Reflect.deleteProperty(globalThis as Record<string, unknown>, 'window');
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [], page: 1, pageSize: 20, total: 0 }));
 
       await withTaskClientAuth({ sessionCookie: 'server-cookie' }, async () => {

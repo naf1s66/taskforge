@@ -13,6 +13,8 @@ import {
 } from '@tanstack/react-query';
 import type { ZodIssue } from 'zod';
 
+import type { TaskRecordDTO } from '@taskforge/shared';
+
 import {
   createTask,
   deleteTask,
@@ -22,10 +24,10 @@ import {
 } from './tasks-client';
 import type {
   CreateTaskInput,
+  TaskDeleteResponse,
   TaskClientErrorKind,
   TaskListQuery,
   TaskListResponse,
-  TaskRecordDTO,
   UpdateTaskInput,
 } from './tasks-client';
 import { useAuth } from './use-auth';
@@ -518,7 +520,7 @@ export function useCreateTask(
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskRecordDTO, TaskClientError, CreateTaskInput, TaskMutationContext>({
     mutationFn: (input) => createTask(input),
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
@@ -535,35 +537,35 @@ export function useCreateTask(
 
       return { touchedQueries, optimisticTaskId: optimisticTask.id } satisfies TaskMutationContext;
     },
-    onError: (error, _variables, context) => {
-      if (!context) {
+    onError: (error, variables, onMutateResult, mutationContext) => {
+      if (!onMutateResult) {
         return;
       }
 
-      for (const [key, snapshot] of context.touchedQueries) {
+      for (const [key, snapshot] of onMutateResult.touchedQueries) {
         queryClient.setQueryData(key, snapshot);
       }
 
-      options?.onError?.(error, _variables, context);
+      options?.onError?.(error, variables, onMutateResult, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
+    onSuccess: (result, variables, onMutateResult, mutationContext) => {
       const taskItem: TaskListItem = { ...result };
 
       collectMatchingQueries(queryClient, userScope, (payload, filters) => {
         if (!taskMatchesFilters(taskItem, filters)) {
-          if (context?.optimisticTaskId) {
-            return removeTaskFromList(payload, context.optimisticTaskId);
+          if (onMutateResult?.optimisticTaskId) {
+            return removeTaskFromList(payload, onMutateResult.optimisticTaskId);
           }
           return payload;
         }
 
-        return replaceTaskInList(payload, context?.optimisticTaskId, taskItem);
+        return replaceTaskInList(payload, onMutateResult?.optimisticTaskId, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      options?.onSuccess?.(result, variables, onMutateResult, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, onMutateResult, mutationContext) => {
+      options?.onSettled?.(result, error, variables, onMutateResult, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...options,
@@ -598,7 +600,7 @@ export function useUpdateTask(
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskRecordDTO, TaskClientError, UpdateTaskVariables, TaskMutationContext>({
     mutationFn: ({ id, input }) => updateTask(id, input),
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
@@ -618,30 +620,33 @@ export function useUpdateTask(
 
       return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
     },
-    onError: (error, variables, context) => {
-      if (context) {
-        for (const [key, snapshot] of context.touchedQueries) {
+    onError: (error, variables, onMutateResult, mutationContext) => {
+      if (onMutateResult) {
+        for (const [key, snapshot] of onMutateResult.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
       }
 
-      options?.onError?.(error, variables, context);
+      options?.onError?.(error, variables, onMutateResult, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
+    onSuccess: (result, variables, onMutateResult, mutationContext) => {
       const taskItem: TaskListItem = { ...result };
 
       collectMatchingQueries(queryClient, userScope, (payload, filters) => {
         if (!taskMatchesFilters(taskItem, filters)) {
+          if (onMutateResult?.optimisticTaskId) {
+            return removeTaskFromList(payload, onMutateResult.optimisticTaskId);
+          }
           return removeTaskFromList(payload, variables.id);
         }
 
-        return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
+        return replaceTaskInList(payload, onMutateResult?.optimisticTaskId ?? variables.id, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      options?.onSuccess?.(result, variables, onMutateResult, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, onMutateResult, mutationContext) => {
+      options?.onSettled?.(result, error, variables, onMutateResult, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...options,
@@ -666,17 +671,17 @@ export function useUpdateTask(
 
 export function useDeleteTask(
   options?: UseMutationOptions<
-    { id: string },
+    TaskDeleteResponse,
     TaskClientError,
     { id: string },
     TaskMutationContext
   >,
-): UseTaskMutationResult<{ id: string }, { id: string }> {
+): UseTaskMutationResult<TaskDeleteResponse, { id: string }> {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskDeleteResponse, TaskClientError, { id: string }, TaskMutationContext>({
     mutationFn: ({ id }) => deleteTask(id),
     onMutate: async ({ id }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
@@ -687,20 +692,20 @@ export function useDeleteTask(
 
       return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
     },
-    onError: (error, variables, context) => {
-      if (context) {
-        for (const [key, snapshot] of context.touchedQueries) {
+    onError: (error, variables, onMutateResult, mutationContext) => {
+      if (onMutateResult) {
+        for (const [key, snapshot] of onMutateResult.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
       }
 
-      options?.onError?.(error, variables, context);
+      options?.onError?.(error, variables, onMutateResult, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
-      options?.onSuccess?.(result, variables, context);
+    onSuccess: (result, variables, onMutateResult, mutationContext) => {
+      options?.onSuccess?.(result, variables, onMutateResult, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, onMutateResult, mutationContext) => {
+      options?.onSettled?.(result, error, variables, onMutateResult, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...options,

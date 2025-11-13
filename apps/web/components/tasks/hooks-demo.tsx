@@ -151,7 +151,9 @@ export function TasksHooksDemo() {
           ) : null}
 
           <ul className="space-y-3">
-            {tasksQuery.tasks.map((task) => (
+          {tasksQuery.tasks.map((task) => {
+            const status = task.status as TaskStatus;
+            return (
               <li key={task.id} className="rounded-xl border border-border/60 bg-card/60 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -163,7 +165,7 @@ export function TasksHooksDemo() {
                       <p className="text-sm text-muted-foreground">{task.description}</p>
                     ) : null}
                     <p className="text-xs text-muted-foreground">
-                      Status: {STATUS_LABELS[task.status]} · Due: {formatDate(task.dueDate)}
+                      Status: {STATUS_LABELS[status]} · Due: {formatDate(task.dueDate)}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -173,11 +175,11 @@ export function TasksHooksDemo() {
                       onClick={() =>
                         updateTask.mutate({
                           id: task.id,
-                          input: { status: task.status === 'DONE' ? 'TODO' : 'DONE' },
+                          input: { status: status === 'DONE' ? 'TODO' : 'DONE' },
                         })
                       }
                     >
-                      {task.status === 'DONE' ? 'Reopen' : 'Complete'}
+                      {status === 'DONE' ? 'Reopen' : 'Complete'}
                     </Button>
                     <Button
                       variant="outline"
@@ -189,7 +191,8 @@ export function TasksHooksDemo() {
                   </div>
                 </div>
               </li>
-            ))}
+            );
+          })}
           </ul>
         </CardContent>
       </Card>

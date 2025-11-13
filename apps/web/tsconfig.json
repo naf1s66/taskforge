@@ -12,6 +12,9 @@
       ],
       "@taskforge/shared": [
         "../../packages/shared/src"
+      ],
+      "@vitejs/plugin-react": [
+        "./types/vite-plugin-react"
       ]
     },
     "types": [

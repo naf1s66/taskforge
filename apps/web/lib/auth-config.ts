@@ -16,6 +16,15 @@ export type AuthProviderSummary = {
   type: string;
 };
 
+type AuthCallbacks = NonNullable<NextAuthConfig['callbacks']>;
+type AuthEvents = NonNullable<NextAuthConfig['events']>;
+
+type SignInCallbackParams = Parameters<NonNullable<AuthCallbacks['signIn']>>[0];
+type JwtCallbackParams = Parameters<NonNullable<AuthCallbacks['jwt']>>[0];
+type SessionCallbackParams = Parameters<NonNullable<AuthCallbacks['session']>>[0];
+type SignInEventParams = Parameters<NonNullable<AuthEvents['signIn']>>[0];
+type LinkAccountEventParams = Parameters<NonNullable<AuthEvents['linkAccount']>>[0];
+
 function createGitHubProvider() {
   const clientId = process.env.GITHUB_ID;
   const clientSecret = process.env.GITHUB_SECRET;
@@ -92,7 +101,7 @@ function mapAccountToPrisma(account: AdapterAccount) {
 async function ensureAccountLink(account: AdapterAccount) {
   const data = mapAccountToPrisma(account);
 
-  const update: Parameters<typeof prisma.account.upsert>[0]['update'] = {
+  const update: Partial<typeof data> & Pick<typeof data, 'userId' | 'type'> = {
     userId: data.userId,
     type: data.type,
   };
@@ -229,18 +238,12 @@ export const authConfig = {
   secret: process.env.NEXTAUTH_SECRET,
   trustHost: true,
   callbacks: {
-    async signIn({
-      user,
-      account,
-      profile,
-    }: {
-      user: AdapterUser;
-      account: Account | null;
-      profile?: Record<string, unknown> | null;
-    }) {
+    async signIn({ user, account, profile }: SignInCallbackParams) {
       if (!account || account.type !== 'oauth') {
         return true;
       }
+
+      const adapterUser = user as AdapterUser;
 
       const typedProfile = (profile ?? {}) as {
         email?: unknown;
@@ -248,7 +251,7 @@ export const authConfig = {
       };
 
       const profileEmail = typeof typedProfile.email === 'string' ? typedProfile.email : null;
-      const normalizedEmail = normalizeEmail(user?.email ?? profileEmail);
+      const normalizedEmail = normalizeEmail((adapterUser?.email as string | null | undefined) ?? profileEmail);
 
       if (!normalizedEmail) {
         console.warn('[auth] OAuth sign-in missing email', {
@@ -280,31 +283,25 @@ export const authConfig = {
         return false;
       }
 
-      user.email = normalizedEmail;
-      user.emailVerified = emailVerified ? new Date() : null;
+      adapterUser.email = normalizedEmail;
+      adapterUser.emailVerified = emailVerified ? new Date() : null;
 
       return true;
     },
-    async jwt({ token, user }: { token: JWT; user?: AdapterUser | null }) {
-      if (user?.id) {
-        token.sub = user.id;
+    async jwt({ token, user }: JwtCallbackParams) {
+      if (user && typeof (user as AdapterUser | { id?: string }).id === 'string') {
+        token.sub = (user as AdapterUser).id;
         console.info('[auth] JWT callback user matched', {
-          userId: user.id,
+          userId: (user as AdapterUser).id,
         });
       }
 
       return token;
     },
-    async session({
-      session,
-      user,
-      token,
-    }: {
-      session: Session;
-      user?: AdapterUser | null;
-      token: JWT;
-    }) {
-      let resolvedUserId = user?.id ?? token?.sub ?? session.user?.id;
+    async session({ session, user, token }: SessionCallbackParams) {
+      const adapterUser = user as AdapterUser | null | undefined;
+
+      let resolvedUserId = adapterUser?.id ?? token?.sub ?? session.user?.id;
 
       if (!resolvedUserId && session.user?.email) {
         const existingUser = await prisma.user.findUnique({
@@ -327,20 +324,14 @@ export const authConfig = {
     },
   },
   events: {
-    async signIn({
-      user,
-      isNewUser,
-    }: {
-      user: AdapterUser;
-      isNewUser?: boolean;
-    }) {
+    async signIn({ user, isNewUser }: SignInEventParams) {
       console.info('[auth] Sign-in completed', {
-        userId: user.id,
+        userId: (user as AdapterUser | { id?: string }).id,
         isNewUser,
       });
     },
-    async linkAccount({ user }: { user: AdapterUser }) {
-      console.info('[auth] Account linked for user', user.id);
+    async linkAccount({ user }: LinkAccountEventParams) {
+      console.info('[auth] Account linked for user', (user as AdapterUser | { id?: string }).id);
     },
   },
 } satisfies NextAuthConfig;

@@ -2,6 +2,9 @@
 
 **Full-stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • JWT auth flows • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
 
+
+> _Authenticated task list preview available in the design handoff; binary assets are excluded from the repository._
+
 - 📄 PRD: [`docs/PRD.md`](docs/PRD.md)
 - 🧑‍💻 Agents: [`docs/AGENTS.md`](docs/AGENTS.md)
 - 🧠 ADRs: [`docs/adr/`](docs/adr/)

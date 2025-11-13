@@ -25,17 +25,26 @@ const NullableString = z
   .nullable()
   .transform((value) => value ?? undefined);
 
-const TaskRecordSchema = z.object({
-  id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  description: NullableString,
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+const TaskRecordSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    description: NullableString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    dueDate: NullableDateString,
+    tags: z.array(NonEmptyTrimmedString).optional(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) =>
+    ({
+      ...value,
+      description: value.description ?? undefined,
+      dueDate: value.dueDate ?? undefined,
+      tags: value.tags ?? [],
+    }) satisfies TaskRecordDTO,
+  );
 
 const TaskListResponseSchema = z.object({
   items: z.array(TaskRecordSchema),
@@ -172,8 +181,7 @@ export class TaskClientError extends Error {
     this.issues = init.issues;
 
     if (init.cause !== undefined) {
-      // @ts-expect-error Node 18 target may not include the cause property
-      this.cause = init.cause;
+      (this as Error & { cause?: unknown }).cause = init.cause;
     }
 
     Object.setPrototypeOf(this, new.target.prototype);
@@ -217,7 +225,7 @@ async function loadServerAuthStorage(): Promise<import('node:async_hooks').Async
     return serverAuthStoragePromise;
   }
 
-  serverAuthStoragePromise = import('node:async_hooks')
+  serverAuthStoragePromise = import(/* webpackIgnore: true */ 'node:async_hooks')
     .then((module) => {
       serverAuthStorage = new module.AsyncLocalStorage<TaskClientAuthState>();
       return serverAuthStorage;
@@ -254,9 +262,9 @@ async function tryReadNextSessionCookie(): Promise<string | undefined> {
   if (!triedLoadingNextCookies) {
     triedLoadingNextCookies = true;
     try {
-      const module = await import('next/headers');
-      if (typeof module.cookies === 'function') {
-        nextCookiesGetter = module.cookies;
+      const headersModule = await import('next/headers');
+      if (typeof headersModule.cookies === 'function') {
+        nextCookiesGetter = headersModule.cookies;
       } else {
         nextCookiesGetter = undefined;
       }
@@ -403,7 +411,10 @@ async function applyAuth(headers: Headers, options?: TaskClientRequestOptions): 
   return undefined;
 }
 
-async function parseJson<T>(response: Response, schema: z.ZodSchema<T>): Promise<T> {
+async function parseJson<T>(
+  response: Response,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+): Promise<T> {
   const raw = await response.json().catch(() => {
     throw new TaskClientError('Failed to parse response body as JSON.', {
       kind: 'serialization',
@@ -463,7 +474,7 @@ async function requestJson<T>(
     method: string;
     body?: unknown;
     query?: Record<string, string | string[]>;
-    schema: z.ZodSchema<T>;
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   },
   options?: TaskClientRequestOptions,
 ): Promise<T> {
@@ -524,7 +535,7 @@ export async function listTasks(
     normalizedQuery = parsed.data;
   }
 
-  return requestJson(
+  return requestJson<TaskListResponse>(
     'v1/tasks',
     {
       method: 'GET',
@@ -547,7 +558,7 @@ export async function createTask(
     });
   }
 
-  return requestJson(
+  return requestJson<TaskRecordDTO>(
     'v1/tasks',
     {
       method: 'POST',
@@ -579,7 +590,7 @@ export async function updateTask(
     });
   }
 
-  return requestJson(
+  return requestJson<TaskRecordDTO>(
     `v1/tasks/${validatedId.data}`,
     {
       method: 'PATCH',
@@ -599,7 +610,7 @@ export async function deleteTask(id: string, options?: TaskClientRequestOptions)
     });
   }
 
-  return requestJson(
+  return requestJson<TaskDeleteResponse>(
     `v1/tasks/${validatedId.data}`,
     {
       method: 'DELETE',
