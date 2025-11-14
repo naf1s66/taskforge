@@ -194,8 +194,7 @@ export function TaskListView({ onCreateTask, onEditTask }: TaskListViewProps) {
 
   const statusCounts = useMemo(() => getStatusCounts(groupedTasks), [groupedTasks]);
 
-  const totalTasks = tasksQuery.data?.total ?? 0;
-  const showingCount = sortedTasks.length;
+  const visibleTaskCount = sortedTasks.length;
 
   return (
     <div className="space-y-8">
@@ -228,9 +227,7 @@ export function TaskListView({ onCreateTask, onEditTask }: TaskListViewProps) {
       <Card className="border-border/70 bg-card/60 shadow-lg shadow-black/5">
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg">My work</CardTitle>
-          <CardDescription>
-            Showing {showingCount} of {totalTasks} tasks · {describeSort(sort)}
-          </CardDescription>
+          <CardDescription>Showing {visibleTaskCount} tasks · {describeSort(sort)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -348,11 +345,11 @@ export function TaskListView({ onCreateTask, onEditTask }: TaskListViewProps) {
 
           {tasksQuery.isLoading ? <TaskListSkeleton mode={viewMode} /> : null}
 
-          {!tasksQuery.isLoading && !tasksQuery.error && showingCount === 0 ? (
+          {!tasksQuery.isLoading && !tasksQuery.error && visibleTaskCount === 0 ? (
             <EmptyState onCreateTask={onCreateTask} />
           ) : null}
 
-          {!tasksQuery.isLoading && !tasksQuery.error && showingCount > 0 ? (
+          {!tasksQuery.isLoading && !tasksQuery.error && visibleTaskCount > 0 ? (
             viewMode === 'board' ? (
               <TaskBoard groupedTasks={groupedTasks} onEditTask={onEditTask} />
             ) : (

@@ -138,7 +138,7 @@ export function TasksHooksDemo() {
         <CardHeader>
           <CardTitle>Results</CardTitle>
           <CardDescription>
-            Showing {tasksQuery.tasks.length} of {tasksQuery.data?.total ?? 0} tasks. Use the controls above to filter.
+            Showing {tasksQuery.tasks.length} tasks. Use the controls above to filter.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
