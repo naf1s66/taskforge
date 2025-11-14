@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   useMutation,
   useQuery,
@@ -420,7 +420,9 @@ function deserializeNormalizedFilters(serialized: string): NormalizedTaskListFil
 }
 
 export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOptions): UseTasksQueryResult {
-  const { user } = useAuth();
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
   const filtersSignature = useMemo(() => stableSerialize(filters), [filters]);
   const normalizedHash = useMemo(() => {
     const parsedFilters = deserializeFilters(filtersSignature);
@@ -434,6 +436,28 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
     [userScope, normalizedHash],
   );
 
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
   const query = useQuery({
     queryKey,
     queryFn: async () => {
@@ -445,7 +469,8 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,
-    ...options,
+    enabled: effectiveEnabled,
+    ...queryOptions,
   });
 
   const friendlyError = toTaskOperationError(query.error);
@@ -453,8 +478,8 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
   return {
     data: query.data,
     tasks: query.data?.items ?? [],
-    isLoading: query.isLoading,
-    isFetching: query.isFetching,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
     isError: query.isError,
     isSuccess: query.isSuccess,
     status: query.status,
