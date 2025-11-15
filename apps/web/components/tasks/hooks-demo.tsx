@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskPriority, TaskStatus } from '@taskforge/shared';
 import { CalendarDays, Filter, Inbox, RefreshCcw, Search, Tag, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { ReadonlyURLSearchParams } from 'next/navigation';
 import type { DateRange } from 'react-day-picker';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
