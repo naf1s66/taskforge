@@ -164,6 +164,18 @@ curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
 
 Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. The list endpoint accepts optional `status`, `priority`, repeated `tag` parameters, free-text search via `q`, and ISO `dueFrom`/`dueTo` ranges that map directly to repository-level filters. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
 
+### Task filter mapping
+
+The task hooks demo (`apps/web/app/(protected)/tasks/hooks-demo/page.tsx`) surfaces the query parameters supported by the API and persists them to the URL/local storage for easy sharing. Each control lines up with a task list filter:
+
+- **Status select** → `status`
+- **Priority select** → `priority`
+- **Tag combobox** → repeated `tag`
+- **Search field** → `q`
+- **Due date range** → `dueFrom` (start of day) / `dueTo` (end of day)
+
+The UI simply passes these fields to `useTasksQuery`, so anything supported by the API immediately flows through the frontend without additional mapping glue.
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
   migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.
