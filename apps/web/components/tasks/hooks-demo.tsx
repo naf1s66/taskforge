@@ -472,7 +472,7 @@ function TagsCombobox({ selected, onChange, availableTags }: TagsComboboxProps) 
                     key={tag}
                     value={tag}
                     onSelect={(value) => toggleTag(value)}
-                    aria-selected={isTagSelected(tag)}
+                    aria-checked={isTagSelected(tag)}
                   >
                     <span className="flex-1 text-sm capitalize">{tag}</span>
                     {isTagSelected(tag) ? <span className="text-xs text-primary">Selected</span> : null}
