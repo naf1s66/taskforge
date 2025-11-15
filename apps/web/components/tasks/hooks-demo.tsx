@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+} from 'react';
 import type { TaskPriority, TaskStatus } from '@taskforge/shared';
 import { useCommandState } from 'cmdk';
 import { CalendarDays, Filter, Inbox, RefreshCcw, Search, Tag, X } from 'lucide-react';
@@ -714,28 +721,47 @@ export function TasksHooksDemo() {
   const queryFilters = useMemo(() => toTaskQueryFilters(filters), [filters]);
 
   const tasksQuery = useTasksQuery(queryFilters, { keepPreviousData: true });
+  const unfilteredTasksQuery = useTasksQuery(undefined, {
+    keepPreviousData: true,
+    enabled: hasUrlFiltersRef.current,
+  });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
   const hasMutationError = createTask.error ?? updateTask.error ?? deleteTask.error;
+  const [availableTags, setAvailableTags] = useState<string[]>(() => sanitizeTags(filters.tags));
 
-  const availableTags = useMemo(() => {
-    const tagMap = new Map<string, string>();
-    for (const task of tasksQuery.data?.items ?? []) {
-      for (const tag of task.tags) {
-        const trimmed = tag.trim();
-        if (!trimmed) {
-          continue;
-        }
-        const key = trimmed.toLowerCase();
-        if (!tagMap.has(key)) {
-          tagMap.set(key, trimmed);
-        }
-      }
+  const mergeAvailableTags = useCallback((items: TaskListItem[] | undefined) => {
+    if (!items || items.length === 0) {
+      return;
     }
-    return Array.from(tagMap.values()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  }, [tasksQuery.data?.items]);
+
+    const collected: string[] = [];
+    for (const task of items) {
+      collected.push(...task.tags);
+    }
+
+    if (collected.length === 0) {
+      return;
+    }
+
+    setAvailableTags((previous) => {
+      const next = sanitizeTags([...previous, ...collected]);
+      if (next.length === previous.length && next.every((tag, index) => tag === previous[index])) {
+        return previous;
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    mergeAvailableTags(tasksQuery.data?.items);
+  }, [mergeAvailableTags, tasksQuery.data?.items]);
+
+  useEffect(() => {
+    mergeAvailableTags(unfilteredTasksQuery.data?.items);
+  }, [mergeAvailableTags, unfilteredTasksQuery.data?.items]);
 
   function handleResetFilters() {
     setFilters(createDefaultFilters());
