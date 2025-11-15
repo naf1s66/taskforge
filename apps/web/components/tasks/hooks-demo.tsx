@@ -116,6 +116,28 @@ function sanitizeTags(tags: string[] | undefined): string[] {
   return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
+function normalizeIsoDateString(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (Number.isNaN(timestamp)) {
+    return undefined;
+  }
+
+  try {
+    return new Date(timestamp).toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
 function parseFiltersFromSearchParams(
   params: ReadonlyURLSearchParams | URLSearchParams | null,
 ): Partial<TaskFilterState> | null {
@@ -125,8 +147,8 @@ function parseFiltersFromSearchParams(
 
   const status = params.get('status');
   const priority = params.get('priority');
-  const dueFrom = params.get('dueFrom');
-  const dueTo = params.get('dueTo');
+  const dueFrom = normalizeIsoDateString(params.get('dueFrom'));
+  const dueTo = normalizeIsoDateString(params.get('dueTo'));
   const search = params.get('q');
   const tags = params.getAll('tag');
 
@@ -193,12 +215,14 @@ function readFiltersFromStorage(): Partial<TaskFilterState> | null {
       next.search = parsed.search.trim();
     }
 
-    if (typeof parsed.dueFrom === 'string' && parsed.dueFrom) {
-      next.dueFrom = parsed.dueFrom;
+    const dueFrom = normalizeIsoDateString(parsed.dueFrom);
+    if (dueFrom) {
+      next.dueFrom = dueFrom;
     }
 
-    if (typeof parsed.dueTo === 'string' && parsed.dueTo) {
-      next.dueTo = parsed.dueTo;
+    const dueTo = normalizeIsoDateString(parsed.dueTo);
+    if (dueTo) {
+      next.dueTo = dueTo;
     }
 
     return next;
