@@ -562,19 +562,13 @@ export function TasksHooksDemo() {
   const searchParams = useSearchParams();
   const [isMounted, setIsMounted] = useState(false);
 
-  const initialFilters = useMemo(() => {
-    const fromUrl = parseFiltersFromSearchParams(searchParams);
-    if (fromUrl) {
-      return { ...createDefaultFilters(), ...fromUrl };
-    }
+  const initialUrlFilters = useMemo(() => parseFiltersFromSearchParams(searchParams), [searchParams]);
+  const hasUrlFiltersRef = useRef(initialUrlFilters !== null);
 
-    const fromStorage = readFiltersFromStorage();
-    if (fromStorage) {
-      return { ...createDefaultFilters(), ...fromStorage };
-    }
-
-    return createDefaultFilters();
-  }, [searchParams]);
+  const initialFilters = useMemo(
+    () => ({ ...createDefaultFilters(), ...(initialUrlFilters ?? {}) }),
+    [initialUrlFilters],
+  );
 
   const [filters, setFilters] = useState<TaskFilterState>(initialFilters);
   const lastQueryRef = useRef(searchParams?.toString() ?? '');
@@ -583,6 +577,24 @@ export function TasksHooksDemo() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isMounted) {
+      return;
+    }
+
+    if (hasUrlFiltersRef.current) {
+      return;
+    }
+
+    const fromStorage = readFiltersFromStorage();
+    if (!fromStorage) {
+      return;
+    }
+
+    const nextFilters = { ...createDefaultFilters(), ...fromStorage };
+    setFilters((previous) => (areFiltersEqual(previous, nextFilters) ? previous : nextFilters));
+  }, [isMounted]);
 
   useEffect(() => {
     const currentQuery = searchParams?.toString() ?? '';
