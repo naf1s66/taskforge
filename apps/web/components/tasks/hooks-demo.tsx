@@ -658,6 +658,9 @@ export function TasksHooksDemo() {
 
   const initialUrlFilters = useMemo(() => parseFiltersFromSearchParams(searchParams), [searchParams]);
   const hasUrlFiltersRef = useRef(initialUrlFilters !== null);
+  const [shouldLoadUnfilteredTasks, setShouldLoadUnfilteredTasks] = useState(
+    hasUrlFiltersRef.current,
+  );
 
   const initialFilters = useMemo(
     () => ({ ...createDefaultFilters(), ...(initialUrlFilters ?? {}) }),
@@ -685,6 +688,9 @@ export function TasksHooksDemo() {
     if (!fromStorage) {
       return;
     }
+
+    hasUrlFiltersRef.current = true;
+    setShouldLoadUnfilteredTasks(true);
 
     const nextFilters = { ...createDefaultFilters(), ...fromStorage };
     setFilters((previous) => (areFiltersEqual(previous, nextFilters) ? previous : nextFilters));
@@ -775,7 +781,7 @@ export function TasksHooksDemo() {
   const tasksQuery = useTasksQuery(queryFilters, { keepPreviousData: true });
   const unfilteredTasksQuery = useTasksQuery(undefined, {
     keepPreviousData: true,
-    enabled: hasUrlFiltersRef.current,
+    enabled: shouldLoadUnfilteredTasks,
   });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -814,6 +820,16 @@ export function TasksHooksDemo() {
   useEffect(() => {
     mergeAvailableTags(unfilteredTasksQuery.data?.items);
   }, [mergeAvailableTags, unfilteredTasksQuery.data?.items]);
+
+  useEffect(() => {
+    if (shouldLoadUnfilteredTasks) {
+      return;
+    }
+
+    if (hasActiveFilters(filters)) {
+      setShouldLoadUnfilteredTasks(true);
+    }
+  }, [filters, shouldLoadUnfilteredTasks]);
 
   function handleResetFilters() {
     setFilters(createDefaultFilters());
