@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from 'react';
 import type { TaskPriority, TaskStatus } from '@taskforge/shared';
+import { useCommandState } from 'cmdk';
 import { CalendarDays, Filter, Inbox, RefreshCcw, Search, Tag, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReadonlyURLSearchParams } from 'next/navigation';
@@ -375,6 +376,45 @@ interface TagsComboboxProps {
   availableTags: string[];
 }
 
+type CommandInputProps = ComponentPropsWithoutRef<typeof CommandInput>;
+
+interface CommandInputWithCreateProps
+  extends Omit<CommandInputProps, 'value' | 'onValueChange' | 'onKeyDown'> {
+  value: string;
+  onValueChange: (value: string) => void;
+  onCreate: () => void;
+  onKeyDown?: CommandInputProps['onKeyDown'];
+}
+
+function CommandInputWithCreate({
+  value,
+  onValueChange,
+  onCreate,
+  onKeyDown,
+  ...props
+}: CommandInputWithCreateProps) {
+  const filteredItemCount = useCommandState((state) => state.filtered.count);
+
+  return (
+    <CommandInput
+      {...props}
+      value={value}
+      onValueChange={onValueChange}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && value.trim()) {
+          if (filteredItemCount === 0) {
+            event.preventDefault();
+            onCreate();
+            return;
+          }
+        }
+
+        onKeyDown?.(event);
+      }}
+    />
+  );
+}
+
 function TagsCombobox({ selected, onChange, availableTags }: TagsComboboxProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -437,17 +477,12 @@ function TagsCombobox({ selected, onChange, availableTags }: TagsComboboxProps) 
         </PopoverTrigger>
         <PopoverContent className="w-72 p-0" align="start">
           <Command>
-            <CommandInput
+            <CommandInputWithCreate
               value={inputValue}
               onValueChange={setInputValue}
               placeholder="Search or create tags"
               aria-label="Search available tags"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && inputValue.trim()) {
-                  event.preventDefault();
-                  handleCreateTag();
-                }
-              }}
+              onCreate={handleCreateTag}
             />
             <CommandList>
               <CommandEmpty>
