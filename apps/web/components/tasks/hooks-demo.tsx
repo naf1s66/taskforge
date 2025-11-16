@@ -165,6 +165,16 @@ function normalizeDateBoundary(
       return undefined;
     }
 
+    const canonical = new Date(Date.UTC(year, month, day));
+    if (
+      Number.isNaN(canonical.getTime()) ||
+      canonical.getUTCFullYear() !== year ||
+      canonical.getUTCMonth() !== month ||
+      canonical.getUTCDate() !== day
+    ) {
+      return undefined;
+    }
+
     return toBoundaryIso(year, month, day);
   }
 
