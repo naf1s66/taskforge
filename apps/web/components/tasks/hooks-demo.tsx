@@ -778,9 +778,11 @@ export function TasksHooksDemo() {
 
   const queryFilters = useMemo(() => toTaskQueryFilters(filters), [filters]);
 
-  const tasksQuery = useTasksQuery(queryFilters, { keepPreviousData: true });
+  const tasksQuery = useTasksQuery(queryFilters, {
+    placeholderData: (previous) => previous,
+  });
   const unfilteredTasksQuery = useTasksQuery(undefined, {
-    keepPreviousData: true,
+    placeholderData: (previous) => previous,
     enabled: shouldLoadUnfilteredTasks,
   });
   const createTask = useCreateTask();
