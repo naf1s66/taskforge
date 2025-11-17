@@ -906,9 +906,11 @@ export function TasksHooksDemo() {
     placeholderData: (previous) => previous,
     enabled: hasHydratedFilters,
   });
+  const isFiltered = hasActiveFilters(filters);
+
   const unfilteredTasksQuery = useTasksQuery(undefined, {
     placeholderData: (previous) => previous,
-    enabled: hasHydratedFilters && shouldLoadUnfilteredTasks,
+    enabled: hasHydratedFilters && shouldLoadUnfilteredTasks && isFiltered,
   });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
@@ -984,7 +986,6 @@ export function TasksHooksDemo() {
     }));
   }
 
-  const isFiltered = hasActiveFilters(filters);
   const isEmpty =
     hasHydratedFilters && !tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.tasks.length === 0;
 
