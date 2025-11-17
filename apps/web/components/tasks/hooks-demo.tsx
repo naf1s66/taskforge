@@ -75,6 +75,8 @@ interface TaskFilterState {
   search: string;
   dueFrom?: string;
   dueTo?: string;
+  dueFromDay?: string;
+  dueToDay?: string;
 }
 
 const DEFAULT_FILTER_STATE: TaskFilterState = {
@@ -84,9 +86,33 @@ const DEFAULT_FILTER_STATE: TaskFilterState = {
   search: '',
   dueFrom: undefined,
   dueTo: undefined,
+  dueFromDay: undefined,
+  dueToDay: undefined,
 };
 
 const DATE_BOUNDARY_CANONICAL_SUFFIXES = ['T00:00:00.000Z', 'T23:59:59.999Z'] as const;
+
+function isCanonicalBoundary(value: string | null | undefined): value is string {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  return DATE_BOUNDARY_CANONICAL_SUFFIXES.some((suffix) => value.endsWith(suffix));
+}
+
+function deriveDateKeyFromCanonicalBoundary(value: string | null | undefined): string | undefined {
+  if (!isCanonicalBoundary(value)) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    return undefined;
+  }
+
+  const parsed = new Date(timestamp);
+  return formatDateKey(new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+}
 
 function createDefaultFilters(): TaskFilterState {
   return { ...DEFAULT_FILTER_STATE, tags: [] };
@@ -126,10 +152,14 @@ function sanitizeTags(tags: string[] | undefined): string[] {
   return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
-function normalizeDateBoundary(
-  value: string | null | undefined,
-  boundary: 'start' | 'end',
-): string | undefined {
+function formatDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeDateKey(value: string | null | undefined): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
@@ -139,43 +169,90 @@ function normalizeDateBoundary(
     return undefined;
   }
 
-  function toBoundaryIso(year: number, month: number, day: number): string {
-    const hours = boundary === 'start' ? 0 : 23;
-    const minutes = boundary === 'start' ? 0 : 59;
-    const seconds = boundary === 'start' ? 0 : 59;
-    const milliseconds = boundary === 'start' ? 0 : 999;
-    return new Date(Date.UTC(year, month, day, hours, minutes, seconds, milliseconds)).toISOString();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return undefined;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const [yearStr, monthStr, dayStr] = trimmed.split('-');
-    const year = Number.parseInt(yearStr, 10);
-    const month = Number.parseInt(monthStr, 10) - 1;
-    const day = Number.parseInt(dayStr, 10);
+  const [yearStr, monthStr, dayStr] = trimmed.split('-');
+  const year = Number.parseInt(yearStr, 10);
+  const month = Number.parseInt(monthStr, 10) - 1;
+  const day = Number.parseInt(dayStr, 10);
 
-    if (
-      Number.isNaN(year) ||
-      Number.isNaN(month) ||
-      Number.isNaN(day) ||
-      month < 0 ||
-      month > 11 ||
-      day < 1 ||
-      day > 31
-    ) {
-      return undefined;
-    }
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day) ||
+    month < 0 ||
+    month > 11 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return undefined;
+  }
 
-    const canonical = new Date(Date.UTC(year, month, day));
-    if (
-      Number.isNaN(canonical.getTime()) ||
-      canonical.getUTCFullYear() !== year ||
-      canonical.getUTCMonth() !== month ||
-      canonical.getUTCDate() !== day
-    ) {
-      return undefined;
-    }
+  const canonical = new Date(Date.UTC(year, month, day));
+  if (
+    Number.isNaN(canonical.getTime()) ||
+    canonical.getUTCFullYear() !== year ||
+    canonical.getUTCMonth() !== month ||
+    canonical.getUTCDate() !== day
+  ) {
+    return undefined;
+  }
 
-    return toBoundaryIso(year, month, day);
+  return trimmed;
+}
+
+function toDateFromKey(key?: string): Date | undefined {
+  if (!key) {
+    return undefined;
+  }
+
+  const normalized = normalizeDateKey(key);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const [yearStr, monthStr, dayStr] = normalized.split('-');
+  const year = Number.parseInt(yearStr, 10);
+  const month = Number.parseInt(monthStr, 10) - 1;
+  const day = Number.parseInt(dayStr, 10);
+
+  return new Date(year, month, day);
+}
+
+function toUserTimezoneBoundaryIsoFromDate(date: Date, boundary: 'start' | 'end'): string {
+  const local = new Date(date);
+  if (boundary === 'start') {
+    local.setHours(0, 0, 0, 0);
+  } else {
+    local.setHours(23, 59, 59, 999);
+  }
+
+  return local.toISOString();
+}
+
+function toUserTimezoneBoundaryIsoFromKey(key?: string, boundary?: 'start' | 'end'): string | undefined {
+  if (!key || !boundary) {
+    return undefined;
+  }
+
+  const date = toDateFromKey(key);
+  if (!date) {
+    return undefined;
+  }
+
+  return toUserTimezoneBoundaryIsoFromDate(date, boundary);
+}
+
+function normalizeDateInstant(value: string | null | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
   }
 
   const timestamp = Date.parse(trimmed);
@@ -183,17 +260,7 @@ function normalizeDateBoundary(
     return undefined;
   }
 
-  try {
-    const parsed = new Date(timestamp);
-    const isCanonical = DATE_BOUNDARY_CANONICAL_SUFFIXES.some((suffix) => trimmed.endsWith(suffix));
-    const year = isCanonical ? parsed.getUTCFullYear() : parsed.getFullYear();
-    const month = isCanonical ? parsed.getUTCMonth() : parsed.getMonth();
-    const day = isCanonical ? parsed.getUTCDate() : parsed.getDate();
-
-    return toBoundaryIso(year, month, day);
-  } catch {
-    return undefined;
-  }
+  return new Date(timestamp).toISOString();
 }
 
 function parseFiltersFromSearchParams(
@@ -205,8 +272,16 @@ function parseFiltersFromSearchParams(
 
   const status = params.get('status');
   const priority = params.get('priority');
-  const dueFrom = normalizeDateBoundary(params.get('dueFrom'), 'start');
-  const dueTo = normalizeDateBoundary(params.get('dueTo'), 'end');
+  const dueFromParam = params.get('dueFrom');
+  const dueToParam = params.get('dueTo');
+  const dueFromDay = normalizeDateKey(params.get('dueFromDay')) ?? deriveDateKeyFromCanonicalBoundary(dueFromParam);
+  const dueToDay = normalizeDateKey(params.get('dueToDay')) ?? deriveDateKeyFromCanonicalBoundary(dueToParam);
+  const dueFrom = dueFromDay
+    ? toUserTimezoneBoundaryIsoFromKey(dueFromDay, 'start')
+    : normalizeDateInstant(dueFromParam);
+  const dueTo = dueToDay
+    ? toUserTimezoneBoundaryIsoFromKey(dueToDay, 'end')
+    : normalizeDateInstant(dueToParam);
   const search = params.get('q');
   const tags = params.getAll('tag');
 
@@ -218,6 +293,14 @@ function parseFiltersFromSearchParams(
 
   if (isTaskPriority(priority)) {
     next.priority = priority;
+  }
+
+  if (dueFromDay) {
+    next.dueFromDay = dueFromDay;
+  }
+
+  if (dueToDay) {
+    next.dueToDay = dueToDay;
   }
 
   if (dueFrom) {
@@ -273,12 +356,30 @@ function readFiltersFromStorage(): Partial<TaskFilterState> | null {
       next.search = parsed.search.trim();
     }
 
-    const dueFrom = normalizeDateBoundary(parsed.dueFrom ?? null, 'start');
+    const dueFromDay =
+      normalizeDateKey(typeof parsed.dueFromDay === 'string' ? parsed.dueFromDay : null) ??
+      deriveDateKeyFromCanonicalBoundary(typeof parsed.dueFrom === 'string' ? parsed.dueFrom : null);
+    if (dueFromDay) {
+      next.dueFromDay = dueFromDay;
+    }
+
+    const dueToDay =
+      normalizeDateKey(typeof parsed.dueToDay === 'string' ? parsed.dueToDay : null) ??
+      deriveDateKeyFromCanonicalBoundary(typeof parsed.dueTo === 'string' ? parsed.dueTo : null);
+    if (dueToDay) {
+      next.dueToDay = dueToDay;
+    }
+
+    const dueFrom = dueFromDay
+      ? toUserTimezoneBoundaryIsoFromKey(dueFromDay, 'start')
+      : normalizeDateInstant(typeof parsed.dueFrom === 'string' ? parsed.dueFrom : null);
     if (dueFrom) {
       next.dueFrom = dueFrom;
     }
 
-    const dueTo = normalizeDateBoundary(parsed.dueTo ?? null, 'end');
+    const dueTo = dueToDay
+      ? toUserTimezoneBoundaryIsoFromKey(dueToDay, 'end')
+      : normalizeDateInstant(typeof parsed.dueTo === 'string' ? parsed.dueTo : null);
     if (dueTo) {
       next.dueTo = dueTo;
     }
@@ -304,6 +405,8 @@ function writeFiltersToStorage(filters: TaskFilterState) {
         search: filters.search,
         dueFrom: filters.dueFrom,
         dueTo: filters.dueTo,
+        dueFromDay: filters.dueFromDay,
+        dueToDay: filters.dueToDay,
       }),
     );
   } catch {
@@ -327,6 +430,12 @@ function areFiltersEqual(a: TaskFilterState, b: TaskFilterState): boolean {
   if (a.dueTo !== b.dueTo) {
     return false;
   }
+  if (a.dueFromDay !== b.dueFromDay) {
+    return false;
+  }
+  if (a.dueToDay !== b.dueToDay) {
+    return false;
+  }
   if (a.tags.length !== b.tags.length) {
     return false;
   }
@@ -338,30 +447,14 @@ function areFiltersEqual(a: TaskFilterState, b: TaskFilterState): boolean {
   return true;
 }
 
-function toUserTimezoneBoundaryIso(value: string | undefined, boundary: 'start' | 'end') {
-  const date = toLocalDayFromStoredIso(value);
-  if (!date) {
-    return undefined;
-  }
-
-  const local = new Date(date);
-  if (boundary === 'start') {
-    local.setHours(0, 0, 0, 0);
-  } else {
-    local.setHours(23, 59, 59, 999);
-  }
-
-  return local.toISOString();
-}
-
 function toTaskQueryFilters(filters: TaskFilterState) {
   return {
     status: filters.status,
     priority: filters.priority,
     tag: filters.tags.length > 0 ? filters.tags : undefined,
     q: filters.search.trim() ? filters.search.trim() : undefined,
-    dueFrom: toUserTimezoneBoundaryIso(filters.dueFrom, 'start'),
-    dueTo: toUserTimezoneBoundaryIso(filters.dueTo, 'end'),
+    dueFrom: filters.dueFrom,
+    dueTo: filters.dueTo,
   } as const;
 }
 
@@ -377,7 +470,7 @@ function hasActiveFilters(filters: TaskFilterState): boolean {
 }
 
 function toLocalDayFromStoredIso(value: string | undefined): Date | undefined {
-  if (!value) {
+  if (!value || !isCanonicalBoundary(value)) {
     return undefined;
   }
 
@@ -387,13 +480,7 @@ function toLocalDayFromStoredIso(value: string | undefined): Date | undefined {
   }
 
   const parsed = new Date(timestamp);
-  const isCanonical = DATE_BOUNDARY_CANONICAL_SUFFIXES.some((suffix) => value.endsWith(suffix));
-
-  const year = isCanonical ? parsed.getUTCFullYear() : parsed.getFullYear();
-  const month = isCanonical ? parsed.getUTCMonth() : parsed.getMonth();
-  const day = isCanonical ? parsed.getUTCDate() : parsed.getDate();
-
-  return new Date(year, month, day);
+  return new Date(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
 }
 
 function toDateRange(filters: TaskFilterState): DateRange | undefined {
@@ -401,8 +488,8 @@ function toDateRange(filters: TaskFilterState): DateRange | undefined {
     return undefined;
   }
 
-  const fromDate = toLocalDayFromStoredIso(filters.dueFrom);
-  const toDate = toLocalDayFromStoredIso(filters.dueTo);
+  const fromDate = toDateFromKey(filters.dueFromDay) ?? toLocalDayFromStoredIso(filters.dueFrom);
+  const toDate = toDateFromKey(filters.dueToDay) ?? toLocalDayFromStoredIso(filters.dueTo);
 
   if (!fromDate && !toDate) {
     return undefined;
@@ -420,11 +507,15 @@ function toDateRange(filters: TaskFilterState): DateRange | undefined {
 }
 
 function startOfDayIso(date: Date): string {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)).toISOString();
+  const local = new Date(date);
+  local.setHours(0, 0, 0, 0);
+  return local.toISOString();
 }
 
 function endOfDayIso(date: Date): string {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)).toISOString();
+  const local = new Date(date);
+  local.setHours(23, 59, 59, 999);
+  return local.toISOString();
 }
 
 function formatDateRange(range?: DateRange): string {
@@ -739,7 +830,7 @@ export function TasksHooksDemo() {
     writeFiltersToStorage(filters);
 
     const current = new URLSearchParams(searchParams?.toString());
-    const keysToClear = ['status', 'priority', 'q', 'dueFrom', 'dueTo', 'tag'];
+    const keysToClear = ['status', 'priority', 'q', 'dueFrom', 'dueTo', 'dueFromDay', 'dueToDay', 'tag'];
     for (const key of keysToClear) {
       current.delete(key);
     }
@@ -762,6 +853,14 @@ export function TasksHooksDemo() {
 
     if (filters.dueTo) {
       current.set('dueTo', filters.dueTo);
+    }
+
+    if (filters.dueFromDay) {
+      current.set('dueFromDay', filters.dueFromDay);
+    }
+
+    if (filters.dueToDay) {
+      current.set('dueToDay', filters.dueToDay);
     }
 
     for (const tag of filters.tags) {
@@ -864,7 +963,13 @@ export function TasksHooksDemo() {
 
   function handleDueRangeChange(range: DateRange | undefined) {
     if (!range || (!range.from && !range.to)) {
-      setFilters((previous) => ({ ...previous, dueFrom: undefined, dueTo: undefined }));
+      setFilters((previous) => ({
+        ...previous,
+        dueFrom: undefined,
+        dueTo: undefined,
+        dueFromDay: undefined,
+        dueToDay: undefined,
+      }));
       return;
     }
 
@@ -872,6 +977,8 @@ export function TasksHooksDemo() {
       ...previous,
       dueFrom: range.from ? startOfDayIso(range.from) : undefined,
       dueTo: range.to ? endOfDayIso(range.to) : range.from ? endOfDayIso(range.from) : undefined,
+      dueFromDay: range.from ? formatDateKey(range.from) : undefined,
+      dueToDay: range.to ? formatDateKey(range.to) : range.from ? formatDateKey(range.from) : undefined,
     }));
   }
 
