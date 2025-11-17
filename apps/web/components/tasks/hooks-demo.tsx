@@ -338,14 +338,30 @@ function areFiltersEqual(a: TaskFilterState, b: TaskFilterState): boolean {
   return true;
 }
 
+function toUserTimezoneBoundaryIso(value: string | undefined, boundary: 'start' | 'end') {
+  const date = toLocalDayFromStoredIso(value);
+  if (!date) {
+    return undefined;
+  }
+
+  const local = new Date(date);
+  if (boundary === 'start') {
+    local.setHours(0, 0, 0, 0);
+  } else {
+    local.setHours(23, 59, 59, 999);
+  }
+
+  return local.toISOString();
+}
+
 function toTaskQueryFilters(filters: TaskFilterState) {
   return {
     status: filters.status,
     priority: filters.priority,
     tag: filters.tags.length > 0 ? filters.tags : undefined,
     q: filters.search.trim() ? filters.search.trim() : undefined,
-    dueFrom: filters.dueFrom,
-    dueTo: filters.dueTo,
+    dueFrom: toUserTimezoneBoundaryIso(filters.dueFrom, 'start'),
+    dueTo: toUserTimezoneBoundaryIso(filters.dueTo, 'end'),
   } as const;
 }
 
