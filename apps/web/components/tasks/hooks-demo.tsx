@@ -860,7 +860,7 @@ export function TasksHooksDemo() {
   }
 
   const isFiltered = hasActiveFilters(filters);
-  const isEmpty = !tasksQuery.isLoading && tasksQuery.tasks.length === 0;
+  const isEmpty = !tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.tasks.length === 0;
 
   return (
     <div className="space-y-6">
