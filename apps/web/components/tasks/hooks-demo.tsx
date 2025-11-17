@@ -671,6 +671,7 @@ export function TasksHooksDemo() {
   const [shouldLoadUnfilteredTasks, setShouldLoadUnfilteredTasks] = useState(
     hasUrlFiltersRef.current,
   );
+  const [hasHydratedFilters, setHasHydratedFilters] = useState(hasUrlFiltersRef.current);
 
   const initialFilters = useMemo(
     () => ({ ...createDefaultFilters(), ...(initialUrlFilters ?? {}) }),
@@ -686,25 +687,21 @@ export function TasksHooksDemo() {
   }, []);
 
   useEffect(() => {
-    if (!isMounted) {
-      return;
-    }
-
-    if (hasUrlFiltersRef.current) {
+    if (!isMounted || hasHydratedFilters) {
       return;
     }
 
     const fromStorage = readFiltersFromStorage();
-    if (!fromStorage) {
-      return;
+    if (fromStorage) {
+      hasUrlFiltersRef.current = true;
+      setShouldLoadUnfilteredTasks(true);
+
+      const nextFilters = { ...createDefaultFilters(), ...fromStorage };
+      setFilters((previous) => (areFiltersEqual(previous, nextFilters) ? previous : nextFilters));
     }
 
-    hasUrlFiltersRef.current = true;
-    setShouldLoadUnfilteredTasks(true);
-
-    const nextFilters = { ...createDefaultFilters(), ...fromStorage };
-    setFilters((previous) => (areFiltersEqual(previous, nextFilters) ? previous : nextFilters));
-  }, [isMounted]);
+    setHasHydratedFilters(true);
+  }, [isMounted, hasHydratedFilters]);
 
   useEffect(() => {
     const currentQuery = searchParams?.toString() ?? '';
@@ -790,10 +787,11 @@ export function TasksHooksDemo() {
 
   const tasksQuery = useTasksQuery(queryFilters, {
     placeholderData: (previous) => previous,
+    enabled: hasHydratedFilters,
   });
   const unfilteredTasksQuery = useTasksQuery(undefined, {
     placeholderData: (previous) => previous,
-    enabled: shouldLoadUnfilteredTasks,
+    enabled: hasHydratedFilters && shouldLoadUnfilteredTasks,
   });
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
