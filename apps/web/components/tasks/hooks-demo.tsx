@@ -90,22 +90,17 @@ const DEFAULT_FILTER_STATE: TaskFilterState = {
   dueToDay: undefined,
 };
 
-const DATE_BOUNDARY_CANONICAL_SUFFIXES = ['T00:00:00.000Z', 'T23:59:59.999Z'] as const;
-
 function isCanonicalBoundary(value: string | null | undefined): value is string {
-  if (typeof value !== 'string') {
-    return false;
-  }
-
-  return DATE_BOUNDARY_CANONICAL_SUFFIXES.some((suffix) => value.endsWith(suffix));
+  return Boolean(normalizeDateInstant(value));
 }
 
 function deriveDateKeyFromCanonicalBoundary(value: string | null | undefined): string | undefined {
-  if (!isCanonicalBoundary(value)) {
+  const normalized = normalizeDateInstant(value);
+  if (!normalized) {
     return undefined;
   }
 
-  const timestamp = Date.parse(value);
+  const timestamp = Date.parse(normalized);
   if (Number.isNaN(timestamp)) {
     return undefined;
   }
@@ -470,11 +465,16 @@ function hasActiveFilters(filters: TaskFilterState): boolean {
 }
 
 function toLocalDayFromStoredIso(value: string | undefined): Date | undefined {
-  if (!value || !isCanonicalBoundary(value)) {
+  if (!value) {
     return undefined;
   }
 
-  const timestamp = Date.parse(value);
+  const normalized = normalizeDateInstant(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const timestamp = Date.parse(normalized);
   if (Number.isNaN(timestamp)) {
     return undefined;
   }
