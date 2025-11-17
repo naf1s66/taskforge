@@ -800,10 +800,12 @@ export function TasksHooksDemo() {
 
     const fromStorage = readFiltersFromStorage();
     if (fromStorage) {
-      hasUrlFiltersRef.current = true;
-      setShouldLoadUnfilteredTasks(true);
-
       const nextFilters = { ...createDefaultFilters(), ...fromStorage };
+      if (hasActiveFilters(nextFilters)) {
+        hasUrlFiltersRef.current = true;
+        setShouldLoadUnfilteredTasks(true);
+      }
+
       setFilters((previous) => (areFiltersEqual(previous, nextFilters) ? previous : nextFilters));
     }
 
