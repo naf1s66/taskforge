@@ -542,6 +542,7 @@ export function useCreateTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: (input) => createTask(input),
@@ -569,7 +570,7 @@ export function useCreateTask(
         queryClient.setQueryData(key, snapshot);
       }
 
-      options?.onError?.(error, _variables, context);
+      onError?.(error, _variables, context);
     },
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
@@ -585,13 +586,13 @@ export function useCreateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
