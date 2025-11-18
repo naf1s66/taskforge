@@ -876,8 +876,10 @@ export function TasksHooksDemo() {
     }
 
     const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const nextUrlWithHash = hash ? `${nextUrl}${hash}` : nextUrl;
     lastQueryRef.current = nextQuery;
-    router.replace(nextUrl, { scroll: false });
+    router.replace(nextUrlWithHash, { scroll: false });
   }, [filters, pathname, router, searchParams, isMounted]);
 
   useEffect(() => {
