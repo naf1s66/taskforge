@@ -243,7 +243,7 @@ function createTaskClientErrorMessage(error: TaskClientError): string {
   }
 }
 
-function toTaskOperationError(error: unknown): TaskOperationError | null {
+export function toTaskOperationError(error: unknown): TaskOperationError | null {
   if (!error) {
     return null;
   }
@@ -754,7 +754,6 @@ export const __testing = {
   normalizeTaskListFilters,
   deserializeNormalizedFilters,
   createTaskClientErrorMessage,
-  toTaskOperationError,
   taskMatchesFilters,
   addTaskToList,
   replaceTaskInList,
