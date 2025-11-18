@@ -176,6 +176,14 @@ The task hooks demo (`apps/web/app/(protected)/tasks/hooks-demo/page.tsx`) surfa
 
 The UI simply passes these fields to `useTasksQuery`, so anything supported by the API immediately flows through the frontend without additional mapping glue.
 
+### Task creation dialog
+
+- Open the hooks demo (`/tasks/hooks-demo`) and click **New task** to launch the modal dialog. The trigger button lives alongside the refresh and filter controls so you can create records from the same workspace used to inspect cache behaviour.
+- The form runs client-side validation with `react-hook-form` + Zod. Title is required, while status/priority default to **To Do**/**Medium** but must remain valid enum values if you change them.
+- Due date and tags are optional, yet still validated/sanitized before submitting. The date picker only accepts calendar selections and tags are normalized through the shared combobox component used elsewhere in the app.
+- Successful submissions optimistically update the task list and surface a toast (`“Task created”`). API or validation errors show inline messages near the fields and emit a destructive toast for additional feedback.
+- Keyboard focus stays trapped within the dialog content, labels/aria descriptions describe each control, and the **Cancel** button or close icon exits without mutating state.
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
   migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.

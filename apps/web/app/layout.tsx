@@ -6,6 +6,7 @@ import { SiteHeader } from '@/components/layout/site-header';
 import { Providers } from './providers';
 import '../styles/globals.css';
 
+import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <main className="flex-1 py-8">{children}</main>
             <footer className="pt-6 text-sm text-muted-foreground">Build momentum, one task at a time.</footer>
           </div>
+          <Toaster />
         </Providers>
       </body>
     </html>

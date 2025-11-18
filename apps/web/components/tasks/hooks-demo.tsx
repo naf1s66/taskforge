@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentPropsWithoutRef,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskPriority, TaskStatus } from '@taskforge/shared';
-import { useCommandState } from 'cmdk';
-import { CalendarDays, Filter, Inbox, RefreshCcw, Search, Tag, X } from 'lucide-react';
+import { CalendarDays, Filter, Inbox, Plus, RefreshCcw, Search } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReadonlyURLSearchParams } from 'next/navigation';
 import type { DateRange } from 'react-day-picker';
@@ -19,7 +11,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -31,6 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
+import { TaskCreateDialog } from '@/components/tasks/task-create-dialog';
+import { TaskTagSelector } from '@/components/tasks/task-tag-selector';
 import { trackEvent } from '@/lib/analytics';
 import {
   useCreateTask,
@@ -39,32 +32,14 @@ import {
   useUpdateTask,
   type TaskListItem,
 } from '@/lib/tasks-hooks';
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  TODO: 'To Do',
-  IN_PROGRESS: 'In Progress',
-  DONE: 'Done',
-};
-
-const PRIORITY_LABELS: Record<TaskPriority, string> = {
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-};
-
-const STATUS_OPTIONS: Array<{ value?: TaskStatus; label: string }> = [
-  { value: undefined, label: 'All statuses' },
-  { value: 'TODO', label: STATUS_LABELS.TODO },
-  { value: 'IN_PROGRESS', label: STATUS_LABELS.IN_PROGRESS },
-  { value: 'DONE', label: STATUS_LABELS.DONE },
-];
-
-const PRIORITY_OPTIONS: Array<{ value?: TaskPriority; label: string }> = [
-  { value: undefined, label: 'All priorities' },
-  { value: 'LOW', label: PRIORITY_LABELS.LOW },
-  { value: 'MEDIUM', label: PRIORITY_LABELS.MEDIUM },
-  { value: 'HIGH', label: PRIORITY_LABELS.HIGH },
-];
+import type { TaskRecordDTO } from '@/lib/tasks-client';
+import {
+  TASK_PRIORITY_LABELS,
+  TASK_PRIORITY_OPTIONS,
+  TASK_STATUS_LABELS,
+  TASK_STATUS_OPTIONS,
+} from '@/lib/task-copy';
+import { sanitizeTags } from '@/lib/task-tags';
 
 const FILTER_STORAGE_KEY = 'taskforge.tasksDemo.filters';
 
@@ -119,32 +94,6 @@ function isTaskStatus(value: string | null): value is TaskStatus {
 
 function isTaskPriority(value: string | null): value is TaskPriority {
   return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH';
-}
-
-function sanitizeTags(tags: string[] | undefined): string[] {
-  if (!tags || tags.length === 0) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const tag of tags) {
-    const trimmed = tag.trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    normalized.push(trimmed);
-  }
-
-  return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 function formatDateKey(date: Date): string {
@@ -546,177 +495,6 @@ function formatDateRange(range?: DateRange): string {
   return 'Select range';
 }
 
-interface TagsComboboxProps {
-  selected: string[];
-  onChange: (next: string[]) => void;
-  availableTags: string[];
-}
-
-type CommandInputProps = ComponentPropsWithoutRef<typeof CommandInput>;
-
-interface CommandInputWithCreateProps
-  extends Omit<CommandInputProps, 'value' | 'onValueChange' | 'onKeyDown'> {
-  value: string;
-  onValueChange: (value: string) => void;
-  onCreate: () => void;
-  onKeyDown?: CommandInputProps['onKeyDown'];
-}
-
-function CommandInputWithCreate({
-  value,
-  onValueChange,
-  onCreate,
-  onKeyDown,
-  ...props
-}: CommandInputWithCreateProps) {
-  const filteredItemCount = useCommandState((state) => state.filtered.count);
-
-  return (
-    <CommandInput
-      {...props}
-      value={value}
-      onValueChange={onValueChange}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && value.trim()) {
-          if (filteredItemCount === 0) {
-            event.preventDefault();
-            onCreate();
-            return;
-          }
-        }
-
-        onKeyDown?.(event);
-      }}
-    />
-  );
-}
-
-function TagsCombobox({ selected, onChange, availableTags }: TagsComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-
-  const normalizedSelected = useMemo(() => selected.map((tag) => tag.toLowerCase()), [selected]);
-
-  const options = useMemo(() => sanitizeTags([...availableTags, ...selected]), [availableTags, selected]);
-
-  function toggleTag(tag: string) {
-    const trimmed = tag.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    const key = trimmed.toLowerCase();
-    if (normalizedSelected.includes(key)) {
-      onChange(selected.filter((existing) => existing.toLowerCase() !== key));
-    } else {
-      onChange(sanitizeTags([...selected, trimmed]));
-    }
-
-    setInputValue('');
-  }
-
-  function handleCreateTag() {
-    toggleTag(inputValue);
-    setOpen(false);
-  }
-
-  function isTagSelected(tag: string) {
-    return normalizedSelected.includes(tag.toLowerCase());
-  }
-
-  function handleRemoveTag(tag: string) {
-    const key = tag.toLowerCase();
-    onChange(selected.filter((existing) => existing.toLowerCase() !== key));
-  }
-
-  return (
-    <div className="space-y-2">
-      <Popover open={open} onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          setInputValue('');
-        }
-      }}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            type="button"
-            aria-expanded={open}
-            className="w-full justify-between"
-          >
-            <span className="flex items-center gap-2 text-sm">
-              <Tag className="h-4 w-4" aria-hidden />
-              {selected.length > 0 ? `${selected.length} tag${selected.length === 1 ? '' : 's'} selected` : 'Filter by tag'}
-            </span>
-            <Filter className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-0" align="start">
-          <Command>
-            <CommandInputWithCreate
-              value={inputValue}
-              onValueChange={setInputValue}
-              placeholder="Search or create tags"
-              aria-label="Search available tags"
-              onCreate={handleCreateTag}
-            />
-            <CommandList>
-              <CommandEmpty>
-                <div className="space-y-2">
-                  <p>No tags found.</p>
-                  {inputValue.trim() ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      type="button"
-                      onClick={handleCreateTag}
-                    >
-                      Create “{inputValue.trim()}”
-                    </Button>
-                  ) : null}
-                </div>
-              </CommandEmpty>
-              <CommandGroup heading="Tags">
-                {options.map((tag) => (
-                  <CommandItem
-                    key={tag}
-                    value={tag}
-                    onSelect={(value) => toggleTag(value)}
-                    aria-checked={isTagSelected(tag)}
-                  >
-                    <span className="flex-1 text-sm capitalize">{tag}</span>
-                    {isTagSelected(tag) ? <span className="text-xs text-primary">Selected</span> : null}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-2" aria-live="polite" aria-label="Selected tags">
-          {selected.map((tag) => (
-            <Badge key={tag.toLowerCase()} variant="outline" className="flex items-center gap-1 capitalize">
-              {tag}
-              <button
-                type="button"
-                onClick={() => handleRemoveTag(tag)}
-                className="rounded-full p-0.5 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                aria-label={`Remove tag ${tag}`}
-              >
-                <X className="h-3 w-3" aria-hidden />
-              </button>
-            </Badge>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">Select one or more tags to narrow the list.</p>
-      )}
-    </div>
-  );
-}
-
 interface DueRangePickerProps {
   value: TaskFilterState;
   onChange: (range: DateRange | undefined) => void;
@@ -944,6 +722,13 @@ export function TasksHooksDemo() {
     });
   }, []);
 
+  const handleDialogTaskCreated = useCallback(
+    (task: TaskRecordDTO) => {
+      mergeAvailableTags([{ ...task } as TaskListItem]);
+    },
+    [mergeAvailableTags],
+  );
+
   useEffect(() => {
     mergeAvailableTags(tasksQuery.data?.items);
   }, [mergeAvailableTags, tasksQuery.data?.items]);
@@ -1017,7 +802,7 @@ export function TasksHooksDemo() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
+                  {TASK_STATUS_OPTIONS.map((option) => (
                     <SelectItem key={option.label} value={option.value ?? 'all'}>
                       {option.label}
                     </SelectItem>
@@ -1040,7 +825,7 @@ export function TasksHooksDemo() {
                   <SelectValue placeholder="All priorities" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PRIORITY_OPTIONS.map((option) => (
+                  {TASK_PRIORITY_OPTIONS.map((option) => (
                     <SelectItem key={option.label} value={option.value ?? 'all'}>
                       {option.label}
                     </SelectItem>
@@ -1074,10 +859,13 @@ export function TasksHooksDemo() {
             </div>
             <div className="md:col-span-2">
               <Label>Tags</Label>
-              <TagsCombobox
-                selected={filters.tags}
+              <TaskTagSelector
+                value={filters.tags}
                 onChange={(next) => setFilters((previous) => ({ ...previous, tags: next }))}
                 availableTags={availableTags}
+                placeholder="Filter by tag"
+                emptyHint="Select one or more tags to narrow the list."
+                ariaLabel="Filter tasks by tag"
               />
             </div>
           </div>
@@ -1102,6 +890,15 @@ export function TasksHooksDemo() {
             >
               Add demo task
             </Button>
+            <TaskCreateDialog
+              availableTags={availableTags}
+              onCreated={handleDialogTaskCreated}
+              trigger={
+                <Button type="button">
+                  <Plus className="mr-2 h-4 w-4" aria-hidden /> New task
+                </Button>
+              }
+            />
           </div>
           {tasksQuery.error ? (
             <Alert variant="destructive">
@@ -1208,8 +1005,8 @@ function TaskListRow({ task, onToggle, onDelete, isUpdating, isDeleting }: TaskL
           </p>
           {task.description ? <p className="text-sm text-muted-foreground">{task.description}</p> : null}
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>Status: {STATUS_LABELS[task.status]}</span>
-            <span>Priority: {PRIORITY_LABELS[task.priority]}</span>
+            <span>Status: {TASK_STATUS_LABELS[task.status]}</span>
+            <span>Priority: {TASK_PRIORITY_LABELS[task.priority]}</span>
             <span>Due: {formatDate(task.dueDate)}</span>
           </div>
           {task.tags.length > 0 ? (
