@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   useMutation,
   useQuery,
@@ -10,6 +10,7 @@ import {
   type UseMutationResult,
   type UseQueryOptions,
   type UseQueryResult,
+  type QueryClient,
 } from '@tanstack/react-query';
 import type { ZodIssue } from 'zod';
 
@@ -536,6 +537,30 @@ function collectMatchingQueries(
   return touched;
 }
 
+function selectTaskFromCache(
+  queryClient: QueryClient,
+  userScope: string,
+  taskId?: string,
+): TaskListItem | null {
+  if (!taskId) {
+    return null;
+  }
+
+  const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
+  for (const [, data] of candidates) {
+    if (!data) {
+      continue;
+    }
+
+    const match = data.items.find((item) => item.id === taskId);
+    if (match) {
+      return { ...match } satisfies TaskListItem;
+    }
+  }
+
+  return null;
+}
+
 export function useCreateTask(
   options?: UseMutationOptions<TaskRecordDTO, TaskClientError, CreateTaskInput, TaskMutationContext>,
 ): UseTaskMutationResult<TaskRecordDTO, CreateTaskInput> {
@@ -610,6 +635,38 @@ export function useCreateTask(
     error: friendlyError,
     rawError: mutation.error,
   };
+}
+
+export function useTaskFromCache(taskId?: string): TaskListItem | null {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+  const stableTaskId = taskId ?? undefined;
+
+  const getSnapshot = useCallback(
+    () => selectTaskFromCache(queryClient, userScope, stableTaskId),
+    [queryClient, userScope, stableTaskId],
+  );
+
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (!stableTaskId) {
+        return () => {};
+      }
+
+      const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+        const key = event.query?.queryKey;
+        if (Array.isArray(key) && key[0] === TASK_QUERY_SCOPE && key[1] === userScope) {
+          onStoreChange();
+        }
+      });
+
+      return unsubscribe;
+    },
+    [queryClient, userScope, stableTaskId],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 interface UpdateTaskVariables {
