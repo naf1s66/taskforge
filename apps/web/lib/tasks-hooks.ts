@@ -114,6 +114,7 @@ const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
+  optimisticMap: (userKey: string) => [...taskQueryKeys.all(userKey), 'optimistic-id-map'] as const,
 };
 
 function stableSerialize(value: unknown): string {
@@ -561,53 +562,6 @@ function selectTaskFromCache(
   return null;
 }
 
-function normalizeTagSet(tags?: string[]): string {
-  if (!tags || tags.length === 0) {
-    return '';
-  }
-
-  return [...tags].sort().join('|');
-}
-
-function matchesOptimisticTask(candidate: TaskListItem, optimisticTask: TaskListItem): boolean {
-  if (candidate._optimistic) {
-    return false;
-  }
-
-  if (candidate.title !== optimisticTask.title) {
-    return false;
-  }
-
-  if ((candidate.description ?? '') !== (optimisticTask.description ?? '')) {
-    return false;
-  }
-
-  if (candidate.status !== optimisticTask.status) {
-    return false;
-  }
-
-  if (candidate.priority !== optimisticTask.priority) {
-    return false;
-  }
-
-  if ((candidate.dueDate ?? '') !== (optimisticTask.dueDate ?? '')) {
-    return false;
-  }
-
-  if (normalizeTagSet(candidate.tags) !== normalizeTagSet(optimisticTask.tags)) {
-    return false;
-  }
-
-  if (candidate.createdAt && optimisticTask.createdAt) {
-    const diffMs = Math.abs(Date.parse(candidate.createdAt) - Date.parse(optimisticTask.createdAt));
-    if (!Number.isNaN(diffMs) && diffMs > 5 * 60_000) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 function selectReplacementTaskId(
   queryClient: QueryClient,
   userScope: string,
@@ -617,20 +571,12 @@ function selectReplacementTaskId(
     return null;
   }
 
-  const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
-  for (const [, data] of candidates) {
-    if (!data) {
-      continue;
-    }
-
-    for (const item of data.items) {
-      if (matchesOptimisticTask(item, optimisticTask)) {
-        return item.id;
-      }
-    }
+  const mapping = queryClient.getQueryData<Record<string, string>>(taskQueryKeys.optimisticMap(userScope));
+  if (!mapping) {
+    return null;
   }
 
-  return null;
+  return mapping[optimisticTask.id] ?? null;
 }
 
 export function useCreateTask(
@@ -671,6 +617,12 @@ export function useCreateTask(
     },
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
+      if (context?.optimisticTaskId) {
+        queryClient.setQueryData<Record<string, string>>(taskQueryKeys.optimisticMap(userScope), (previous) => ({
+          ...(previous ?? {}),
+          [context.optimisticTaskId]: taskItem.id,
+        }));
+      }
 
       collectMatchingQueries(queryClient, userScope, (payload, filters) => {
         if (!taskMatchesFilters(taskItem, filters)) {
