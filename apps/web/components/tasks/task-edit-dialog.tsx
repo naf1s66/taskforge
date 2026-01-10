@@ -107,8 +107,11 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
     form.reset(taskRecordToFormValues(task), { keepDirty: true, keepDirtyValues: true });
   }, [task, form]);
 
+  const hasRequestError = Boolean(updateTask.error);
+  const isOptimistic = Boolean(task?._optimistic);
+
   function handleSubmit(values: TaskFormValues) {
-    if (!taskId) {
+    if (!taskId || isOptimistic) {
       return;
     }
 
@@ -124,8 +127,6 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
       },
     });
   }
-
-  const hasRequestError = Boolean(updateTask.error);
   const lastUpdatedLabel = useMemo(() => {
     if (!task) {
       return null;
@@ -168,6 +169,13 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
             <AlertDescription>{updateTask.error.message}</AlertDescription>
           </Alert>
         ) : null}
+        {isOptimistic ? (
+          <Alert>
+            <AlertDescription>
+              This task is still syncing from a recent create action. Please wait for it to finish before saving edits.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)} noValidate aria-busy={updateTask.isPending}>
             <TaskFormFields form={form} availableTags={availableTags} />
@@ -175,7 +183,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
               <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={updateTask.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateTask.isPending || !task}>
+              <Button type="submit" disabled={updateTask.isPending || !task || isOptimistic}>
                 {updateTask.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> Saving…
