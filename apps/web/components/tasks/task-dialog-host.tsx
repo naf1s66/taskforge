@@ -60,12 +60,21 @@ export function TaskDialogHost() {
     }
   }, []);
 
+  const handleEditTaskIdChange = useCallback((nextTaskId: string) => {
+    setActiveDialog((current) => (current?.type === 'edit' ? { type: 'edit', taskId: nextTaskId } : current));
+  }, []);
+
   const activeTaskId = activeDialog?.type === 'edit' ? activeDialog.taskId : null;
 
   return (
     <>
       <TaskCreateDialog open={activeDialog?.type === 'create'} onOpenChange={handleCreateOpenChange} trigger={null} />
-      <TaskEditDialog taskId={activeTaskId} open={activeDialog?.type === 'edit'} onOpenChange={handleEditOpenChange} />
+      <TaskEditDialog
+        taskId={activeTaskId}
+        open={activeDialog?.type === 'edit'}
+        onOpenChange={handleEditOpenChange}
+        onTaskIdChange={handleEditTaskIdChange}
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, PenSquare } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/components/ui/use-toast';
 import { sanitizeTags } from '@/lib/task-tags';
-import { useTaskFromCache, useUpdateTask, toTaskOperationError } from '@/lib/tasks-hooks';
+import { useTaskFromCache, useTaskReplacementId, useUpdateTask, toTaskOperationError } from '@/lib/tasks-hooks';
 
 import {
   TaskFormFields,
@@ -26,15 +26,18 @@ interface TaskEditDialogProps {
   taskId: string | null;
   open: boolean;
   onOpenChange?: (open: boolean) => void;
+  onTaskIdChange?: (taskId: string) => void;
   availableTags?: string[];
 }
 
-export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] }: TaskEditDialogProps) {
+export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, availableTags = [] }: TaskEditDialogProps) {
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: TASK_FORM_DEFAULT_VALUES,
   });
   const task = useTaskFromCache(open ? taskId ?? undefined : undefined);
+  const [optimisticSnapshot, setOptimisticSnapshot] = useState<typeof task>(null);
+  const replacementId = useTaskReplacementId(optimisticSnapshot);
   const missingNotifiedRef = useRef<string | null>(null);
   const { toast } = useToast();
 
@@ -111,6 +114,20 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
 
     form.reset(taskRecordToFormValues(task), { keepDirty: true, keepDirtyValues: true });
   }, [task, form]);
+
+  useEffect(() => {
+    if (task?._optimistic) {
+      setOptimisticSnapshot(task);
+    }
+  }, [task]);
+
+  useEffect(() => {
+    if (!replacementId || !taskId?.startsWith('optimistic-')) {
+      return;
+    }
+
+    onTaskIdChange?.(replacementId);
+  }, [replacementId, taskId, onTaskIdChange]);
 
   const hasRequestError = Boolean(updateTask.error);
   const isOptimistic = Boolean(task?._optimistic);
