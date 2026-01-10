@@ -40,6 +40,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
   const previousTaskIdRef = useRef<string | null>(null);
   const replacementId = useTaskReplacementId(optimisticSnapshot);
   const missingNotifiedRef = useRef<string | null>(null);
+  const optimisticMissingNotifiedRef = useRef<string | null>(null);
   const { toast } = useToast();
 
   const updateTask = useUpdateTask({
@@ -89,11 +90,21 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
   useEffect(() => {
     if (!open) {
       missingNotifiedRef.current = null;
+      optimisticMissingNotifiedRef.current = null;
       return;
     }
 
     const isOptimisticId = Boolean(taskId?.startsWith('optimistic-'));
     if (isOptimisticId) {
+      if (!task && !replacementId && optimisticSnapshot && optimisticMissingNotifiedRef.current !== taskId) {
+        optimisticMissingNotifiedRef.current = taskId;
+        toast({
+          title: 'Task unavailable',
+          description: 'The task could not be created and is no longer available to edit.',
+          variant: 'destructive',
+        });
+        handleDialogOpenChange(false);
+      }
       return;
     }
 
@@ -106,7 +117,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       });
       handleDialogOpenChange(false);
     }
-  }, [open, taskId, task, toast, handleDialogOpenChange]);
+  }, [open, taskId, task, replacementId, optimisticSnapshot, toast, handleDialogOpenChange]);
 
   useEffect(() => {
     if (!task) {
