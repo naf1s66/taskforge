@@ -114,8 +114,11 @@ const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
-  optimisticMap: (userKey: string) => [...taskQueryKeys.all(userKey), 'optimistic-id-map'] as const,
 };
+
+const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
+
+const optimisticIdMapKey = (userKey: string) => [OPTIMISTIC_ID_MAP_SCOPE, userKey] as const;
 
 function stableSerialize(value: unknown): string {
   if (value === undefined) {
@@ -571,7 +574,7 @@ function selectReplacementTaskId(
     return null;
   }
 
-  const mapping = queryClient.getQueryData<Record<string, string>>(taskQueryKeys.optimisticMap(userScope));
+  const mapping = queryClient.getQueryData<Record<string, string>>(optimisticIdMapKey(userScope));
   if (!mapping) {
     return null;
   }
@@ -618,7 +621,7 @@ export function useCreateTask(
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
       if (context?.optimisticTaskId) {
-        queryClient.setQueryData<Record<string, string>>(taskQueryKeys.optimisticMap(userScope), (previous) => ({
+        queryClient.setQueryData<Record<string, string>>(optimisticIdMapKey(userScope), (previous) => ({
           ...(previous ?? {}),
           [context.optimisticTaskId]: taskItem.id,
         }));
