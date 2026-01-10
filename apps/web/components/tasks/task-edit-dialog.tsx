@@ -37,6 +37,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
   });
   const task = useTaskFromCache(open ? taskId ?? undefined : undefined);
   const [optimisticSnapshot, setOptimisticSnapshot] = useState<typeof task>(null);
+  const previousTaskIdRef = useRef<string | null>(null);
   const replacementId = useTaskReplacementId(optimisticSnapshot);
   const missingNotifiedRef = useRef<string | null>(null);
   const { toast } = useToast();
@@ -112,7 +113,12 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       return;
     }
 
-    form.reset(taskRecordToFormValues(task), { keepDirty: true, keepDirtyValues: true });
+    const nextTaskId = task.id;
+    const previousTaskId = previousTaskIdRef.current;
+    const isSameTask = previousTaskId === nextTaskId;
+
+    previousTaskIdRef.current = nextTaskId;
+    form.reset(taskRecordToFormValues(task), isSameTask ? { keepDirty: true, keepDirtyValues: true } : undefined);
   }, [task, form]);
 
   useEffect(() => {
