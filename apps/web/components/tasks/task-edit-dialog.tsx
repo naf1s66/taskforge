@@ -88,6 +88,11 @@ export function TaskEditDialog({ taskId, open, onOpenChange, availableTags = [] 
       return;
     }
 
+    const isOptimisticId = Boolean(taskId?.startsWith('optimistic-'));
+    if (isOptimisticId) {
+      return;
+    }
+
     if (taskId && !task && missingNotifiedRef.current !== taskId) {
       missingNotifiedRef.current = taskId;
       toast({
