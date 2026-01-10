@@ -554,7 +554,7 @@ function selectTaskFromCache(
 
     const match = data.items.find((item) => item.id === taskId);
     if (match) {
-      return { ...match } satisfies TaskListItem;
+      return match;
     }
   }
 
