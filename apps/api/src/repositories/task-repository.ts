@@ -81,15 +81,15 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     // Serialize MAX(boardOrder)+1 allocations, including empty lanes.
     await tx.$executeRaw`
       SELECT pg_advisory_xact_lock(
-        hashtextextended(${userId} || ':' || ${status}, 0)
+        hashtextextended((CAST(${userId} AS text) || ':' || CAST(${status} AS text)), 0)
       )
     `;
 
     const [row] = await tx.$queryRaw<Array<{ max: number | null }>>`
       SELECT MAX("boardOrder") AS max
       FROM "Task"
-      WHERE "userId" = ${userId}
-        AND "status" = ${status}
+      WHERE "userId" = CAST(${userId} AS uuid)
+        AND "status" = CAST(${status} AS "TaskStatus")
     `;
 
     return (row?.max ?? -1) + 1;
