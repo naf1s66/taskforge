@@ -102,8 +102,10 @@ For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskfo
 Run Prisma migrations whenever the schema changes:
 
 ```bash
-pnpm -C apps/api prisma migrate deploy
+pnpm -C apps/api prisma migrate dev
 ```
+
+Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
 
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 

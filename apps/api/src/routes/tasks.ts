@@ -1,59 +1,167 @@
 import { Router } from 'express';
+import { z } from 'zod';
 
-import type { TaskDTO, TaskPriority, TaskStatus } from '@taskforge/shared';
-
+import { getPrismaClient } from '../prisma';
 import { TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
+import {
+  createTaskRepository,
+  type TaskCreateInput,
+  type TaskRepository,
+  type TaskUpdateInput,
+} from '../repositories/task-repository';
+import { normalizeTagLabels } from '../repositories/task-mapper';
 
-export const router = Router();
+const TaskListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().positive().default(1),
+    pageSize: z.coerce.number().int().positive().max(100).default(20),
+    status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
+    q: z.string().trim().min(1).optional(),
+    dueFrom: z.string().datetime().optional(),
+    dueTo: z.string().datetime().optional(),
+  })
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.dueFrom && data.dueTo) {
+      const from = new Date(data.dueFrom);
+      const to = new Date(data.dueTo);
+      if (from.getTime() > to.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo',
+        });
+      }
+    }
+  });
 
-type TaskRecord = TaskDTO & {
-  id: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-};
-
-const tasks: TaskRecord[] = [];
-
-router.get('/', (_req, res) => {
-  res.json({ items: tasks });
+const TaskIdParamSchema = z.object({
+  id: z
+    .string({ required_error: 'Task id is required', invalid_type_error: 'Invalid identifier' })
+    .trim()
+    .uuid({ message: 'Invalid identifier' }),
 });
 
-router.post('/', (req, res) => {
-  const parsed = TaskCreateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+export function createTaskRouter(taskRepository?: TaskRepository) {
+  const repository = taskRepository ?? createTaskRepository(getPrismaClient());
+  const router = Router();
 
-  const task: TaskRecord = {
-    id: String(Date.now()),
-    status: parsed.data.status ?? 'TODO',
-    priority: parsed.data.priority ?? 'MEDIUM',
-    ...parsed.data,
-  };
+  router.get('/', async (req, res, next) => {
+    try {
+      const parseQuery = TaskListQuerySchema.safeParse(req.query);
+      if (!parseQuery.success) {
+        return res
+          .status(400)
+          .json({ error: 'Invalid payload', details: parseQuery.error.flatten() });
+      }
 
-  tasks.push(task);
-  res.status(201).json(task);
-});
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-router.patch('/:id', (req, res) => {
-  const parsed = TaskUpdateSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+      const { page, pageSize, status, priority, tag, q, dueFrom, dueTo } = parseQuery.data;
 
-  const index = tasks.findIndex(task => task.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: 'Not found' });
+      const normalizedTags = normalizeTagLabels(
+        Array.isArray(tag) ? tag : tag ? [tag] : undefined,
+      );
 
-  tasks[index] = {
-    ...tasks[index],
-    ...parsed.data,
-    status: parsed.data.status ?? tasks[index].status,
-    priority: parsed.data.priority ?? tasks[index].priority,
-  };
+      const { items, total } = await repository.listTasks(user.id, {
+        page,
+        pageSize,
+        status,
+        priority,
+        tags: normalizedTags.length ? normalizedTags : undefined,
+        search: q,
+        dueFrom: dueFrom ? new Date(dueFrom) : undefined,
+        dueTo: dueTo ? new Date(dueTo) : undefined,
+      });
+      res.json({ items, page, pageSize, total });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-  res.json(tasks[index]);
-});
+  router.post('/', async (req, res, next) => {
+    const parsed = TaskCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
 
-router.delete('/:id', (req, res) => {
-  const index = tasks.findIndex(task => task.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: 'Not found' });
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
-  const [deleted] = tasks.splice(index, 1);
-  res.json(deleted);
-});
+      const payload: TaskCreateInput = parsed.data;
+      const task = await repository.createTask(user.id, payload);
+      console.info('task.created', { userId: user.id, taskId: task.id });
+      res.status(201).json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid identifier' });
+    }
+
+    const parsed = TaskUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { id } = params.data;
+      const payload: TaskUpdateInput = parsed.data;
+      const updated = await repository.updateTask(user.id, id, payload);
+      if (!updated) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      console.info('task.updated', { userId: user.id, taskId: updated.id });
+      // TODO: Emit structured audit log event once the audit pipeline is available.
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid identifier' });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { id } = params.data;
+      const deleted = await repository.deleteTask(user.id, id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      console.info('task.deleted', { userId: user.id, taskId: deleted.id });
+      // TODO: Emit structured audit log event once the audit pipeline is available.
+      res.json({ id: deleted.id, status: 'deleted' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}

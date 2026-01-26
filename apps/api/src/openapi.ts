@@ -85,6 +85,12 @@ const invalidPayloadExample = {
   value: errorResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const invalidIdentifierExample = {
+  value: { error: 'Invalid identifier' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const notFoundExample = { value: { error: 'Not found' } } satisfies OpenAPIV3.ExampleObject;
+
 const logoutSuccessExample = { value: { success: true } } satisfies OpenAPIV3.ExampleObject;
 
 const authMeSuccessExample = {
@@ -101,6 +107,161 @@ const authSuccessResponseExample = {
   value: authSuccessExample,
 } satisfies OpenAPIV3.ExampleObject;
 
+const taskRecord: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    title: { type: 'string' },
+    description: { type: 'string', nullable: true },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    tags: { type: 'array', items: { type: 'string' } },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+  required: ['id', 'title', 'status', 'priority', 'tags', 'createdAt', 'updatedAt'],
+  example: {
+    id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    title: 'Draft project brief',
+    description: 'Summarize goals and milestones for the release',
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    dueDate: '2024-07-10T16:00:00.000Z',
+    tags: ['planning', 'product'],
+    createdAt: '2024-06-01T12:00:00.000Z',
+    updatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const taskCreateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    description: { type: 'string', minLength: 1 },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time' },
+    tags: {
+      type: 'array',
+      items: { type: 'string', minLength: 1 },
+    },
+  },
+  required: ['title'],
+  example: {
+    title: 'Book product sync',
+    description: 'Coordinate roadmap review with stakeholders',
+    status: 'TODO',
+    priority: 'HIGH',
+    tags: ['planning'],
+    dueDate: '2024-07-05T15:00:00.000Z',
+  },
+};
+
+const taskUpdateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    description: { type: 'string', minLength: 1 },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time' },
+    tags: { type: 'array', items: { type: 'string', minLength: 1 } },
+  },
+  additionalProperties: false,
+  example: {
+    status: 'IN_PROGRESS',
+    priority: 'MEDIUM',
+    dueDate: '2024-07-12T20:00:00.000Z',
+    tags: ['planning', 'proposal'],
+  },
+};
+
+const taskListResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TaskRecord' },
+    },
+    page: { type: 'integer', minimum: 1 },
+    pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+    total: { type: 'integer', minimum: 0 },
+  },
+  required: ['items', 'page', 'pageSize', 'total'],
+  example: {
+    items: [
+      taskRecord.example,
+      {
+        id: '14377d29-0a0f-4b26-8b6d-60406ad3f7c1',
+        title: 'Follow up with design partners',
+        description: 'Confirm handoff expectations and surface risks early.',
+        status: 'TODO',
+        priority: 'MEDIUM',
+        dueDate: '2024-07-18T15:00:00.000Z',
+        tags: ['customer', 'outreach'],
+        createdAt: '2024-06-02T14:22:00.000Z',
+        updatedAt: '2024-06-04T11:10:00.000Z',
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+    total: 2,
+  },
+};
+
+const taskCreatedExample = {
+  value: taskRecord.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskUpdatedRecordExample = {
+  value: {
+    ...(taskRecord.example as Record<string, unknown>),
+    status: 'DONE',
+    priority: 'MEDIUM',
+    tags: ['planning', 'product', 'retro'],
+    dueDate: '2024-07-12T20:00:00.000Z',
+    updatedAt: '2024-06-05T18:15:00.000Z',
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskListExample = {
+  value: taskListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskListInvalidFiltersExample = {
+  value: {
+    error: 'Invalid payload',
+    details: {
+      fieldErrors: {
+        dueFrom: ['dueFrom must be earlier than or equal to dueTo'],
+      },
+      formErrors: [],
+    },
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskDeletedResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    status: { type: 'string', enum: ['deleted'] },
+  },
+  required: ['id', 'status'],
+  example: {
+    id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    status: 'deleted',
+  },
+};
+
+const taskUpdateExample = {
+  value: taskUpdateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const taskDeletedExample = {
+  value: taskDeletedResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -115,6 +276,13 @@ export const openApiDocument: OpenAPIV3.Document = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
+      },
+      sessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: 'tf_session',
+        description:
+          'HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication.',
       },
     },
     schemas: {
@@ -150,6 +318,11 @@ export const openApiDocument: OpenAPIV3.Document = {
         example: logoutSuccessExample.value,
       },
       ErrorResponse: errorResponse,
+      TaskRecord: taskRecord,
+      TaskCreateInput: taskCreateInput,
+      TaskUpdateInput: taskUpdateInput,
+      TaskListResponse: taskListResponse,
+      TaskDeleteResponse: taskDeletedResponse,
     },
   },
   paths: {
@@ -314,7 +487,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Auth'],
         summary: 'Retrieve the authenticated user',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Current user',
@@ -345,7 +520,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Auth'],
         summary: 'Alias for the authenticated user endpoint',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Current user or null when not authenticated',
@@ -377,24 +554,81 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Tasks'],
         summary: 'List tasks for the authenticated user',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Returns a paginated collection of the signed-in user\'s tasks. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'page',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+            description: 'Page number (1-indexed).',
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            description: 'Number of tasks per page.',
+          },
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+            description: 'Filter tasks by workflow status.',
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            description: 'Filter tasks by priority.',
+          },
+          {
+            name: 'tag',
+            in: 'query',
+            style: 'form',
+            explode: true,
+            schema: { type: 'array', items: { type: 'string' } },
+            description:
+              'Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
+          },
+          {
+            name: 'q',
+            in: 'query',
+            schema: { type: 'string', minLength: 1 },
+            description: 'Case-insensitive search over the title and description.',
+          },
+          {
+            name: 'dueFrom',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return tasks due on or after this ISO timestamp.',
+          },
+          {
+            name: 'dueTo',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return tasks due on or before this ISO timestamp.',
+          },
+        ],
         responses: {
           '200': {
             description: 'Task collection',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    items: {
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        additionalProperties: true,
-                      },
-                    },
-                  },
-                  required: ['items'],
+                schema: { $ref: '#/components/schemas/TaskListResponse' },
+                examples: {
+                  default: taskListExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidFilters: taskListInvalidFiltersExample,
                 },
               },
             },
@@ -404,6 +638,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -412,14 +649,16 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Tasks'],
         summary: 'Create a task',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Creates a new task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TaskCreateInput' },
+              examples: {
+                default: { value: taskCreateInput.example as Record<string, unknown> },
               },
             },
           },
@@ -429,9 +668,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Task created',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskCreatedExample,
                 },
               },
             },
@@ -441,6 +680,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
               },
             },
           },
@@ -449,6 +691,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -459,22 +704,24 @@ export const openApiDocument: OpenAPIV3.Document = {
       patch: {
         tags: ['Tasks'],
         summary: 'Update a task',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Partially updates a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         parameters: [
           {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'string' },
+            schema: { type: 'string', format: 'uuid' },
           },
         ],
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TaskUpdateInput' },
+              examples: {
+                default: taskUpdateExample,
               },
             },
           },
@@ -484,9 +731,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Task updated',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskUpdatedRecordExample,
                 },
               },
             },
@@ -496,47 +743,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
-              },
-            },
-          },
-          '401': {
-            description: 'Unauthorized',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
-              },
-            },
-          },
-          '404': {
-            description: 'Task not found',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ErrorResponse' },
-              },
-            },
-          },
-        },
-      },
-      delete: {
-        tags: ['Tasks'],
-        summary: 'Delete a task',
-        security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string' },
-          },
-        ],
-        responses: {
-          '200': {
-            description: 'Task removed',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                  invalidIdentifier: invalidIdentifierExample,
                 },
               },
             },
@@ -546,6 +755,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
               },
             },
           },
@@ -554,6 +766,70 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
+              },
+            },
+          },
+        },
+      },
+      delete: {
+        tags: ['Tasks'],
+        summary: 'Delete a task',
+        description:
+          'Deletes a task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Task removed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/TaskDeleteResponse' },
+                examples: {
+                  default: taskDeletedExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid identifier',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidIdentifier: invalidIdentifierExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Task not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
               },
             },
           },
@@ -564,7 +840,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         tags: ['Tags'],
         summary: 'List tags',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Retrieves all tag labels created by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Tag collection',
@@ -590,7 +868,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Tags'],
         summary: 'Create a tag',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Creates a new tag for the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         requestBody: {
           required: true,
           content: {

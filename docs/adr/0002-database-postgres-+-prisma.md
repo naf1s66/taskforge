@@ -12,3 +12,4 @@ Use **PostgreSQL** (Neon/Supabase free tiers) with **Prisma ORM** for DX, migrat
 - SQL reliability; generous free tiers.
 - Prisma generates types; simple migrations.
 - Cold-starts on free tiers may add latency.
+- Tasks, tags, and their join table (`TaskTag`) back the API repository so every task read/write stays scoped to the authenticated user via Prisma transactions.
