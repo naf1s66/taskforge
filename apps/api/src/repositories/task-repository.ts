@@ -78,6 +78,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     userId: string,
     status: PrismaTaskStatus,
   ): Promise<number> => {
+    // Lock existing rows for the lane to serialize MAX(boardOrder)+1 allocations.
     await tx.$executeRaw`
       SELECT 1 FROM "Task"
       WHERE "userId" = ${userId}
