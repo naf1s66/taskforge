@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import type { TaskRecordDTO } from '@taskforge/shared';
+import type { TaskBoardItemDTO, TaskRecordDTO } from '@taskforge/shared';
 
 export const taskWithTagsInclude = {
   TaskTag: {
@@ -27,6 +27,22 @@ export function toTaskRecordDTO(task: TaskWithTags): TaskRecordDTO {
     dueDate: task.dueDate?.toISOString(),
     tags,
     createdAt: task.createdAt.toISOString(),
+    updatedAt: task.updatedAt.toISOString(),
+  };
+}
+
+export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemDTO {
+  const tags = task.TaskTag.map(({ tag }) => tag.label).sort((a: string, b: string) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  );
+
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate?.toISOString(),
+    tags,
     updatedAt: task.updatedAt.toISOString(),
   };
 }

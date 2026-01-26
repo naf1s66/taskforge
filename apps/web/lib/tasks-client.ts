@@ -1,4 +1,11 @@
-import { getSessionCookieName, type TaskDTO, type TaskRecordDTO, type TaskPriority, type TaskStatus } from '@taskforge/shared';
+import {
+  getSessionCookieName,
+  type BoardReadModelDTO,
+  type TaskDTO,
+  type TaskRecordDTO,
+  type TaskPriority,
+  type TaskStatus,
+} from '@taskforge/shared';
 import { z } from 'zod';
 
 import { getApiBaseUrl } from './env';
@@ -35,6 +42,52 @@ const TaskRecordSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+});
+
+const TaskBoardItemSchema = z.object({
+  id: z.string().uuid(),
+  title: NonEmptyTrimmedString,
+  status: TaskStatusSchema,
+  priority: TaskPrioritySchema,
+  dueDate: NullableDateString,
+  tags: z.array(z.string().min(1)).default([]),
+  updatedAt: z.string().datetime(),
+});
+
+const TagSummarySchema = z.object({
+  label: NonEmptyTrimmedString,
+  count: z.number().int().min(0),
+});
+
+const BoardColumnSchema = z.object({
+  status: TaskStatusSchema,
+  title: NonEmptyTrimmedString,
+  order: z.number().int().min(1),
+  tasks: z.array(TaskBoardItemSchema),
+  total: z.number().int().min(0),
+  overdueCount: z.number().int().min(0),
+  tags: z.array(TagSummarySchema),
+});
+
+const BoardSummarySchema = z.object({
+  totalsByStatus: z.object({
+    TODO: z.number().int().min(0),
+    IN_PROGRESS: z.number().int().min(0),
+    DONE: z.number().int().min(0),
+  }),
+  overdueByStatus: z.object({
+    TODO: z.number().int().min(0),
+    IN_PROGRESS: z.number().int().min(0),
+    DONE: z.number().int().min(0),
+  }),
+  totalTasks: z.number().int().min(0),
+  totalOverdue: z.number().int().min(0),
+});
+
+const BoardResponseSchema = z.object({
+  columns: z.array(BoardColumnSchema),
+  summary: BoardSummarySchema,
+  generatedAt: z.string().datetime(),
 });
 
 const TaskListResponseSchema = z.object({
@@ -128,6 +181,7 @@ const TaskListQuerySchema = z
 
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskDeleteResponse = z.infer<typeof TaskDeleteResponseSchema>;
+export type TaskBoardResponse = z.infer<typeof BoardResponseSchema>;
 
 export type CreateTaskInput = Omit<TaskDTO, 'id'>;
 export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id'>>;
@@ -530,6 +584,17 @@ export async function listTasks(
       method: 'GET',
       query: toQueryRecord(normalizedQuery),
       schema: TaskListResponseSchema,
+    },
+    options,
+  );
+}
+
+export async function getTaskBoard(options?: TaskClientRequestOptions): Promise<BoardReadModelDTO> {
+  return requestJson(
+    'v1/tasks/board',
+    {
+      method: 'GET',
+      schema: BoardResponseSchema,
     },
     options,
   );
