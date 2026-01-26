@@ -41,6 +41,7 @@ export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemDTO {
     title: task.title,
     status: task.status,
     priority: task.priority,
+    position: task.boardOrder,
     dueDate: task.dueDate?.toISOString(),
     tags,
     updatedAt: task.updatedAt.toISOString(),

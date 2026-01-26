@@ -141,16 +141,18 @@ const taskBoardItem: OpenAPIV3.SchemaObject = {
     title: { type: 'string' },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    position: { type: 'integer', minimum: 0 },
     dueDate: { type: 'string', format: 'date-time', nullable: true },
     tags: { type: 'array', items: { type: 'string' } },
     updatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['id', 'title', 'status', 'priority', 'tags', 'updatedAt'],
+  required: ['id', 'title', 'status', 'priority', 'position', 'tags', 'updatedAt'],
   example: {
     id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
     title: 'Draft project brief',
     status: 'IN_PROGRESS',
     priority: 'HIGH',
+    position: 0,
     dueDate: '2024-07-10T16:00:00.000Z',
     tags: ['planning', 'product'],
     updatedAt: '2024-06-03T09:30:00.000Z',
@@ -248,13 +250,30 @@ const boardResponse: OpenAPIV3.SchemaObject = {
       items: { $ref: '#/components/schemas/BoardColumn' },
     },
     summary: { $ref: '#/components/schemas/BoardSummary' },
+    updatedAt: { type: 'string', format: 'date-time' },
     generatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['columns', 'summary', 'generatedAt'],
+  required: ['columns', 'summary', 'updatedAt', 'generatedAt'],
   example: {
     columns: [boardColumn.example],
     summary: boardSummary.example,
+    updatedAt: '2024-06-03T09:30:00.000Z',
     generatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const boardMoveRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string', format: 'uuid' },
+    targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    targetIndex: { type: 'integer', minimum: 0 },
+  },
+  required: ['taskId', 'targetStatus', 'targetIndex'],
+  example: {
+    taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    targetStatus: 'DONE',
+    targetIndex: 0,
   },
 };
 
@@ -448,6 +467,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       BoardColumn: boardColumn,
       BoardSummary: boardSummary,
       BoardResponse: boardResponse,
+      BoardMoveRequest: boardMoveRequest,
       TaskCreateInput: taskCreateInput,
       TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
@@ -839,6 +859,12 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           '200': {
             description: 'Task board',
+            headers: {
+              ETag: {
+                description: 'Entity tag representing the latest board update timestamp.',
+                schema: { type: 'string' },
+              },
+            },
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/BoardResponse' },
@@ -855,6 +881,78 @@ export const openApiDocument: OpenAPIV3.Document = {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 examples: {
                   unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/tasks/board/move': {
+      patch: {
+        tags: ['Tasks'],
+        summary: 'Move a task within the Kanban board',
+        description:
+          'Updates the status and ordering of a task on the board. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/BoardMoveRequest' },
+              examples: {
+                default: { value: boardMoveRequest.example as Record<string, unknown> },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Task board updated',
+            headers: {
+              ETag: {
+                description: 'Entity tag representing the latest board update timestamp.',
+                schema: { type: 'string' },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BoardResponse' },
+                examples: {
+                  default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: { value: { error: 'Not found' } },
                 },
               },
             },
