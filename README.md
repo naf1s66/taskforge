@@ -1,68 +1,72 @@
 # TaskForge (Monorepo)
 
-**Full-stack Task Manager** showcasing Next.js (TS) + shadcn/ui + Tailwind + Framer Motion • Express (TS) • PostgreSQL (Neon/Supabase) • Prisma • JWT auth flows • Swagger/OpenAPI • Jest/Supertest • Docker • GitHub Actions.
+Full-stack task manager built with Next.js (TS), shadcn/ui, Tailwind, Framer Motion, Express (TS), PostgreSQL (Neon/Supabase), Prisma, JWT auth, Swagger/OpenAPI, Jest/Supertest, Docker, and GitHub Actions.
 
-- 📄 PRD: [`docs/PRD.md`](docs/PRD.md)
-- 🧑‍💻 Agents: [`docs/AGENTS.md`](docs/AGENTS.md)
-- 🧠 ADRs: [`docs/adr/`](docs/adr/)
+- PRD: `docs/PRD.md`
+- Agents: `docs/AGENTS.md`
+- ADRs: `docs/adr/`
 
 ## Structure
 ```
 taskforge/
-├─ apps/
-│  ├─ web/     # Next.js App Router (TS), Tailwind, shadcn/ui, Framer Motion
-│  └─ api/     # Express (TS), Prisma, Swagger, Zod
-├─ packages/shared/        # Shared DTOs/types
-├─ infra/                  # docker-compose, env templates
-├─ docs/                   # PRD, agents, ADRs, OpenAPI
-├─ .github/workflows/ci.yml
-├─ Makefile
-├─ package.json (pnpm workspaces)
-└─ pnpm-workspace.yaml
+- apps/
+  - web/     # Next.js App Router (TS), Tailwind, shadcn/ui, Framer Motion
+  - api/     # Express (TS), Prisma, Swagger, Zod
+- packages/shared/        # Shared DTOs/types
+- infra/                  # docker-compose, env templates
+- docs/                   # PRD, agents, ADRs, OpenAPI
+- .github/workflows/ci.yml
+- Makefile
+- package.json (pnpm workspaces)
+- pnpm-workspace.yaml
 ```
 
 ## Quick Start
-1. **Install dependencies**
+1. Install dependencies
    ```bash
    pnpm install
    ```
-2. **Copy environment templates (optional for dev defaults)**
+2. Optional: copy environment templates
    ```bash
    cp infra/env/api.env.example apps/api/.env
    cp infra/env/web.env.example apps/web/.env
    ```
-3. **Run static checks**
+3. Apply Prisma migrations (required for the task repository)
+   ```bash
+   pnpm -C apps/api prisma migrate deploy
+   ```
+4. Run static checks
    ```bash
    pnpm lint
    pnpm typecheck
    ```
-4. **Start the Docker services (Postgres + MailHog + app containers)**
+5. Start Docker services (Postgres + MailHog + app containers)
    ```bash
    make up
    # when finished
    make down
    ```
-5. **Run dev servers locally (hot reload)**
+6. Run dev servers locally (hot reload)
    ```bash
    pnpm -C apps/api dev
    pnpm -C apps/web dev
    ```
-6. **Smoke test**
+7. Smoke tests
    - API health: `curl http://localhost:4000/api/taskforge/v1/health`
-   - Web UI: http://localhost:3000
-7. **Docker auth smoke test**
+   - Web UI: `http://localhost:3000`
+8. Docker auth smoke test
    ```bash
    make auth-smoke
    ```
    This runs a scripted register/login/bridge check from inside the web container to confirm it can reach the API with the shared `SESSION_BRIDGE_SECRET`.
 
-> `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
+Note: `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are intended for iterative development outside containers.
 
 ## Authentication Reference
-> For deeper architectural decisions see [ADR 0001 – Auth strategy](docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md) and the [PRD auth section](docs/PRD.md#authentication).
+For architectural details, see `docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md` and the PRD auth section in `docs/PRD.md#authentication`.
 
 ### Environment variables
-Keep `.env` files in sync with the templates in `infra/env/`. The table below highlights auth-related variables and how to adjust them between local development and production deployments.
+Keep `.env` files aligned with the templates in `infra/env/`. The table below summarizes the auth-related variables and their intended use.
 
 | Variable | Scope | Dev default | Notes |
 | --- | --- | --- | --- |
@@ -74,25 +78,25 @@ Keep `.env` files in sync with the templates in `infra/env/`. The table below hi
 | `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Include the `/api/taskforge` prefix so callers can append `/v1/*` paths consistently. |
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
-| `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen + redirect URIs to match `NEXTAUTH_URL`. |
+| `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen and redirect URIs to match `NEXTAUTH_URL`. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
-| `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if you need parity with production infrastructure. |
+| `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
-> **Production tip:** uncomment `COOKIE_DOMAIN` in both `.env` files when deploying across subdomains (for example `api.taskforge.app` and `app.taskforge.app`) so session cookies are shared correctly.
+For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskforge.app`), set `COOKIE_DOMAIN` in both `.env` files so session cookies are shared correctly.
 
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
 2. Update the secrets listed above. For Docker-based workflows keep the Postgres host as `db`; when running the dev servers directly (`pnpm -C apps/* dev`) point `DATABASE_URL` at `localhost` or your cloud instance.
-3. Restart the affected service after changing secrets (e.g., `pnpm -C apps/web dev` or `make up`).
+3. Restart the affected service after changing secrets (for example, `pnpm -C apps/web dev` or `make up`).
 
 ### OAuth providers
-- Configure any provider credentials you have. Leaving the variables blank keeps the login screen in a safe “No providers configured” state.
-- **Google Cloud**
-  1. Create an OAuth consent screen (External) in [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+- Configure any provider credentials that are available. Leaving the variables blank keeps the login screen in a safe "No providers configured" state.
+- Google Cloud
+  1. Create an OAuth consent screen (External) in https://console.cloud.google.com/apis/credentials
   2. Add an OAuth 2.0 Client ID (Web application) with authorized origins `http://localhost:3000` and redirect URI `http://localhost:3000/api/auth/callback/google` for local development.
-  3. Repeat the setup with your production domains and update `NEXTAUTH_URL` plus redirect URIs to match.
-- **GitHub** – create an OAuth app at <https://github.com/settings/developers>. Use the same callback pattern `http://localhost:3000/api/auth/callback/github` while testing locally.
-- Accounts created through Google or GitHub reuse existing credential users when the email matches, letting teammates link social login after registering with a password.
+  3. Repeat the setup with production domains and update `NEXTAUTH_URL` plus redirect URIs to match.
+- GitHub: create an OAuth app at https://github.com/settings/developers. Use the same callback pattern `http://localhost:3000/api/auth/callback/github` while testing locally.
+- Accounts created through Google or GitHub reuse existing credential users when the email matches.
 
 ### Database migrations and seed user
 Run Prisma migrations whenever the schema changes:
@@ -109,43 +113,40 @@ pnpm -C apps/api tsx prisma/seed.ts
 make seed
 ```
 
-Running the seed multiple times is safe—it upserts the user and respects `SEED_USER_PASSWORD` if provided. The seed user surfaces in both the API JWT flow and the NextAuth login page.
+Running the seed multiple times is safe; it upserts the user and respects `SEED_USER_PASSWORD` if provided. The seed user is available in both the API JWT flow and the NextAuth login page.
 
 ### Auth smoke tests
-1. **API-only JWT flow**
+1. API-only JWT flow
    ```bash
    pnpm -C apps/api dev
-   # in another shell (use curl if you do not have HTTPie installed)
+   # in another shell (use curl if HTTPie is not available)
    http POST :4000/api/taskforge/v1/auth/login email=demo@taskforge.dev password=Demo1234!
    http GET :4000/api/taskforge/v1/auth/me "Authorization:Bearer <token>"
    ```
    Replace `<token>` with the `accessToken` returned from the login response.
-2. **Docker bridge test** – `make up` then run `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
-3. **NextAuth UI** – start the web app (`pnpm -C apps/web dev`) and visit [`http://localhost:3000/login`](http://localhost:3000/login). With provider credentials in place you should see GitHub/Google buttons; otherwise a helper callout explains how to enable them. After signing in you are redirected to the dashboard which confirms session state in the header.
+2. Docker bridge test: run `make up` then `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
+3. NextAuth UI: start the web app (`pnpm -C apps/web dev`) and visit `http://localhost:3000/login`. With provider credentials in place, GitHub/Google buttons appear; otherwise a helper callout explains how to enable them. After signing in, the app redirects to the dashboard and confirms session state in the header.
 
-Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
+Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above.
 
 ## Continuous Integration
-- The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
-  migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.
-- Frontend auth tests should be exposed through `pnpm test` in `apps/web`; the CI job runs that script automatically when it is
-  present so browser coverage can gate merges alongside the API checks.
-- Configure repository secrets (`CI_JWT_SECRET`, `CI_JWT_REFRESH_SECRET`, `CI_SESSION_BRIDGE_SECRET`, `CI_NEXTAUTH_SECRET`) to
-  override the CI-safe defaults used in the workflow when running against staging infrastructure.
+- The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies migrations via `prisma migrate deploy` before executing the Jest suite in `apps/api`.
+- Frontend tests run through `pnpm test` in `apps/web`; the CI job executes that script when present.
+- Configure repository secrets (`CI_JWT_SECRET`, `CI_JWT_REFRESH_SECRET`, `CI_SESSION_BRIDGE_SECRET`, `CI_NEXTAUTH_SECRET`) to override the CI-safe defaults used in the workflow when running against staging infrastructure.
 
 ### Accessing session state in code
 - Server components read the active session via `getCurrentUser()` (`apps/web/lib/server-auth.ts`).
-- Client components use `useAuth()` (`apps/web/lib/use-auth.ts`), a thin wrapper around `next-auth/react`’s `useSession()` hook.
+- Client components use `useAuth()` (`apps/web/lib/use-auth.ts`), a thin wrapper around `next-auth/react`'s `useSession()` hook.
 
 ## Scripts
-- `make dev` – run api + web (assumes local dev, not cross-platform background mgmt).
-- `make migrate` / `make seed` – DB ops (requires Prisma client and seed hooked up).
-- `make swagger` – export OpenAPI (placeholder script in `apps/api/src/openapi.export.js`).
+- `make dev` - run api + web (assumes local dev, not cross-platform background management).
+- `make migrate` / `make seed` - database operations.
+- `make swagger` - export OpenAPI.
 
 ## Deploy Targets (free tiers)
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email (dev): MailHog; (prod) any free SMTP (e.g., Brevo, Resend, Postmark trial)
+- Email (dev): MailHog; (prod) any free SMTP (for example Brevo, Resend, Postmark trial)
 
-**Note:** This scaffold uses an in-memory store in the API for now—wire up Prisma (see PRD) before production.
+Task data persists via Prisma. Run migrations before exercising the API in any environment.
