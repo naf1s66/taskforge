@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Plus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -77,6 +77,13 @@ export function TaskCreateDialog({ trigger, availableTags = [], onCreated, open,
 
     onOpenChange?.(nextOpen);
   }
+
+  useEffect(() => {
+    if (isControlled && !dialogOpen) {
+      form.reset(TASK_FORM_DEFAULT_VALUES);
+      createTask.reset();
+    }
+  }, [isControlled, dialogOpen, form, createTask]);
 
   function handleSubmit(values: TaskFormValues) {
     createTask.mutate({
