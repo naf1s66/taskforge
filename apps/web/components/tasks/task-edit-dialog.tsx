@@ -82,6 +82,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
         form.reset(TASK_FORM_DEFAULT_VALUES);
         updateTask.reset();
         lastKnownTaskRef.current = null;
+        setOptimisticSnapshot(null);
       }
 
       onOpenChange?.(nextOpen);
