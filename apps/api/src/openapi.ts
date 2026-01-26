@@ -249,12 +249,29 @@ const boardResponse: OpenAPIV3.SchemaObject = {
     },
     summary: { $ref: '#/components/schemas/BoardSummary' },
     generatedAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
   },
-  required: ['columns', 'summary', 'generatedAt'],
+  required: ['columns', 'summary', 'generatedAt', 'updatedAt'],
   example: {
     columns: [boardColumn.example],
     summary: boardSummary.example,
     generatedAt: '2024-06-03T09:30:00.000Z',
+    updatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const boardMoveInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string', format: 'uuid' },
+    targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    targetIndex: { type: 'integer', minimum: 0 },
+  },
+  required: ['taskId', 'targetStatus', 'targetIndex'],
+  example: {
+    taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    targetStatus: 'IN_PROGRESS',
+    targetIndex: 1,
   },
 };
 
@@ -448,6 +465,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       BoardColumn: boardColumn,
       BoardSummary: boardSummary,
       BoardResponse: boardResponse,
+      BoardMoveInput: boardMoveInput,
       TaskCreateInput: taskCreateInput,
       TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
@@ -839,6 +857,12 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           '200': {
             description: 'Task board',
+            headers: {
+              ETag: {
+                schema: { type: 'string' },
+                description: 'Entity tag for cache validation.',
+              },
+            },
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/BoardResponse' },
@@ -855,6 +879,117 @@ export const openApiDocument: OpenAPIV3.Document = {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
                 examples: {
                   unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/board': {
+      get: {
+        tags: ['Board'],
+        summary: 'Retrieve the Kanban board read model',
+        description:
+          'Returns a board-friendly representation of tasks grouped by status lanes. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        responses: {
+          '200': {
+            description: 'Task board',
+            headers: {
+              ETag: {
+                schema: { type: 'string' },
+                description: 'Entity tag for cache validation.',
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BoardResponse' },
+                examples: {
+                  default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/board/move': {
+      patch: {
+        tags: ['Board'],
+        summary: 'Move a task within the Kanban board',
+        description:
+          'Moves a task to a new status lane and/or position for the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/BoardMoveInput' },
+              examples: {
+                default: { value: boardMoveInput.example as Record<string, unknown> },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Updated board',
+            headers: {
+              ETag: {
+                schema: { type: 'string' },
+                description: 'Entity tag for cache validation.',
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BoardResponse' },
+                examples: {
+                  default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Task not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
                 },
               },
             },

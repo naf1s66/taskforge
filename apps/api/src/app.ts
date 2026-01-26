@@ -8,6 +8,7 @@ import swaggerUi from 'swagger-ui-express';
 import { PrismaUserStore, UserStore } from './auth/user-store';
 import { openApiDocument } from './openapi';
 import { createAuthRouter } from './routes/auth';
+import { createBoardRouter } from './routes/board';
 import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { createTaskRouter } from './routes/tasks';
@@ -80,6 +81,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use(authRouterFactory.authMiddleware);
   app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
+  app.use('/api/taskforge/v1/board', createBoardRouter(taskRepository));
   app.use('/api/taskforge/v1/tags', tagRoutes);
   app.get('/api/taskforge/v1/me', (_req, res) => {
     const user = res.locals.user as

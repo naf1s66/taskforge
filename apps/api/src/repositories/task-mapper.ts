@@ -13,6 +13,8 @@ export type TaskWithTags = Prisma.TaskGetPayload<{
   include: typeof taskWithTagsInclude;
 }>;
 
+export type TaskBoardItemWithOrder = TaskBoardItemDTO & { boardOrder: number };
+
 export function toTaskRecordDTO(task: TaskWithTags): TaskRecordDTO {
   const tags = task.TaskTag.map(({ tag }) => tag.label).sort((a: string, b: string) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
@@ -31,7 +33,7 @@ export function toTaskRecordDTO(task: TaskWithTags): TaskRecordDTO {
   };
 }
 
-export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemDTO {
+export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemWithOrder {
   const tags = task.TaskTag.map(({ tag }) => tag.label).sort((a: string, b: string) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
   );
@@ -44,6 +46,7 @@ export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemDTO {
     dueDate: task.dueDate?.toISOString(),
     tags,
     updatedAt: task.updatedAt.toISOString(),
+    boardOrder: task.boardOrder,
   };
 }
 

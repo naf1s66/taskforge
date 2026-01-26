@@ -44,6 +44,21 @@ const TaskIdParamSchema = z.object({
     .uuid({ message: 'Invalid identifier' }),
 });
 
+function resolveIfNoneMatch(req: { headers: Record<string, string | string[] | undefined> }) {
+  const header = req.headers['if-none-match'];
+  if (Array.isArray(header)) {
+    return header.join(', ');
+  }
+  return header;
+}
+
+function setBoardCacheHeaders(res: { setHeader: (key: string, value: string) => void }, updatedAt: string) {
+  const etag = `W/"${updatedAt}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Last-Modified', updatedAt);
+  return etag;
+}
+
 export function createTaskRouter(taskRepository?: TaskRepository) {
   const repository = taskRepository ?? createTaskRepository(getPrismaClient());
   const router = Router();
@@ -113,6 +128,10 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
       }
 
       const board = await repository.getTaskBoard(user.id);
+      const etag = setBoardCacheHeaders(res, board.updatedAt);
+      if (resolveIfNoneMatch(req) === etag) {
+        return res.status(304).end();
+      }
       res.json(board);
     } catch (error) {
       next(error);

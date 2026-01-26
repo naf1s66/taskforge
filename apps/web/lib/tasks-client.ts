@@ -88,6 +88,7 @@ const BoardResponseSchema = z.object({
   columns: z.array(BoardColumnSchema),
   summary: BoardSummarySchema,
   generatedAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
 });
 
 const TaskListResponseSchema = z.object({

@@ -59,6 +59,7 @@ export interface BoardReadModelDTO {
   columns: BoardColumnDTO[];
   summary: BoardSummaryDTO;
   generatedAt: string;
+  updatedAt: string;
 }
 
 export interface AuthUserDTO {
