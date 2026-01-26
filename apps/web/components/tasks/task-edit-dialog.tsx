@@ -38,6 +38,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
   const task = useTaskFromCache(open ? taskId ?? undefined : undefined);
   const [optimisticSnapshot, setOptimisticSnapshot] = useState<typeof task>(null);
   const previousTaskIdRef = useRef<string | null>(null);
+  const lastKnownTaskRef = useRef<typeof task>(null);
   const replacementId = useTaskReplacementId(optimisticSnapshot);
   const missingNotifiedRef = useRef<string | null>(null);
   const optimisticMissingNotifiedRef = useRef<string | null>(null);
@@ -80,6 +81,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       if (!nextOpen) {
         form.reset(TASK_FORM_DEFAULT_VALUES);
         updateTask.reset();
+        lastKnownTaskRef.current = null;
       }
 
       onOpenChange?.(nextOpen);
@@ -108,7 +110,12 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       return;
     }
 
-    if (taskId && !task && missingNotifiedRef.current !== taskId) {
+    if (task) {
+      lastKnownTaskRef.current = task;
+      return;
+    }
+
+    if (taskId && !lastKnownTaskRef.current && missingNotifiedRef.current !== taskId) {
       missingNotifiedRef.current = taskId;
       toast({
         title: 'Task unavailable',
@@ -146,8 +153,9 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
     onTaskIdChange?.(replacementId);
   }, [replacementId, taskId, onTaskIdChange]);
 
+  const resolvedTask = task ?? lastKnownTaskRef.current;
   const hasRequestError = Boolean(updateTask.error);
-  const isOptimistic = Boolean(task?._optimistic);
+  const isOptimistic = Boolean(resolvedTask?._optimistic);
 
   function handleSubmit(values: TaskFormValues) {
     if (!taskId || isOptimistic) {
@@ -167,11 +175,11 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
     });
   }
   const lastUpdatedLabel = useMemo(() => {
-    if (!task) {
+    if (!resolvedTask) {
       return null;
     }
 
-    const timestamp = task.updatedAt ?? task.createdAt;
+    const timestamp = resolvedTask.updatedAt ?? resolvedTask.createdAt;
     if (!timestamp) {
       return null;
     }
@@ -185,17 +193,17 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
     } catch {
       return null;
     }
-  }, [task]);
+  }, [resolvedTask]);
 
-  const dialogDescription = task
-    ? `Edit the details for “${task.title}”. Title, description, status, priority, due date, and tags can be updated.`
+  const dialogDescription = resolvedTask
+    ? `Edit the details for “${resolvedTask.title}”. Title, description, status, priority, due date, and tags can be updated.`
     : 'Edit the selected task.';
 
   return (
     <Dialog open={open && Boolean(taskId)} onOpenChange={handleDialogOpenChange}>
       <DialogContent aria-describedby="edit-task-description">
         <DialogHeader>
-          <DialogTitle>{task ? `Edit ${task.title}` : 'Edit task'}</DialogTitle>
+          <DialogTitle>{resolvedTask ? `Edit ${resolvedTask.title}` : 'Edit task'}</DialogTitle>
           <DialogDescription id="edit-task-description">
             {dialogDescription}
           </DialogDescription>
@@ -222,7 +230,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
               <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={updateTask.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateTask.isPending || !task || isOptimistic}>
+              <Button type="submit" disabled={updateTask.isPending || !resolvedTask || isOptimistic}>
                 {updateTask.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> Saving…
