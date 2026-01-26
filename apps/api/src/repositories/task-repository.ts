@@ -78,12 +78,11 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     userId: string,
     status: PrismaTaskStatus,
   ): Promise<number> => {
-    // Lock existing rows for the lane to serialize MAX(boardOrder)+1 allocations.
+    // Serialize MAX(boardOrder)+1 allocations, including empty lanes.
     await tx.$executeRaw`
-      SELECT 1 FROM "Task"
-      WHERE "userId" = ${userId}
-        AND "status" = ${status}
-      FOR UPDATE
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${userId} || ':' || ${status}, 0)
+      )
     `;
 
     const [row] = await tx.$queryRaw<Array<{ max: number | null }>>`
@@ -105,7 +104,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     const now = new Date();
     const latestUpdatedAt = tasks.reduce<Date>(
       (latest, task) => (task.updatedAt > latest ? task.updatedAt : latest),
-      tasks[0]?.updatedAt ?? now,
+      new Date(0),
     );
     const columns = buildBoardColumns(tasks.map(toTaskBoardItemDTO), now);
     const summary = buildBoardSummary(columns);
@@ -113,7 +112,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     return {
       columns,
       summary,
-      updatedAt: latestUpdatedAt.toISOString(),
+      updatedAt: (tasks.length ? latestUpdatedAt : new Date(0)).toISOString(),
       generatedAt: now.toISOString(),
     };
   };
