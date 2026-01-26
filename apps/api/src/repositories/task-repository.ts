@@ -73,17 +73,36 @@ export type TaskBoardMoveResult =
   | { status: 'invalid'; message: string };
 
 export function createTaskRepository(prisma: PrismaClient): TaskRepository {
+  const lockBoardLane = async (
+    tx: Prisma.TransactionClient,
+    userId: string,
+    status: PrismaTaskStatus,
+  ): Promise<void> => {
+    await tx.$executeRaw`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended((CAST(${userId} AS text) || ':' || CAST(${status} AS text)), 0)
+      )
+    `;
+  };
+
+  const lockBoardLanes = async (
+    tx: Prisma.TransactionClient,
+    userId: string,
+    statuses: PrismaTaskStatus[],
+  ): Promise<void> => {
+    const uniqueStatuses = [...new Set(statuses)].sort((a, b) => a.localeCompare(b));
+    for (const status of uniqueStatuses) {
+      await lockBoardLane(tx, userId, status);
+    }
+  };
+
   const allocateBoardOrder = async (
     tx: Prisma.TransactionClient,
     userId: string,
     status: PrismaTaskStatus,
   ): Promise<number> => {
     // Serialize MAX(boardOrder)+1 allocations, including empty lanes.
-    await tx.$executeRaw`
-      SELECT pg_advisory_xact_lock(
-        hashtextextended((CAST(${userId} AS text) || ':' || CAST(${status} AS text)), 0)
-      )
-    `;
+    await lockBoardLane(tx, userId, status);
 
     const [row] = await tx.$queryRaw<Array<{ max: number | null }>>`
       SELECT MAX("boardOrder") AS max
@@ -197,6 +216,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
         const sourceStatus = task.status;
         const targetStatus = input.targetStatus as PrismaTaskStatus;
+        await lockBoardLanes(tx, userId, [sourceStatus, targetStatus]);
         const sourceTasks = await tx.task.findMany({
           where: { userId, status: sourceStatus },
           orderBy: [{ boardOrder: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
@@ -343,6 +363,12 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
         if (input.tags !== undefined) {
           const normalizedTags = normalizeTagLabels(input.tags);
           await replaceTaskTags(tx, taskId, normalizedTags);
+          if (Object.keys(updateData).length === 0) {
+            await tx.task.update({
+              where: { id: taskId },
+              data: { updatedAt: new Date() },
+            });
+          }
         }
 
         const updated = await tx.task.findUnique({
