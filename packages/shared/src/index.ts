@@ -23,6 +23,44 @@ export interface TaskRecordDTO {
   updatedAt: string;
 }
 
+export interface TaskBoardItemDTO {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate?: string;
+  tags: string[];
+  updatedAt: string;
+}
+
+export interface TagSummaryDTO {
+  label: string;
+  count: number;
+}
+
+export interface BoardColumnDTO {
+  status: TaskStatus;
+  title: string;
+  order: number;
+  tasks: TaskBoardItemDTO[];
+  total: number;
+  overdueCount: number;
+  tags: TagSummaryDTO[];
+}
+
+export interface BoardSummaryDTO {
+  totalsByStatus: Record<TaskStatus, number>;
+  overdueByStatus: Record<TaskStatus, number>;
+  totalTasks: number;
+  totalOverdue: number;
+}
+
+export interface BoardReadModelDTO {
+  columns: BoardColumnDTO[];
+  summary: BoardSummaryDTO;
+  generatedAt: string;
+}
+
 export interface AuthUserDTO {
   id: string;
   email: string;

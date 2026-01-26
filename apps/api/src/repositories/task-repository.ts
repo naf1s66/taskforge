@@ -7,10 +7,21 @@ import type {
 import type {
   TaskPriority as SharedTaskPriority,
   TaskStatus as SharedTaskStatus,
+  BoardReadModelDTO,
+  BoardColumnDTO,
+  BoardSummaryDTO,
   TaskRecordDTO,
+  TaskBoardItemDTO,
+  TagSummaryDTO,
 } from '@taskforge/shared';
 
-import { normalizeTagLabels, parseDueDate, taskWithTagsInclude, toTaskRecordDTO } from './task-mapper';
+import {
+  normalizeTagLabels,
+  parseDueDate,
+  taskWithTagsInclude,
+  toTaskBoardItemDTO,
+  toTaskRecordDTO,
+} from './task-mapper';
 
 export interface TaskCreateInput {
   title: string;
@@ -41,6 +52,7 @@ export interface TaskListResult {
 
 export interface TaskRepository {
   listTasks(userId: string, options?: TaskListOptions): Promise<TaskListResult>;
+  getTaskBoard(userId: string): Promise<BoardReadModelDTO>;
   createTask(userId: string, input: TaskCreateInput): Promise<TaskRecordDTO>;
   updateTask(
     userId: string,
@@ -115,6 +127,23 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
       return {
         items: tasks.map(toTaskRecordDTO),
         total,
+      };
+    },
+
+    async getTaskBoard(userId) {
+      const tasks = await prisma.task.findMany({
+        where: { userId },
+        include: taskWithTagsInclude,
+      });
+
+      const now = new Date();
+      const columns = buildBoardColumns(tasks.map(toTaskBoardItemDTO), now);
+      const summary = buildBoardSummary(columns);
+
+      return {
+        columns,
+        summary,
+        generatedAt: now.toISOString(),
       };
     },
 
@@ -233,4 +262,132 @@ async function replaceTaskTags(
       },
     });
   }
+}
+
+const statusOrder: Array<{
+  status: SharedTaskStatus;
+  title: string;
+  order: number;
+}> = [
+  { status: 'TODO', title: 'To Do', order: 1 },
+  { status: 'IN_PROGRESS', title: 'In Progress', order: 2 },
+  { status: 'DONE', title: 'Done', order: 3 },
+];
+
+const priorityRank: Record<SharedTaskPriority, number> = {
+  HIGH: 0,
+  MEDIUM: 1,
+  LOW: 2,
+};
+
+function buildBoardColumns(tasks: TaskBoardItemDTO[], now: Date): BoardColumnDTO[] {
+  const buckets = new Map<SharedTaskStatus, TaskBoardItemDTO[]>();
+  for (const { status } of statusOrder) {
+    buckets.set(status, []);
+  }
+
+  for (const task of tasks) {
+    const bucket = buckets.get(task.status);
+    if (bucket) {
+      bucket.push(task);
+    }
+  }
+
+  return statusOrder.map(({ status, title, order }) => {
+    const items = buckets.get(status) ?? [];
+    const sorted = [...items].sort((left, right) => compareBoardTasks(left, right));
+    const overdueCount = sorted.filter(task => isOverdue(task, now)).length;
+    const tags = summarizeTags(sorted);
+
+    return {
+      status,
+      title,
+      order,
+      tasks: sorted,
+      total: sorted.length,
+      overdueCount,
+      tags,
+    };
+  });
+}
+
+function compareBoardTasks(left: TaskBoardItemDTO, right: TaskBoardItemDTO): number {
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
+  const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
+  if (leftDue !== rightDue) {
+    return leftDue - rightDue;
+  }
+
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  const titleDelta = left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function summarizeTags(tasks: TaskBoardItemDTO[]): TagSummaryDTO[] {
+  const counts = new Map<string, number>();
+
+  for (const task of tasks) {
+    for (const label of task.tags) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+}
+
+function isOverdue(task: TaskBoardItemDTO, now: Date): boolean {
+  if (!task.dueDate) {
+    return false;
+  }
+  if (task.status === 'DONE') {
+    return false;
+  }
+  const due = Date.parse(task.dueDate);
+  if (Number.isNaN(due)) {
+    return false;
+  }
+  return due < now.getTime();
+}
+
+function buildBoardSummary(columns: BoardColumnDTO[]): BoardSummaryDTO {
+  const totalsByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies Record<SharedTaskStatus, number>;
+  const overdueByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies Record<SharedTaskStatus, number>;
+
+  for (const column of columns) {
+    totalsByStatus[column.status] = column.total;
+    overdueByStatus[column.status] = column.overdueCount;
+  }
+
+  const totalTasks = Object.values(totalsByStatus).reduce((sum, value) => sum + value, 0);
+  const totalOverdue = Object.values(overdueByStatus).reduce((sum, value) => sum + value, 0);
+
+  return {
+    totalsByStatus,
+    overdueByStatus,
+    totalTasks,
+    totalOverdue,
+  };
 }

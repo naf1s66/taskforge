@@ -105,6 +105,20 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
     }
   });
 
+  router.get('/board', async (req, res, next) => {
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const board = await repository.getTaskBoard(user.id);
+      res.json(board);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.patch('/:id', async (req, res, next) => {
     const params = TaskIdParamSchema.safeParse(req.params);
     if (!params.success) {
