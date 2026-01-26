@@ -10,40 +10,44 @@ Cookie: tf_session={{accessToken}}
 ###
 # Filtered search: high priority docs tasks due in Q1
 
-GET http://localhost:4000/api/taskforge/v1/tasks?q=release&status=IN_PROGRESS&priority=HIGH&tag=docs&dueFrom=2024-01-01T00:00:00.000Z&dueTo=2024-03-31T23:59:59.999Z
+GET http://localhost:4000/api/taskforge/v1/tasks?q=release&status=IN_PROGRESS&priority=HIGH&tag=docs&tag=launch&dueFrom=2024-01-01T00:00:00.000Z&dueTo=2024-03-31T23:59:59.999Z
 Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 ###
+# Create a task with tags + due date
 POST http://localhost:4000/api/taskforge/v1/tasks
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 {
-  "title": "Write API docs",
-  "description": "Outline request/response examples",
+  "title": "Write dashboard walkthrough",
+  "description": "Capture screenshots and describe filters + dialogs",
   "priority": "HIGH",
-  "tags": ["api", "docs", "work"],
-  "dueDate": "2024-03-01T09:30:00.000Z"
+  "status": "IN_PROGRESS",
+  "tags": ["docs", "dashboard", "release"],
+  "dueDate": "2024-03-08T17:00:00.000Z"
 }
 
 ###
+# Update a task (replace {{taskId}} with the created task id)
 PATCH http://localhost:4000/api/taskforge/v1/tasks/{{taskId}}
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}
 
 {
-  "title": "Draft proposal v2",
-  "description": "Expanded with metrics",
-  "status": "IN_PROGRESS",
-  "priority": "HIGH",
-  "tags": ["planning", "proposal"],
-  "dueDate": "2024-04-05T15:00:00.000Z"
+  "title": "Write dashboard walkthrough (final)",
+  "description": "Confirm dialog behavior + include limitations",
+  "status": "DONE",
+  "priority": "MEDIUM",
+  "tags": ["docs", "release"],
+  "dueDate": "2024-03-10T12:00:00.000Z"
 }
 
 ###
+# Delete a task
 DELETE http://localhost:4000/api/taskforge/v1/tasks/{{taskId}}
 Authorization: Bearer {{accessToken}}
 Cookie: tf_session={{accessToken}}

@@ -13,4 +13,4 @@
 11. 11-frontend-task-filters-empty-states.md – Add filter controls + empty-state UX tied to hook params.
 12. 12-frontend-task-create-dialog.md – Build the create-task dialog powered by the create mutation.
 13. 13-frontend-task-edit-dialog.md – Build the edit-task dialog with optimistic updates + error handling.
-14. 14-docs-dashboard-updates.md – Update PRD/README/`.http` docs and capture screenshots/Loom of the experience.
+14. [x] 14-docs-dashboard-updates.md – Update PRD/README/`.http` docs and capture screenshots/Loom of the experience.

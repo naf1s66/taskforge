@@ -136,10 +136,16 @@ Running the seed multiple times is safe—it upserts the user and respects `SEED
 2. **Docker bridge test** – `make up` then run `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
 3. **NextAuth UI** – start the web app (`pnpm -C apps/web dev`) and visit [`http://localhost:3000/login`](http://localhost:3000/login). With provider credentials in place you should see GitHub/Google buttons; otherwise a helper callout explains how to enable them. After signing in you are redirected to the dashboard which confirms session state in the header.
 
-Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
+Screenshots of the login flow and protected task dashboard will be linked after design approval. Coordinate with design before publishing externally and replace placeholders with approved assets when available.
 
 ## Tasks API
 The task routes live under `/api/taskforge/v1/tasks` and require the authenticated user's JWT. You can supply the token either as a Bearer header or via the shared `tf_session` cookie issued during login/registration.
+
+### Setup + seed data
+1. Apply migrations: `pnpm -C apps/api prisma migrate dev`.
+2. Seed a demo user and sample tasks (optional): `pnpm -C apps/api tsx prisma/seed.ts` or `make seed`.
+3. Run the API server: `pnpm -C apps/api dev`.
+4. Use the `.http` samples in [`apps/api/tests/tasks.http`](apps/api/tests/tasks.http) after completing the auth flow in [`apps/api/tests/auth.http`](apps/api/tests/auth.http).
 
 ```bash
 # 1) Start the API locally
@@ -163,6 +169,12 @@ curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
 ```
 
 Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. The list endpoint accepts optional `status`, `priority`, repeated `tag` parameters, free-text search via `q`, and ISO `dueFrom`/`dueTo` ranges that map directly to repository-level filters. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
+
+### Tasks dashboard usage (UI)
+- Visit `http://localhost:3000/dashboard` (or `/tasks/hooks-demo` for the hooks demo) after authenticating through the NextAuth login page. The dashboard shows status columns, priority badges, and tag chips for each task.
+- Use the filter controls to update the URL query string (`status`, `priority`, `tag`, `q`, `dueFrom`, `dueTo`). The UI passes these parameters directly to `useTasksQuery`, so the API and UI stay in sync.
+- Click **New task** to open the create dialog, or use the **Edit** action on a task card to update existing work. Both dialogs validate with Zod and display inline errors.
+- The current UI does not expose pagination controls yet; it loads the first page and relies on filters to refine results.
 
 ### Task filter mapping
 
@@ -190,6 +202,10 @@ The UI simply passes these fields to `useTasksQuery`, so anything supported by t
 - The dialog pre-fills the selected task from the React Query cache and keeps the form in sync with live updates (for example, optimistic writes from other tabs). Title, description, status, priority, due date, and tags are all editable with the same validation logic as task creation.
 - Submitting the form calls `useUpdateTask`, optimistically patches the cache, and surfaces inline validation errors when the API rejects a field. If the task disappears while the dialog is open, it automatically closes and shows a toast explaining the conflict.
 - A subtle "Last updated" hint above the form provides additional context for reviewers. Keyboard focus, escape key handling, and the **Cancel** button mirror the experience provided by the create dialog.
+
+### Dashboard visuals
+
+Links to approved dashboard screenshots/GIFs and Loom walkthroughs will be added after design review.
 
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
