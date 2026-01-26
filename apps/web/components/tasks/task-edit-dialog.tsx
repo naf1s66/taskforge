@@ -97,6 +97,10 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       return;
     }
 
+    if (taskId && lastKnownTaskRef.current?.id && lastKnownTaskRef.current.id !== taskId) {
+      lastKnownTaskRef.current = null;
+    }
+
     const isOptimisticId = Boolean(taskId?.startsWith('optimistic-'));
     if (isOptimisticId) {
       if (!task && !replacementId && optimisticSnapshot && optimisticMissingNotifiedRef.current !== taskId) {
@@ -116,7 +120,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       return;
     }
 
-    if (taskId && !lastKnownTaskRef.current && missingNotifiedRef.current !== taskId) {
+    if (taskId && lastKnownTaskRef.current?.id === taskId && missingNotifiedRef.current !== taskId) {
       missingNotifiedRef.current = taskId;
       toast({
         title: 'Task unavailable',
