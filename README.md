@@ -31,32 +31,43 @@ taskforge/
    cp infra/env/api.env.example apps/api/.env
    cp infra/env/web.env.example apps/web/.env
    ```
-3. **Run static checks**
+3. **Apply Prisma migrations (required for the task repository)**
+   ```bash
+   pnpm -C apps/api prisma migrate dev
+   ```
+   Re-run this whenever the Prisma schema changes to keep your local database aligned.
+4. **Run static checks**
    ```bash
    pnpm lint
    pnpm typecheck
    ```
-4. **Start the Docker services (Postgres + MailHog + app containers)**
+5. **Start the Docker services (Postgres + MailHog + app containers)**
    ```bash
    make up
    # when finished
    make down
    ```
-5. **Run dev servers locally (hot reload)**
+6. **Run dev servers locally (hot reload)**
    ```bash
    pnpm -C apps/api dev
    pnpm -C apps/web dev
    ```
-6. **Smoke test**
+7. **Smoke test**
    - API health: `curl http://localhost:4000/api/taskforge/v1/health`
    - Web UI: http://localhost:3000
-7. **Docker auth smoke test**
+8. **Docker auth smoke test**
    ```bash
    make auth-smoke
    ```
    This runs a scripted register/login/bridge check from inside the web container to confirm it can reach the API with the shared `SESSION_BRIDGE_SECRET`.
 
 > `make up` builds and starts the Dockerized API/Web services, while the pnpm dev commands are ideal for iterative development outside containers.
+
+## Testing
+
+- **API integration tests** – `pnpm -C apps/api test`
+  - Spins up a disposable Postgres instance, applies Prisma migrations, then runs the Jest/Supertest suite that exercises auth plus the task CRUD/filter flows (tags, cross-user guards, pagination, validation).
+  - The same command runs in CI via `make test` / `make ci`, so keep it green before opening pull requests.
 
 ## Authentication Reference
 > For deeper architectural decisions see [ADR 0001 – Auth strategy](docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md) and the [PRD auth section](docs/PRD.md#authentication).
@@ -98,8 +109,10 @@ Keep `.env` files in sync with the templates in `infra/env/`. The table below hi
 Run Prisma migrations whenever the schema changes:
 
 ```bash
-pnpm -C apps/api prisma migrate deploy
+pnpm -C apps/api prisma migrate dev
 ```
+
+Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
 
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 
@@ -123,7 +136,76 @@ Running the seed multiple times is safe—it upserts the user and respects `SEED
 2. **Docker bridge test** – `make up` then run `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
 3. **NextAuth UI** – start the web app (`pnpm -C apps/web dev`) and visit [`http://localhost:3000/login`](http://localhost:3000/login). With provider credentials in place you should see GitHub/Google buttons; otherwise a helper callout explains how to enable them. After signing in you are redirected to the dashboard which confirms session state in the header.
 
-Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above. Capture fresh UI snapshots for release notes or marketing updates as needed.
+Screenshots of the login flow and protected task dashboard will be linked after design approval. Coordinate with design before publishing externally and replace placeholders with approved assets when available.
+
+## Tasks API
+The task routes live under `/api/taskforge/v1/tasks` and require the authenticated user's JWT. You can supply the token either as a Bearer header or via the shared `tf_session` cookie issued during login/registration.
+
+### Setup + seed data
+1. Apply migrations: `pnpm -C apps/api prisma migrate dev`.
+2. Seed a demo user and sample tasks (optional): `pnpm -C apps/api tsx prisma/seed.ts` or `make seed`.
+3. Run the API server: `pnpm -C apps/api dev`.
+4. Use the `.http` samples in [`apps/api/tests/tasks.http`](apps/api/tests/tasks.http) after completing the auth flow in [`apps/api/tests/auth.http`](apps/api/tests/auth.http).
+
+```bash
+# 1) Start the API locally
+pnpm -C apps/api dev
+
+# 2) Authenticate (see apps/api/tests/auth.http for detailed flows)
+
+# 3) List the first page of tasks (defaults: page=1, pageSize=20)
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "http://localhost:4000/api/taskforge/v1/tasks?page=1&pageSize=10"
+
+# 3b) Filter high priority in-progress docs tasks due this quarter
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "http://localhost:4000/api/taskforge/v1/tasks?q=release&status=IN_PROGRESS&priority=HIGH&tag=docs&dueFrom=2024-01-01T00:00:00.000Z&dueTo=2024-03-31T23:59:59.999Z"
+
+# 4) Create a task for the signed-in user
+curl -b "tf_session=$ACCESS_TOKEN" -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Draft release notes","tags":["docs"]}' \
+  http://localhost:4000/api/taskforge/v1/tasks
+```
+
+Responses use the shared DTOs from `packages/shared`, returning timestamps, status/priority defaults, and the normalized tag list. The list endpoint accepts optional `status`, `priority`, repeated `tag` parameters, free-text search via `q`, and ISO `dueFrom`/`dueTo` ranges that map directly to repository-level filters. Validation failures mirror the auth endpoints by responding with `{"error":"Invalid payload","details":...}`.
+
+### Tasks dashboard usage (UI)
+- Visit `http://localhost:3000/dashboard` (or `/tasks/hooks-demo` for the hooks demo) after authenticating through the NextAuth login page. The dashboard shows status columns, priority badges, and tag chips for each task.
+- Use the filter controls to update the URL query string (`status`, `priority`, `tag`, `q`, `dueFrom`, `dueTo`). The UI passes these parameters directly to `useTasksQuery`, so the API and UI stay in sync.
+- Click **New task** to open the create dialog, or use the **Edit** action on a task card to update existing work. Both dialogs validate with Zod and display inline errors.
+- The current UI does not expose pagination controls yet; it loads the first page and relies on filters to refine results.
+
+### Task filter mapping
+
+The task hooks demo (`apps/web/app/(protected)/tasks/hooks-demo/page.tsx`) surfaces the query parameters supported by the API and persists them to the URL/local storage for easy sharing. Each control lines up with a task list filter:
+
+- **Status select** → `status`
+- **Priority select** → `priority`
+- **Tag combobox** → repeated `tag`
+- **Search field** → `q`
+- **Due date range** → `dueFrom` (start of day) / `dueTo` (end of day)
+
+The UI simply passes these fields to `useTasksQuery`, so anything supported by the API immediately flows through the frontend without additional mapping glue.
+
+### Task creation dialog
+
+- Open the hooks demo (`/tasks/hooks-demo`) and click **New task** to launch the modal dialog. The trigger button lives alongside the refresh and filter controls so you can create records from the same workspace used to inspect cache behaviour.
+- The form runs client-side validation with `react-hook-form` + Zod. Title is required, while status/priority default to **To Do**/**Medium** but must remain valid enum values if you change them.
+- Due date and tags are optional, yet still validated/sanitized before submitting. The date picker only accepts calendar selections and tags are normalized through the shared combobox component used elsewhere in the app.
+- Successful submissions optimistically update the task list and surface a toast (`“Task created”`). API or validation errors show inline messages near the fields and emit a destructive toast for additional feedback.
+- Keyboard focus stays trapped within the dialog content, labels/aria descriptions describe each control, and the **Cancel** button or close icon exits without mutating state.
+
+### Task editing dialog
+
+- Any button with `data-task-dialog="edit"` launches the edit modal. The dashboard columns wire this attribute to each task card's **Edit** action, so you can update records directly from the kanban snapshot without locating a dedicated page.
+- The dialog pre-fills the selected task from the React Query cache and keeps the form in sync with live updates (for example, optimistic writes from other tabs). Title, description, status, priority, due date, and tags are all editable with the same validation logic as task creation.
+- Submitting the form calls `useUpdateTask`, optimistically patches the cache, and surfaces inline validation errors when the API rejects a field. If the task disappears while the dialog is open, it automatically closes and shows a toast explaining the conflict.
+- A subtle "Last updated" hint above the form provides additional context for reviewers. Keyboard focus, escape key handling, and the **Cancel** button mirror the experience provided by the create dialog.
+
+### Dashboard visuals
+
+Links to approved dashboard screenshots/GIFs and Loom walkthroughs will be added after design review.
 
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
@@ -148,4 +230,4 @@ Screenshots of the login flow and protected dashboard live in the design referen
 - DB: Neon or Supabase
 - Email (dev): MailHog; (prod) any free SMTP (e.g., Brevo, Resend, Postmark trial)
 
-**Note:** This scaffold uses an in-memory store in the API for now—wire up Prisma (see PRD) before production.
+**Note:** Task data (including tag assignments) now persists through Prisma. Run `pnpm -C apps/api prisma migrate dev` before exercising the API locally to ensure the task repository has the required tables.
