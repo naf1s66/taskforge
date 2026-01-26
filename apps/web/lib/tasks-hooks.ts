@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import {
   useMutation,
   useQuery,
@@ -10,6 +10,7 @@ import {
   type UseMutationResult,
   type UseQueryOptions,
   type UseQueryResult,
+  type QueryClient,
 } from '@tanstack/react-query';
 import type { ZodIssue } from 'zod';
 
@@ -114,6 +115,10 @@ const taskQueryKeys = {
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
 };
+
+const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
+
+const optimisticIdMapKey = (userKey: string) => [OPTIMISTIC_ID_MAP_SCOPE, userKey] as const;
 
 function stableSerialize(value: unknown): string {
   if (value === undefined) {
@@ -536,6 +541,47 @@ function collectMatchingQueries(
   return touched;
 }
 
+function selectTaskFromCache(
+  queryClient: QueryClient,
+  userScope: string,
+  taskId?: string,
+): TaskListItem | null {
+  if (!taskId) {
+    return null;
+  }
+
+  const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
+  for (const [, data] of candidates) {
+    if (!data) {
+      continue;
+    }
+
+    const match = data.items.find((item) => item.id === taskId);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function selectReplacementTaskId(
+  queryClient: QueryClient,
+  userScope: string,
+  optimisticTask: TaskListItem | null,
+): string | null {
+  if (!optimisticTask?._optimistic) {
+    return null;
+  }
+
+  const mapping = queryClient.getQueryData<Record<string, string>>(optimisticIdMapKey(userScope));
+  if (!mapping) {
+    return null;
+  }
+
+  return mapping[optimisticTask.id] ?? null;
+}
+
 export function useCreateTask(
   options?: UseMutationOptions<TaskRecordDTO, TaskClientError, CreateTaskInput, TaskMutationContext>,
 ): UseTaskMutationResult<TaskRecordDTO, CreateTaskInput> {
@@ -574,6 +620,12 @@ export function useCreateTask(
     },
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
+      if (context?.optimisticTaskId) {
+        queryClient.setQueryData<Record<string, string>>(optimisticIdMapKey(userScope), (previous) => ({
+          ...(previous ?? {}),
+          [context.optimisticTaskId]: taskItem.id,
+        }));
+      }
 
       collectMatchingQueries(queryClient, userScope, (payload, filters) => {
         if (!taskMatchesFilters(taskItem, filters)) {
@@ -610,6 +662,70 @@ export function useCreateTask(
     error: friendlyError,
     rawError: mutation.error,
   };
+}
+
+export function useTaskFromCache(taskId?: string): TaskListItem | null {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+  const stableTaskId = taskId ?? undefined;
+
+  const getSnapshot = useCallback(
+    () => selectTaskFromCache(queryClient, userScope, stableTaskId),
+    [queryClient, userScope, stableTaskId],
+  );
+
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (!stableTaskId) {
+        return () => {};
+      }
+
+      const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+        const key = event.query?.queryKey;
+        if (Array.isArray(key) && key[0] === TASK_QUERY_SCOPE && key[1] === userScope) {
+          onStoreChange();
+        }
+      });
+
+      return unsubscribe;
+    },
+    [queryClient, userScope, stableTaskId],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useTaskReplacementId(optimisticTask: TaskListItem | null): string | null {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+  const stableOptimisticTask = optimisticTask?._optimistic ? optimisticTask : null;
+
+  const getSnapshot = useCallback(
+    () => selectReplacementTaskId(queryClient, userScope, stableOptimisticTask),
+    [queryClient, userScope, stableOptimisticTask],
+  );
+
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (!stableOptimisticTask) {
+        return () => {};
+      }
+
+      const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+        const key = event.query?.queryKey;
+        if (Array.isArray(key) && key[0] === TASK_QUERY_SCOPE && key[1] === userScope) {
+          onStoreChange();
+        }
+      });
+
+      return unsubscribe;
+    },
+    [queryClient, userScope, stableOptimisticTask],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 interface UpdateTaskVariables {

@@ -184,6 +184,13 @@ The UI simply passes these fields to `useTasksQuery`, so anything supported by t
 - Successful submissions optimistically update the task list and surface a toast (`“Task created”`). API or validation errors show inline messages near the fields and emit a destructive toast for additional feedback.
 - Keyboard focus stays trapped within the dialog content, labels/aria descriptions describe each control, and the **Cancel** button or close icon exits without mutating state.
 
+### Task editing dialog
+
+- Any button with `data-task-dialog="edit"` launches the edit modal. The dashboard columns wire this attribute to each task card's **Edit** action, so you can update records directly from the kanban snapshot without locating a dedicated page.
+- The dialog pre-fills the selected task from the React Query cache and keeps the form in sync with live updates (for example, optimistic writes from other tabs). Title, description, status, priority, due date, and tags are all editable with the same validation logic as task creation.
+- Submitting the form calls `useUpdateTask`, optimistically patches the cache, and surfaces inline validation errors when the API rejects a field. If the task disappears while the dialog is open, it automatically closes and shows a toast explaining the conflict.
+- A subtle "Last updated" hint above the form provides additional context for reviewers. Keyboard focus, escape key handling, and the **Cancel** button mirror the experience provided by the create dialog.
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies
   migrations via `prisma migrate deploy` before executing the auth-focused Jest suite in `apps/api`.
