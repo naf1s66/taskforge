@@ -49,6 +49,7 @@ const TaskBoardItemSchema = z.object({
   title: NonEmptyTrimmedString,
   status: TaskStatusSchema,
   priority: TaskPrioritySchema,
+  position: z.number().int().min(0),
   dueDate: NullableDateString,
   tags: z.array(z.string().min(1)).default([]),
   updatedAt: z.string().datetime(),
@@ -87,7 +88,14 @@ const BoardSummarySchema = z.object({
 const BoardResponseSchema = z.object({
   columns: z.array(BoardColumnSchema),
   summary: BoardSummarySchema,
+  updatedAt: z.string().datetime(),
   generatedAt: z.string().datetime(),
+});
+
+const BoardMoveSchema = z.object({
+  taskId: z.string().uuid(),
+  targetStatus: TaskStatusSchema,
+  targetIndex: z.number().int().min(0),
 });
 
 const TaskListResponseSchema = z.object({
@@ -182,6 +190,7 @@ const TaskListQuerySchema = z
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskDeleteResponse = z.infer<typeof TaskDeleteResponseSchema>;
 export type TaskBoardResponse = z.infer<typeof BoardResponseSchema>;
+export type BoardMoveInput = z.infer<typeof BoardMoveSchema>;
 
 export type CreateTaskInput = Omit<TaskDTO, 'id'>;
 export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id'>>;
@@ -594,6 +603,29 @@ export async function getTaskBoard(options?: TaskClientRequestOptions): Promise<
     'v1/tasks/board',
     {
       method: 'GET',
+      schema: BoardResponseSchema,
+    },
+    options,
+  );
+}
+
+export async function moveTaskOnBoard(
+  input: BoardMoveInput,
+  options?: TaskClientRequestOptions,
+): Promise<BoardReadModelDTO> {
+  const parsed = BoardMoveSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new TaskClientError('Board move payload was invalid.', {
+      kind: 'validation',
+      issues: parsed.error.issues,
+    });
+  }
+
+  return requestJson(
+    'v1/tasks/board/move',
+    {
+      method: 'PATCH',
+      body: parsed.data,
       schema: BoardResponseSchema,
     },
     options,

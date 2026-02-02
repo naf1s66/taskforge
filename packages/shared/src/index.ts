@@ -28,6 +28,7 @@ export interface TaskBoardItemDTO {
   title: string;
   status: TaskStatus;
   priority: TaskPriority;
+  position: number;
   dueDate?: string;
   tags: string[];
   updatedAt: string;
@@ -58,7 +59,14 @@ export interface BoardSummaryDTO {
 export interface BoardReadModelDTO {
   columns: BoardColumnDTO[];
   summary: BoardSummaryDTO;
+  updatedAt: string;
   generatedAt: string;
+}
+
+export interface BoardMoveRequestDTO {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
 }
 
 export interface AuthUserDTO {

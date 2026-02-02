@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { getPrismaClient } from '../prisma';
-import { TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
+import { TaskBoardMoveSchema, TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
 import {
   createTaskRepository,
   type TaskCreateInput,
@@ -113,7 +113,37 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
       }
 
       const board = await repository.getTaskBoard(user.id);
+      res.set('ETag', `"${board.updatedAt}"`);
       res.json(board);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/board/move', async (req, res, next) => {
+    const parsed = TaskBoardMoveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await repository.moveTaskOnBoard(user.id, parsed.data);
+      if (result.status === 'not_found') {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (result.status === 'invalid') {
+        return res
+          .status(400)
+          .json({ error: 'Invalid payload', details: { targetIndex: result.message } });
+      }
+
+      res.set('ETag', `"${result.board.updatedAt}"`);
+      res.json(result.board);
     } catch (error) {
       next(error);
     }

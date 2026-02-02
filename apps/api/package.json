@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
-    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "test": "pnpm run prisma:generate && cross-env NODE_ENV=test jest --runInBand",
     "gen:openapi": "tsx src/openapi.export.ts",
     "prisma:generate": "prisma generate"
   },
