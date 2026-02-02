@@ -219,10 +219,14 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
         await lockBoardLanes(tx, userId, [sourceStatus, targetStatus]);
         const sourceTasks = await tx.task.findMany({
           where: { userId, status: sourceStatus },
-          orderBy: [{ boardOrder: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
+          include: taskWithTagsInclude,
         });
 
-        const sourceIds = sourceTasks.map(item => item.id).filter(id => id !== task.id);
+        const sourceIds = sourceTasks
+          .map(toTaskBoardItemDTO)
+          .sort(compareBoardItems)
+          .map(item => item.id)
+          .filter(id => id !== task.id);
 
         if (sourceStatus === targetStatus) {
           if (input.targetIndex > sourceIds.length) {
@@ -249,9 +253,12 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
         const targetTasks = await tx.task.findMany({
           where: { userId, status: targetStatus },
-          orderBy: [{ boardOrder: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
+          include: taskWithTagsInclude,
         });
-        const targetIds = targetTasks.map(item => item.id);
+        const targetIds = targetTasks
+          .map(toTaskBoardItemDTO)
+          .sort(compareBoardItems)
+          .map(item => item.id);
 
         if (input.targetIndex > targetIds.length) {
           return {
@@ -441,6 +448,36 @@ const priorityRank: Record<SharedTaskPriority, number> = {
   LOW: 2,
 };
 
+function compareBoardItems(left: TaskBoardItemDTO, right: TaskBoardItemDTO): number {
+  const positionDelta = left.position - right.position;
+  if (positionDelta !== 0) {
+    return positionDelta;
+  }
+
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
+  const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
+  if (leftDue !== rightDue) {
+    return leftDue - rightDue;
+  }
+
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  const titleDelta = left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
 function buildBoardColumns(tasks: TaskBoardItemDTO[], now: Date): BoardColumnDTO[] {
   const buckets = new Map<SharedTaskStatus, TaskBoardItemDTO[]>();
   for (const { status } of statusOrder) {
@@ -473,33 +510,7 @@ function buildBoardColumns(tasks: TaskBoardItemDTO[], now: Date): BoardColumnDTO
 }
 
 function compareBoardTasks(left: TaskBoardItemDTO, right: TaskBoardItemDTO): number {
-  const positionDelta = left.position - right.position;
-  if (positionDelta !== 0) {
-    return positionDelta;
-  }
-
-  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
-  if (priorityDelta !== 0) {
-    return priorityDelta;
-  }
-
-  const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
-  const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
-  if (leftDue !== rightDue) {
-    return leftDue - rightDue;
-  }
-
-  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
-  if (updatedDelta !== 0) {
-    return updatedDelta;
-  }
-
-  const titleDelta = left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
-  if (titleDelta !== 0) {
-    return titleDelta;
-  }
-
-  return left.id.localeCompare(right.id);
+  return compareBoardItems(left, right);
 }
 
 function summarizeTags(tasks: TaskBoardItemDTO[]): TagSummaryDTO[] {
