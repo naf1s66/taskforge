@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowUpDown,
@@ -16,6 +16,27 @@ import {
   Sparkles,
   Timer,
 } from 'lucide-react';
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { TaskPriority, TaskStatus } from '@taskforge/shared';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -31,7 +52,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTasksQuery, type TaskListItem } from '@/lib/tasks-hooks';
+import { ToastAction } from '@/components/ui/toast';
+import { useToast } from '@/components/ui/use-toast';
+import { useMoveTaskOnBoard, useTasksQuery, type TaskListItem } from '@/lib/tasks-hooks';
 import { cn } from '@/lib/utils';
 
 import type { DashboardUser } from './types';
@@ -51,6 +74,12 @@ const statusMeta: Record<TaskStatus, { title: string; description: string }> = {
     title: 'Done',
     description: 'Shipped work ready to celebrate.',
   },
+};
+
+const statusEmptyCopy: Record<TaskStatus, string> = {
+  TODO: 'No tasks to pick up yet.',
+  IN_PROGRESS: 'Nothing in progress yet.',
+  DONE: 'Nothing completed yet.',
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -91,6 +120,7 @@ const statusFilters: Array<{ value: 'ALL' | TaskStatus; label: string }> = [
 ];
 
 const sortOptions = [
+  { value: 'manual', label: 'Board order' },
   { value: 'recent', label: 'Recently updated' },
   { value: 'dueDate', label: 'Due date' },
   { value: 'priority', label: 'Priority' },
@@ -136,6 +166,8 @@ function sortTasks(tasks: TaskListItem[], sortBy: SortOption): TaskListItem[] {
   const copy = [...tasks];
 
   switch (sortBy) {
+    case 'manual':
+      return copy;
     case 'priority':
       copy.sort((a, b) => priorityWeights[a.priority] - priorityWeights[b.priority]);
       break;
@@ -172,13 +204,250 @@ function sortTasks(tasks: TaskListItem[], sortBy: SortOption): TaskListItem[] {
   return copy;
 }
 
+const columnIdPrefix = 'column-';
+
+type ColumnOrderState = Record<TaskStatus, string[]>;
+
+const emptyColumnOrder: ColumnOrderState = {
+  TODO: [],
+  IN_PROGRESS: [],
+  DONE: [],
+};
+
+function cloneColumnOrder(order: ColumnOrderState): ColumnOrderState {
+  return {
+    TODO: [...order.TODO],
+    IN_PROGRESS: [...order.IN_PROGRESS],
+    DONE: [...order.DONE],
+  };
+}
+
+function areArraysEqual(a: string[], b: string[]) {
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  return a.every((value, index) => value === b[index]);
+}
+
+function getColumnId(status: TaskStatus) {
+  return `${columnIdPrefix}${status}`;
+}
+
+function getStatusFromColumnId(id: string): TaskStatus | null {
+  if (!id.startsWith(columnIdPrefix)) {
+    return null;
+  }
+
+  return id.slice(columnIdPrefix.length) as TaskStatus;
+}
+
+function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }) {
+  return (
+    <Card
+      className={cn(
+        'border-border/60 bg-background/60 shadow-sm transition-colors',
+        dragging ? 'shadow-md ring-2 ring-primary/40' : 'hover:border-border',
+      )}
+    >
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className={cn('uppercase tracking-wide', statusBadgeTone[task.status])}>
+            {statusLabels[task.status]}
+          </Badge>
+          <Badge variant="outline" className={cn('capitalize', priorityBadgeTone[task.priority])}>
+            {priorityLabels[task.priority]}
+          </Badge>
+          {task._optimistic ? (
+            <Badge variant="warning" className="uppercase tracking-wide">
+              Syncing
+            </Badge>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">{task.title}</p>
+            {task.description ? <p className="text-xs text-muted-foreground">{task.description}</p> : null}
+            <p className="text-xs text-muted-foreground">Due {formatDueDate(task.dueDate)}</p>
+          </div>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="gap-2 px-2 text-xs"
+              data-task-dialog="edit"
+              data-task-id={task.id}
+              aria-label={`Edit task ${task.title}`}
+            >
+              <PenSquare className="h-3.5 w-3.5" /> Edit
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SortableTaskCard({ task, columnStatus }: { task: TaskListItem; columnStatus: TaskStatus }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: { status: columnStatus },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <article ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <TaskCard task={task} dragging={isDragging} />
+    </article>
+  );
+}
+
+function BoardColumn({
+  status,
+  meta,
+  tasks,
+  index,
+  dragActive,
+  activeId,
+}: {
+  status: TaskStatus;
+  meta: { title: string; description: string };
+  tasks: TaskListItem[];
+  index: number;
+  dragActive: boolean;
+  activeId: string | null;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: getColumnId(status),
+    data: { status },
+  });
+
+  return (
+    <motion.article
+      key={status}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 * index, duration: 0.4 }}
+      className={cn(
+        'flex flex-col gap-4 rounded-xl border border-border/70 bg-card/50 p-5 shadow-sm backdrop-blur',
+        dragActive ? 'ring-1 ring-border/60' : '',
+      )}
+    >
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-foreground/90">{meta.title}</h3>
+          <Badge variant="muted" className="uppercase tracking-wide">
+            {tasks.length}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">{meta.description}</p>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'space-y-3 rounded-lg border border-dashed border-border/40 bg-background/40 p-3 transition-colors',
+          isOver ? 'border-primary/60 bg-primary/5 ring-2 ring-primary/30' : '',
+        )}
+      >
+        {tasks.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-background/40 px-4 py-6 text-center text-sm text-muted-foreground">
+            {statusEmptyCopy[status]}
+          </div>
+        ) : null}
+        <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <SortableTaskCard key={task.id} task={task} columnStatus={status} />
+          ))}
+        </SortableContext>
+        {dragActive && tasks.length === 0 && activeId ? (
+          <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-6 text-center text-xs text-primary/80">
+            Drop the task here
+          </div>
+        ) : null}
+      </div>
+    </motion.article>
+  );
+}
 export function DashboardContent({ user }: { user: DashboardUser }) {
   const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
-  const [sortBy, setSortBy] = useState<SortOption>('recent');
+  const [sortBy, setSortBy] = useState<SortOption>('manual');
+  const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() => cloneColumnOrder(emptyColumnOrder));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const columnOrderRef = useRef(columnOrder);
+  const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
+  const lastMoveRef = useRef<{ taskId: string; targetStatus: TaskStatus; targetIndex: number } | null>(null);
 
   const tasksQuery = useTasksQuery({ pageSize: 50 });
+  const moveTask = useMoveTaskOnBoard();
+  const { toast } = useToast();
 
-  const sortedTasks = useMemo(() => sortTasks(tasksQuery.tasks, sortBy), [tasksQuery.tasks, sortBy]);
+  useEffect(() => {
+    columnOrderRef.current = columnOrder;
+  }, [columnOrder]);
+
+  const tasksByStatus = useMemo(() => {
+    const grouped: Record<TaskStatus, TaskListItem[]> = {
+      TODO: [],
+      IN_PROGRESS: [],
+      DONE: [],
+    };
+
+    for (const task of tasksQuery.tasks) {
+      grouped[task.status].push(task);
+    }
+
+    return grouped;
+  }, [tasksQuery.tasks]);
+
+  useEffect(() => {
+    setColumnOrder((prev) => {
+      const next: ColumnOrderState = cloneColumnOrder(prev);
+      let changed = false;
+
+      for (const status of statusOrder) {
+        const ids = tasksByStatus[status].map((task) => task.id);
+        const retained = prev[status].filter((id) => ids.includes(id));
+        const additions = ids.filter((id) => !retained.includes(id));
+        const nextOrder = [...retained, ...additions];
+
+        if (!areArraysEqual(nextOrder, prev[status])) {
+          next[status] = nextOrder;
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [tasksByStatus]);
+
+  const orderedTasksByStatus = useMemo(() => {
+    const ordered: Record<TaskStatus, TaskListItem[]> = {
+      TODO: [],
+      IN_PROGRESS: [],
+      DONE: [],
+    };
+
+    for (const status of statusOrder) {
+      if (sortBy !== 'manual') {
+        ordered[status] = sortTasks(tasksByStatus[status], sortBy);
+        continue;
+      }
+
+      const order = columnOrder[status];
+      const tasks = tasksByStatus[status];
+      const taskMap = new Map(tasks.map((task) => [task.id, task]));
+      const orderedTasks = order.map((id) => taskMap.get(id)).filter(Boolean) as TaskListItem[];
+      const missing = tasks.filter((task) => !order.includes(task.id));
+      ordered[status] = [...orderedTasks, ...missing];
+    }
+
+    return ordered;
+  }, [columnOrder, sortBy, tasksByStatus]);
 
   const visibleColumns = useMemo(
     () => {
@@ -187,10 +456,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       return targetStatuses.map((status) => ({
         status,
         meta: statusMeta[status],
-        tasks: sortedTasks.filter((task) => task.status === status),
+        tasks: orderedTasksByStatus[status],
       }));
     },
-    [sortedTasks, statusFilter],
+    [orderedTasksByStatus, statusFilter],
   );
 
   const visibleTaskCount = useMemo(
@@ -209,6 +478,186 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const firstName = user.name?.split(' ')[0] ?? 'there';
 
   const isEmpty = !tasksQuery.isLoading && !tasksQuery.isError && totalTasks === 0;
+  const dragActive = Boolean(activeId);
+
+  const taskMap = useMemo(() => new Map(tasksQuery.tasks.map((task) => [task.id, task])), [tasksQuery.tasks]);
+  const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
+
+  const buildPositionAnnouncement = (taskId: string, status: TaskStatus) => {
+    const tasks = columnOrderRef.current[status];
+    const position = tasks.indexOf(taskId);
+    return position === -1 ? '' : `Position ${position + 1} of ${tasks.length}.`;
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const findStatusForTask = (id: string) => {
+    if (id.startsWith(columnIdPrefix)) {
+      return getStatusFromColumnId(id);
+    }
+
+    for (const status of statusOrder) {
+      if (columnOrderRef.current[status].includes(id)) {
+        return status;
+      }
+    }
+
+    return null;
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const currentId = event.active.id as string;
+    setActiveId(currentId);
+    setSortBy('manual');
+    dragSnapshotRef.current = cloneColumnOrder(columnOrderRef.current);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) {
+      return;
+    }
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    const activeStatus = findStatusForTask(activeId);
+    const overStatus = findStatusForTask(overId);
+
+    if (!activeStatus || !overStatus || activeStatus === overStatus) {
+      return;
+    }
+
+    setColumnOrder((prev) => {
+      const activeItems = prev[activeStatus].filter((id) => id !== activeId);
+      const overItems = [...prev[overStatus]];
+      const overIndex = overId.startsWith(columnIdPrefix) ? overItems.length : overItems.indexOf(overId);
+      const nextIndex = overIndex >= 0 ? overIndex : overItems.length;
+      overItems.splice(nextIndex, 0, activeId);
+
+      const nextOrder = {
+        ...prev,
+        [activeStatus]: activeItems,
+        [overStatus]: overItems,
+      };
+      columnOrderRef.current = nextOrder;
+      return nextOrder;
+    });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    const activeTaskId = active.id as string;
+    setActiveId(null);
+
+    if (!over) {
+      if (dragSnapshotRef.current) {
+        setColumnOrder((prev) => {
+          const next = dragSnapshotRef.current ?? prev;
+          columnOrderRef.current = next;
+          return next;
+        });
+      }
+      dragSnapshotRef.current = null;
+      return;
+    }
+
+    const overId = over.id as string;
+    const activeStatus = findStatusForTask(activeTaskId);
+    const overStatus = findStatusForTask(overId);
+
+    if (!activeStatus || !overStatus) {
+      dragSnapshotRef.current = null;
+      return;
+    }
+
+    let nextOrder = columnOrderRef.current;
+    let targetIndex = nextOrder[overStatus].indexOf(activeTaskId);
+    const initialSnapshot = dragSnapshotRef.current;
+    const initialStatus =
+      initialSnapshot?.TODO.includes(activeTaskId)
+        ? 'TODO'
+        : initialSnapshot?.IN_PROGRESS.includes(activeTaskId)
+          ? 'IN_PROGRESS'
+          : initialSnapshot?.DONE.includes(activeTaskId)
+            ? 'DONE'
+            : null;
+    const initialIndex = initialStatus ? initialSnapshot?.[initialStatus].indexOf(activeTaskId) ?? -1 : -1;
+
+    if (activeStatus === overStatus) {
+      const activeIndex = nextOrder[overStatus].indexOf(activeTaskId);
+      const overIndex = overId.startsWith(columnIdPrefix) ? activeIndex : nextOrder[overStatus].indexOf(overId);
+
+      if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
+        const updated = arrayMove(nextOrder[overStatus], activeIndex, overIndex);
+        targetIndex = updated.indexOf(activeTaskId);
+        setColumnOrder((prev) => {
+          const next = { ...prev, [overStatus]: updated };
+          columnOrderRef.current = next;
+          return next;
+        });
+        nextOrder = { ...nextOrder, [overStatus]: updated };
+      }
+    }
+
+    const hasMoved =
+      activeStatus !== overStatus || (initialStatus === overStatus && initialIndex !== targetIndex);
+
+    if (hasMoved && targetIndex !== -1) {
+      const movePayload = {
+        taskId: activeTaskId,
+        targetStatus: overStatus,
+        targetIndex: Math.max(0, targetIndex),
+      };
+      lastMoveRef.current = movePayload;
+
+      moveTask.mutate(movePayload, {
+        onError: () => {
+          if (dragSnapshotRef.current) {
+            setColumnOrder((prev) => {
+              const next = dragSnapshotRef.current ?? prev;
+              columnOrderRef.current = next;
+              return next;
+            });
+          }
+
+          toast({
+            variant: 'destructive',
+            title: 'Unable to move task',
+            description: 'We could not save that move. Please try again.',
+            action: (
+              <ToastAction
+                altText="Retry move"
+                onClick={() => {
+                  if (lastMoveRef.current) {
+                    moveTask.mutate(lastMoveRef.current);
+                  }
+                }}
+              >
+                Retry
+              </ToastAction>
+            ),
+          });
+        },
+      });
+    }
+
+    dragSnapshotRef.current = null;
+  };
+
+  const handleDragCancel = () => {
+    if (dragSnapshotRef.current) {
+      setColumnOrder((prev) => {
+        const next = dragSnapshotRef.current ?? prev;
+        columnOrderRef.current = next;
+        return next;
+      });
+    }
+    dragSnapshotRef.current = null;
+    setActiveId(null);
+  };
 
   return (
     <div className="space-y-10">
@@ -421,82 +870,79 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         ) : null}
 
         {!tasksQuery.isLoading && !isEmpty ? (
-          <section className="grid gap-4 md:grid-cols-3">
-            {visibleColumns.map((column, index) => (
-              <motion.article
-                key={column.status}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 * index, duration: 0.4 }}
-                className="flex flex-col gap-4 rounded-xl border border-border/70 bg-card/50 p-5 shadow-sm backdrop-blur"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-semibold text-foreground/90">{column.meta.title}</h3>
-                    <Badge variant="muted" className="uppercase tracking-wide">
-                      {column.tasks.length}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{column.meta.description}</p>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+            accessibility={{
+              screenReaderInstructions: {
+                draggable:
+                  'To pick up a task, press space or enter. Use arrow keys to move between columns. Press space or enter again to drop.',
+              },
+              announcements: {
+                onDragStart: ({ active }) => {
+                  const task = taskMap.get(active.id as string);
+                  const status = findStatusForTask(active.id as string);
+                  if (!task || !status) {
+                    return 'Task picked up.';
+                  }
+                  return `Picked up ${task.title}. ${statusLabels[status]} lane. ${buildPositionAnnouncement(
+                    task.id,
+                    status,
+                  )}`;
+                },
+                onDragOver: ({ active, over }) => {
+                  if (!over) {
+                    return 'Dragging task.';
+                  }
+                  const status = findStatusForTask(over.id as string);
+                  if (!status) {
+                    return 'Dragging task.';
+                  }
+                  const task = taskMap.get(active.id as string);
+                  return task
+                    ? `Moving ${task.title} over ${statusLabels[status]} lane.`
+                    : `Moving over ${statusLabels[status]} lane.`;
+                },
+                onDragEnd: ({ active, over }) => {
+                  if (!over) {
+                    return 'Task dropped.';
+                  }
+                  const task = taskMap.get(active.id as string);
+                  const status = findStatusForTask(over.id as string);
+                  if (!task || !status) {
+                    return 'Task dropped.';
+                  }
+                  return `Dropped ${task.title} in ${statusLabels[status]} lane.`;
+                },
+                onDragCancel: () => 'Task movement cancelled.',
+              },
+            }}
+          >
+            <section className="grid gap-4 md:grid-cols-3">
+              {visibleColumns.map((column, index) => (
+                <BoardColumn
+                  key={column.status}
+                  status={column.status}
+                  meta={column.meta}
+                  tasks={column.tasks}
+                  index={index}
+                  dragActive={dragActive}
+                  activeId={activeId}
+                />
+              ))}
+            </section>
+            <DragOverlay>
+              {activeTask ? (
+                <div className="w-[320px] max-w-full">
+                  <TaskCard task={activeTask} dragging />
                 </div>
-                <div className="space-y-3">
-                  {column.tasks.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/60 bg-background/40 px-4 py-6 text-center text-sm text-muted-foreground">
-                      No tasks in this status yet.
-                    </div>
-                  ) : null}
-                  {column.tasks.map((task) => (
-                    <article
-                      key={task.id}
-                      className="space-y-3 rounded-lg border border-border/60 bg-background/60 px-4 py-3 shadow-sm transition-colors hover:border-border"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={cn('uppercase tracking-wide', statusBadgeTone[task.status])}
-                        >
-                          {statusLabels[task.status]}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className={cn('capitalize', priorityBadgeTone[task.priority])}
-                        >
-                          {priorityLabels[task.priority]}
-                        </Badge>
-                        {task._optimistic ? (
-                          <Badge variant="warning" className="uppercase tracking-wide">
-                            Syncing
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium text-foreground">{task.title}</p>
-                          {task.description ? (
-                            <p className="text-xs text-muted-foreground">{task.description}</p>
-                          ) : null}
-                          <p className="text-xs text-muted-foreground">Due {formatDueDate(task.dueDate)}</p>
-                        </div>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="gap-2 px-2 text-xs"
-                            data-task-dialog="edit"
-                            data-task-id={task.id}
-                            aria-label={`Edit task ${task.title}`}
-                          >
-                            <PenSquare className="h-3.5 w-3.5" /> Edit
-                          </Button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </motion.article>
-            ))}
-          </section>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         ) : null}
       </section>
 

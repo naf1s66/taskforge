@@ -8,6 +8,18 @@ import { getApiUrl, SESSION_COOKIE_NAME } from './env';
 
 export type AuthenticatedUser = NonNullable<Session['user']>;
 
+const devAuthBypassEnabled =
+  process.env.NODE_ENV !== 'production' && process.env.TF_DEV_BYPASS_AUTH === 'true';
+
+function getDevBypassUser(): AuthenticatedUser {
+  return {
+    id: 'dev-user',
+    name: 'TaskForge Demo',
+    email: 'demo@taskforge.dev',
+    image: null,
+  };
+}
+
 async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
   const cookieStore = cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
@@ -51,6 +63,10 @@ async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
 }
 
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
+  if (devAuthBypassEnabled) {
+    return getDevBypassUser();
+  }
+
   const session = await auth();
   if (session?.user) {
     return session.user as AuthenticatedUser;

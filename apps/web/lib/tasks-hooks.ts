@@ -18,18 +18,22 @@ import {
   createTask,
   deleteTask,
   listTasks,
+  moveTaskOnBoard,
   updateTask,
   TaskClientError,
 } from './tasks-client';
 import type {
+  BoardMoveInput,
   CreateTaskInput,
   TaskClientErrorKind,
   TaskListQuery,
   TaskListResponse,
+  TaskBoardResponse,
   TaskRecordDTO,
   UpdateTaskInput,
 } from './tasks-client';
 import { useAuth } from './use-auth';
+import type { TaskStatus } from '@taskforge/shared';
 
 export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean };
 
@@ -779,6 +783,80 @@ export function useUpdateTask(
 
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
+
+      options?.onSuccess?.(result, variables, context);
+    },
+    onSettled: (result, error, variables, context) => {
+      options?.onSettled?.(result, error, variables, context);
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+    },
+    ...options,
+  });
+
+  const friendlyError = toTaskOperationError(mutation.error);
+
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    reset: mutation.reset,
+    status: mutation.status,
+    isPending: mutation.isPending,
+    isSuccess: mutation.isSuccess,
+    isError: mutation.isError,
+    data: mutation.data,
+    variables: mutation.variables,
+    error: friendlyError,
+    rawError: mutation.error,
+  };
+}
+
+interface MoveTaskVariables extends BoardMoveInput {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
+}
+
+export function useMoveTaskOnBoard(
+  options?: UseMutationOptions<TaskBoardResponse, TaskClientError, MoveTaskVariables, TaskMutationContext>,
+): UseTaskMutationResult<TaskBoardResponse, MoveTaskVariables> {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+
+  const mutation = useMutation({
+    mutationFn: (input) => moveTaskOnBoard(input),
+    onMutate: async ({ taskId, targetStatus }) => {
+      await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+
+      const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) =>
+        updateTaskInList(payload, taskId, {
+          status: targetStatus,
+          updatedAt: new Date().toISOString(),
+          _optimistic: true,
+        }),
+      );
+
+      return { touchedQueries, optimisticTaskId: taskId } satisfies TaskMutationContext;
+    },
+    onError: (error, variables, context) => {
+      if (context) {
+        for (const [key, snapshot] of context.touchedQueries) {
+          queryClient.setQueryData(key, snapshot);
+        }
+      }
+
+      options?.onError?.(error, variables, context);
+    },
+    onSuccess: (result, variables, context) => {
+      if (context?.optimisticTaskId) {
+        collectMatchingQueries(queryClient, userScope, (payload) =>
+          updateTaskInList(payload, context.optimisticTaskId as string, {
+            _optimistic: false,
+            status: variables.targetStatus,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
+      }
 
       options?.onSuccess?.(result, variables, context);
     },
