@@ -58,8 +58,16 @@ import { useMoveTaskOnBoard, useTaskBoardQuery, useTasksQuery, type TaskListItem
 import { cn } from '@/lib/utils';
 
 import type { DashboardUser } from './types';
-
-const statusOrder: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
+import {
+  areArraysEqual,
+  cloneColumnOrder,
+  columnIdPrefix,
+  emptyColumnOrder,
+  findTaskStatusInOrder,
+  getStatusFromColumnId,
+  type ColumnOrderState,
+  statusOrder,
+} from './board-order-utils';
 
 const statusMeta: Record<TaskStatus, { title: string; description: string }> = {
   TODO: {
@@ -204,44 +212,6 @@ function sortTasks(tasks: TaskListItem[], sortBy: SortOption): TaskListItem[] {
   return copy;
 }
 
-const columnIdPrefix = 'column-';
-
-type ColumnOrderState = Record<TaskStatus, string[]>;
-
-const emptyColumnOrder: ColumnOrderState = {
-  TODO: [],
-  IN_PROGRESS: [],
-  DONE: [],
-};
-
-function cloneColumnOrder(order: ColumnOrderState): ColumnOrderState {
-  return {
-    TODO: [...order.TODO],
-    IN_PROGRESS: [...order.IN_PROGRESS],
-    DONE: [...order.DONE],
-  };
-}
-
-function areArraysEqual(a: string[], b: string[]) {
-  if (a.length !== b.length) {
-    return false;
-  }
-
-  return a.every((value, index) => value === b[index]);
-}
-
-function getColumnId(status: TaskStatus) {
-  return `${columnIdPrefix}${status}`;
-}
-
-function getStatusFromColumnId(id: string): TaskStatus | null {
-  if (!id.startsWith(columnIdPrefix)) {
-    return null;
-  }
-
-  return id.slice(columnIdPrefix.length) as TaskStatus;
-}
-
 function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }) {
   return (
     <Card
@@ -349,6 +319,8 @@ function BoardColumn({
       </div>
       <div
         ref={setNodeRef}
+        role="region"
+        aria-label={`${meta.title} drop zone`}
         className={cn(
           'space-y-3 rounded-lg border border-dashed border-border/40 bg-background/40 p-3 transition-colors',
           isOver ? 'border-primary/60 bg-primary/5 ring-2 ring-primary/30' : '',
@@ -536,16 +508,14 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       return getStatusFromColumnId(id);
     }
 
-    for (const status of statusOrder) {
-      if (columnOrderRef.current[status].includes(id)) {
-        return status;
-      }
-    }
-
-    return null;
+    return findTaskStatusInOrder(columnOrderRef.current, id);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (moveTask.isPending) {
+      return;
+    }
+
     const currentId = event.active.id as string;
     setActiveId(currentId);
     setSortBy('manual');
@@ -611,14 +581,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
 
     const initialSnapshot = dragSnapshotRef.current;
-    const initialStatus =
-      initialSnapshot?.TODO.includes(activeTaskId)
-        ? 'TODO'
-        : initialSnapshot?.IN_PROGRESS.includes(activeTaskId)
-          ? 'IN_PROGRESS'
-          : initialSnapshot?.DONE.includes(activeTaskId)
-            ? 'DONE'
-            : null;
+    const initialStatus = initialSnapshot ? findTaskStatusInOrder(initialSnapshot, activeTaskId) : null;
     const sourceStatus = initialStatus ?? activeStatus;
     const destinationStatus = overStatus;
     const initialIndex = sourceStatus ? initialSnapshot?.[sourceStatus].indexOf(activeTaskId) ?? -1 : -1;
@@ -1002,3 +965,4 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     </div>
   );
 }
+

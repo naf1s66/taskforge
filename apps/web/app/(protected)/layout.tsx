@@ -4,10 +4,10 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server-auth';
 import { SESSION_COOKIE_NAME } from '@/lib/env';
 import { isSessionTokenExpired } from '@/lib/session-bridge';
+import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  const devAuthBypassEnabled =
-    process.env.NODE_ENV !== 'production' && process.env.TF_DEV_BYPASS_AUTH === 'true';
+  const devAuthBypassEnabled = isDevAuthBypassEnabled();
 
   if (devAuthBypassEnabled) {
     return <>{children}</>;

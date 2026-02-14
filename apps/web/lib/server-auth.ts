@@ -5,11 +5,15 @@ import { cookies } from 'next/headers';
 
 import { auth } from './auth';
 import { getApiUrl, SESSION_COOKIE_NAME } from './env';
+import { isDevAuthBypassEnabled } from './dev-auth-bypass';
 
 export type AuthenticatedUser = NonNullable<Session['user']>;
 
-const devAuthBypassEnabled =
-  process.env.NODE_ENV !== 'production' && process.env.TF_DEV_BYPASS_AUTH === 'true';
+const devAuthBypassEnabled = isDevAuthBypassEnabled();
+
+if (devAuthBypassEnabled) {
+  console.warn('[auth] TF_DEV_BYPASS_AUTH is enabled. Do not use in production.');
+}
 
 function getDevBypassUser(): AuthenticatedUser {
   return {
