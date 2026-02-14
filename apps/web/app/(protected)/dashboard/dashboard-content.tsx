@@ -611,8 +611,6 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       return;
     }
 
-    let nextOrder = columnOrderRef.current;
-    let targetIndex = nextOrder[overStatus].indexOf(activeTaskId);
     const initialSnapshot = dragSnapshotRef.current;
     const initialStatus =
       initialSnapshot?.TODO.includes(activeTaskId)
@@ -622,31 +620,37 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
           : initialSnapshot?.DONE.includes(activeTaskId)
             ? 'DONE'
             : null;
-    const initialIndex = initialStatus ? initialSnapshot?.[initialStatus].indexOf(activeTaskId) ?? -1 : -1;
+    const sourceStatus = initialStatus ?? activeStatus;
+    const destinationStatus = overStatus;
+    const initialIndex = sourceStatus ? initialSnapshot?.[sourceStatus].indexOf(activeTaskId) ?? -1 : -1;
 
-    if (activeStatus === overStatus) {
-      const activeIndex = nextOrder[overStatus].indexOf(activeTaskId);
-      const overIndex = overId.startsWith(columnIdPrefix) ? activeIndex : nextOrder[overStatus].indexOf(overId);
+    let nextOrder = columnOrderRef.current;
+    let targetIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
+
+    if (sourceStatus === destinationStatus) {
+      const activeIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
+      const overIndex =
+        overId.startsWith(columnIdPrefix) ? activeIndex : nextOrder[destinationStatus].indexOf(overId);
 
       if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
-        const updated = arrayMove(nextOrder[overStatus], activeIndex, overIndex);
+        const updated = arrayMove(nextOrder[destinationStatus], activeIndex, overIndex);
         targetIndex = updated.indexOf(activeTaskId);
         setColumnOrder((prev) => {
-          const next = { ...prev, [overStatus]: updated };
+          const next = { ...prev, [destinationStatus]: updated };
           columnOrderRef.current = next;
           return next;
         });
-        nextOrder = { ...nextOrder, [overStatus]: updated };
+        nextOrder = { ...nextOrder, [destinationStatus]: updated };
       }
     }
 
     const hasMoved =
-      activeStatus !== overStatus || (initialStatus === overStatus && initialIndex !== targetIndex);
+      sourceStatus !== destinationStatus || (sourceStatus === destinationStatus && initialIndex !== targetIndex);
 
     if (hasMoved && targetIndex !== -1) {
       const movePayload = {
         taskId: activeTaskId,
-        targetStatus: overStatus,
+        targetStatus: destinationStatus,
         targetIndex: Math.max(0, targetIndex),
       };
       lastMoveRef.current = movePayload;
