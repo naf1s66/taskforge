@@ -861,6 +861,7 @@ export function useUpdateTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: ({ id, input }) => updateTask(id, input),
@@ -1033,6 +1034,7 @@ export function useDeleteTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: ({ id }) => deleteTask(id),
