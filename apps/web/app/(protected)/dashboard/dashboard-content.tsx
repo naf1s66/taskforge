@@ -646,6 +646,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const hasMoved =
       sourceStatus !== destinationStatus || (sourceStatus === destinationStatus && initialIndex !== targetIndex);
 
+    let clearSnapshotAfterDragEnd = true;
+
     if (hasMoved && targetIndex !== -1) {
       const movePayload = {
         taskId: activeTaskId,
@@ -654,13 +656,15 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       };
       lastMoveRef.current = movePayload;
 
+      const rollbackSnapshot = dragSnapshotRef.current ? cloneColumnOrder(dragSnapshotRef.current) : null;
+      clearSnapshotAfterDragEnd = false;
+
       moveTask.mutate(movePayload, {
         onError: () => {
-          if (dragSnapshotRef.current) {
-            setColumnOrder((prev) => {
-              const next = dragSnapshotRef.current ?? prev;
-              columnOrderRef.current = next;
-              return next;
+          if (rollbackSnapshot) {
+            setColumnOrder(() => {
+              columnOrderRef.current = rollbackSnapshot;
+              return rollbackSnapshot;
             });
           }
 
@@ -682,10 +686,15 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             ),
           });
         },
+        onSettled: () => {
+          dragSnapshotRef.current = null;
+        },
       });
     }
 
-    dragSnapshotRef.current = null;
+    if (clearSnapshotAfterDragEnd) {
+      dragSnapshotRef.current = null;
+    }
   };
 
   const handleDragCancel = () => {
