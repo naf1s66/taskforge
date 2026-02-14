@@ -63,6 +63,7 @@ type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
 interface TaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
+  boardSnapshot?: TaskBoardResponse;
 }
 
 export interface TaskOperationError {
@@ -387,6 +388,40 @@ function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
     ...list,
     items: nextItems,
     total: Math.max(0, list.total - 1),
+  };
+}
+
+function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({ ...column, tasks: [...column.tasks] }));
+  let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
+
+  for (const column of columns) {
+    const index = column.tasks.findIndex((task) => task.id === input.taskId);
+    if (index !== -1) {
+      const [task] = column.tasks.splice(index, 1);
+      movedTask = { ...task, status: input.targetStatus };
+      column.total = column.tasks.length;
+      break;
+    }
+  }
+
+  if (!movedTask) {
+    return board;
+  }
+
+  const targetColumn = columns.find((column) => column.status === input.targetStatus);
+  if (!targetColumn) {
+    return board;
+  }
+
+  const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
+  targetColumn.tasks.splice(insertIndex, 0, movedTask);
+  targetColumn.total = targetColumn.tasks.length;
+
+  return {
+    ...board,
+    columns,
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -848,6 +883,10 @@ export function useUpdateTask(
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
+        }
       }
 
       options?.onError?.(error, variables, context);
@@ -904,7 +943,8 @@ export function useMoveTaskOnBoard(
 
   const mutation = useMutation({
     mutationFn: (input) => moveTaskOnBoard(input),
-    onMutate: async ({ taskId, targetStatus }) => {
+    onMutate: async (variables) => {
+      const { taskId, targetStatus } = variables;
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) =>
@@ -915,12 +955,22 @@ export function useMoveTaskOnBoard(
         }),
       );
 
-      return { touchedQueries, optimisticTaskId: taskId } satisfies TaskMutationContext;
+      const boardKey = taskQueryKeys.board(userScope);
+      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+      if (boardSnapshot) {
+        queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
+      }
+
+      return { touchedQueries, optimisticTaskId: taskId, boardSnapshot } satisfies TaskMutationContext;
     },
     onError: (error, variables, context) => {
       if (context) {
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
+        }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
         }
       }
 
@@ -936,6 +986,8 @@ export function useMoveTaskOnBoard(
           }),
         );
       }
+
+      queryClient.setQueryData(taskQueryKeys.board(userScope), result);
 
       options?.onSuccess?.(result, variables, context);
     },
@@ -990,6 +1042,10 @@ export function useDeleteTask(
       if (context) {
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
+        }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
         }
       }
 

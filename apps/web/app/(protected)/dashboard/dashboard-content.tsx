@@ -533,7 +533,25 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const activeStatus = findStatusForTask(activeId);
     const overStatus = findStatusForTask(overId);
 
-    if (!activeStatus || !overStatus || activeStatus === overStatus) {
+    if (!activeStatus || !overStatus) {
+      return;
+    }
+
+    if (activeStatus === overStatus) {
+      setColumnOrder((prev) => {
+        const items = prev[overStatus];
+        const activeIndex = items.indexOf(activeId);
+        const overIndex = overId.startsWith(columnIdPrefix) ? items.length - 1 : items.indexOf(overId);
+
+        if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+          return prev;
+        }
+
+        const updated = arrayMove(items, activeIndex, overIndex);
+        const nextOrder = { ...prev, [overStatus]: updated };
+        columnOrderRef.current = nextOrder;
+        return nextOrder;
+      });
       return;
     }
 
