@@ -419,10 +419,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       let changed = false;
 
       for (const status of statusOrder) {
-        const ids = tasksByStatus[status].map((task) => task.id);
-        const retained = prev[status].filter((id) => ids.includes(id));
-        const additions = ids.filter((id) => !retained.includes(id));
-        const nextOrder = [...retained, ...additions];
+        const visibleIds = tasksByStatus[status].map((task) => task.id);
+        const baseOrder = boardOrder?.[status] ?? prev[status];
+        const additions = visibleIds.filter((id) => !baseOrder.includes(id));
+        const nextOrder = [...baseOrder, ...additions];
 
         if (!areArraysEqual(nextOrder, prev[status])) {
           next[status] = nextOrder;
@@ -432,7 +432,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
       return changed ? next : prev;
     });
-  }, [tasksByStatus]);
+  }, [boardOrder, tasksByStatus]);
 
   const orderedTasksByStatus = useMemo(() => {
     const ordered: Record<TaskStatus, TaskListItem[]> = {
