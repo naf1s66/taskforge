@@ -4,15 +4,8 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server-auth';
 import { SESSION_COOKIE_NAME } from '@/lib/env';
 import { isSessionTokenExpired } from '@/lib/session-bridge';
-import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  const devAuthBypassEnabled = isDevAuthBypassEnabled();
-
-  if (devAuthBypassEnabled) {
-    return <>{children}</>;
-  }
-
   const headerList = headers();
   const forwardedUrl = headerList.get('x-forwarded-url');
   const invokePath = headerList.get('x-invoke-path');
