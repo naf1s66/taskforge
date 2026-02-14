@@ -414,9 +414,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
       for (const status of statusOrder) {
         const serverIds = boardOrder[status];
-        const retained = prev[status].filter((id) => serverIds.includes(id));
-        const additions = serverIds.filter((id) => !retained.includes(id));
-        const merged = [...retained, ...additions];
+        const extras = prev[status].filter((id) => !serverIds.includes(id));
+        const merged = [...serverIds, ...extras];
 
         if (!areArraysEqual(merged, prev[status])) {
           next[status] = merged;
