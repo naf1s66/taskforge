@@ -893,7 +893,7 @@ export function useUpdateTask(
         }
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context);
     },
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
@@ -906,13 +906,13 @@ export function useUpdateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
@@ -944,6 +944,7 @@ export function useMoveTaskOnBoard(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onMutate, onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: (input) => moveTaskOnBoard(input),
@@ -965,7 +966,9 @@ export function useMoveTaskOnBoard(
         queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
       }
 
-      return { touchedQueries, optimisticTaskId: taskId, boardSnapshot } satisfies TaskMutationContext;
+      const context = { touchedQueries, optimisticTaskId: taskId, boardSnapshot } satisfies TaskMutationContext;
+      await onMutate?.(variables);
+      return context;
     },
     onError: (error, variables, context) => {
       if (context) {
@@ -978,7 +981,7 @@ export function useMoveTaskOnBoard(
         }
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context);
     },
     onSuccess: (result, variables, context) => {
       if (context?.optimisticTaskId) {
@@ -993,13 +996,13 @@ export function useMoveTaskOnBoard(
 
       queryClient.setQueryData(taskQueryKeys.board(userScope), result);
 
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
@@ -1053,16 +1056,16 @@ export function useDeleteTask(
         }
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context);
     },
     onSuccess: (result, variables, context) => {
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);

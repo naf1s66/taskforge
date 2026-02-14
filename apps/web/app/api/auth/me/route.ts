@@ -2,6 +2,8 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
+import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
+import { getCurrentUser } from '@/lib/server-auth';
 
 interface ApiMeResponse {
   user: { id: string; email: string | null; createdAt?: string } | null;
@@ -12,6 +14,18 @@ export async function GET() {
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
 
   if (!sessionCookie?.value) {
+    if (isDevAuthBypassEnabled()) {
+      const bypassUser = await getCurrentUser();
+      if (bypassUser) {
+        return NextResponse.json({
+          user: {
+            id: bypassUser.id,
+            email: bypassUser.email,
+          },
+        } satisfies ApiMeResponse);
+      }
+    }
+
     return NextResponse.json({ user: null } satisfies ApiMeResponse);
   }
 
