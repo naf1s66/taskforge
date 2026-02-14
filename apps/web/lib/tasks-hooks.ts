@@ -18,6 +18,7 @@ import {
   createTask,
   deleteTask,
   listTasks,
+  getTaskBoard,
   moveTaskOnBoard,
   updateTask,
   TaskClientError,
@@ -44,13 +45,20 @@ export interface TaskListData extends Omit<TaskListResponse, 'items'> {
 type TaskQueryFnData = TaskListData;
 
 type TaskQueryKey = ReturnType<typeof taskQueryKeys.list>;
+type TaskBoardQueryKey = ReturnType<typeof taskQueryKeys.board>;
 
 type TaskQueryOptions = Omit<
   UseQueryOptions<TaskQueryFnData, TaskClientError, TaskQueryFnData, TaskQueryKey>,
   'queryKey' | 'queryFn'
 >;
 
+type TaskBoardQueryOptions = Omit<
+  UseQueryOptions<TaskBoardResponse, TaskClientError, TaskBoardResponse, TaskBoardQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
 type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
+type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
 
 interface TaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
@@ -78,6 +86,20 @@ export interface UseTasksQueryResult {
   fetchStatus: TaskListQueryResult['fetchStatus'];
   refetch: TaskListQueryResult['refetch'];
   queryKey: TaskQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
+export interface UseTaskBoardQueryResult {
+  data: TaskBoardResponse | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TaskBoardQueryResult['status'];
+  fetchStatus: TaskBoardQueryResult['fetchStatus'];
+  refetch: TaskBoardQueryResult['refetch'];
+  queryKey: TaskBoardQueryKey;
   error: TaskOperationError | null;
   rawError: unknown;
 }
@@ -118,6 +140,7 @@ const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
+  board: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
 };
 
 const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
@@ -487,6 +510,62 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
   return {
     data: query.data,
     tasks: query.data?.items ?? [],
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
+export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoardQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(() => taskQueryKeys.board(userScope), [userScope]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => getTaskBoard(),
+    staleTime: 15_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
     isLoading: shouldDelayForAuth || query.isLoading,
     isFetching: shouldDelayForAuth || query.isFetching,
     isError: query.isError,

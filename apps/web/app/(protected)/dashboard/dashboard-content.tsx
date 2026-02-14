@@ -54,7 +54,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/components/ui/use-toast';
-import { useMoveTaskOnBoard, useTasksQuery, type TaskListItem } from '@/lib/tasks-hooks';
+import { useMoveTaskOnBoard, useTaskBoardQuery, useTasksQuery, type TaskListItem } from '@/lib/tasks-hooks';
 import { cn } from '@/lib/utils';
 
 import type { DashboardUser } from './types';
@@ -383,12 +383,50 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const lastMoveRef = useRef<{ taskId: string; targetStatus: TaskStatus; targetIndex: number } | null>(null);
 
   const tasksQuery = useTasksQuery({ pageSize: 50 });
+  const boardQuery = useTaskBoardQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
 
   useEffect(() => {
     columnOrderRef.current = columnOrder;
   }, [columnOrder]);
+
+  const boardOrder = useMemo(() => {
+    if (!boardQuery.data) {
+      return null;
+    }
+
+    const next = cloneColumnOrder(emptyColumnOrder);
+    for (const column of boardQuery.data.columns) {
+      next[column.status] = column.tasks.map((task) => task.id);
+    }
+    return next;
+  }, [boardQuery.data]);
+
+  useEffect(() => {
+    if (!boardOrder || activeId) {
+      return;
+    }
+
+    setColumnOrder((prev) => {
+      const next = cloneColumnOrder(prev);
+      let changed = false;
+
+      for (const status of statusOrder) {
+        const serverIds = boardOrder[status];
+        const retained = prev[status].filter((id) => serverIds.includes(id));
+        const additions = serverIds.filter((id) => !retained.includes(id));
+        const merged = [...retained, ...additions];
+
+        if (!areArraysEqual(merged, prev[status])) {
+          next[status] = merged;
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [activeId, boardOrder]);
 
   const tasksByStatus = useMemo(() => {
     const grouped: Record<TaskStatus, TaskListItem[]> = {
