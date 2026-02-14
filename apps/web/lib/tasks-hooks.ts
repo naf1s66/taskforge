@@ -244,6 +244,10 @@ function extractFiltersFromKey(queryKey: QueryKey): NormalizedTaskListFilters | 
   return undefined;
 }
 
+function isTaskListQueryKey(queryKey: QueryKey, userScope: string): boolean {
+  return Array.isArray(queryKey) && queryKey[0] === TASK_QUERY_SCOPE && queryKey[1] === userScope && queryKey[2] === 'list';
+}
+
 function createTaskClientErrorMessage(error: TaskClientError): string {
   switch (error.kind) {
     case 'validation':
@@ -643,7 +647,7 @@ function collectMatchingQueries(
   const touched: Array<[QueryKey, TaskListData | undefined]> = [];
 
   for (const [key, data] of candidates) {
-    if (!data) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
@@ -669,8 +673,8 @@ function selectTaskFromCache(
   }
 
   const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
-  for (const [, data] of candidates) {
-    if (!data) {
+  for (const [key, data] of candidates) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
