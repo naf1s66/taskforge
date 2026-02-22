@@ -430,7 +430,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
       for (const status of statusOrder) {
         const visibleIds = tasksByStatus[status].map((task) => task.id);
-        const baseOrder = boardOrder?.[status] ?? prev[status];
+        const baseOrder = boardOrder?.[status] ?? prev[status].filter((id) => visibleIds.includes(id));
         const additions = visibleIds.filter((id) => !baseOrder.includes(id));
         const nextOrder = [...baseOrder, ...additions];
 
