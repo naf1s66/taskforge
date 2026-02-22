@@ -4,6 +4,10 @@ export const statusOrder: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
 
 export const columnIdPrefix = 'column-';
 
+export function getColumnId(status: TaskStatus): string {
+  return `${columnIdPrefix}${status}`;
+}
+
 export type ColumnOrderState = Record<TaskStatus, string[]>;
 
 export const emptyColumnOrder: ColumnOrderState = {
