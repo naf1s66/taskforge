@@ -261,9 +261,11 @@ function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }
 }
 
 function SortableTaskCard({ task, columnStatus }: { task: TaskListItem; columnStatus: TaskStatus }) {
+  const isOptimistic = Boolean(task._optimistic);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { status: columnStatus },
+    disabled: isOptimistic,
   });
 
   const style = {
@@ -272,7 +274,14 @@ function SortableTaskCard({ task, columnStatus }: { task: TaskListItem; columnSt
   };
 
   return (
-    <article ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <article
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      aria-disabled={isOptimistic}
+      className={cn(isOptimistic ? 'cursor-not-allowed opacity-90' : 'cursor-grab active:cursor-grabbing')}
+    >
       <TaskCard task={task} dragging={isDragging} />
     </article>
   );

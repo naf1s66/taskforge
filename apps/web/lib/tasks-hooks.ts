@@ -953,13 +953,25 @@ export function useMoveTaskOnBoard(
       const { taskId, targetStatus } = variables;
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
 
-      const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) =>
-        updateTaskInList(payload, taskId, {
+      const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+        const existing = payload.items.find((item) => item.id === taskId);
+        if (!existing) {
+          return payload;
+        }
+
+        const movedTask: TaskListItem = {
+          ...existing,
           status: targetStatus,
           updatedAt: new Date().toISOString(),
           _optimistic: true,
-        }),
-      );
+        };
+
+        if (!taskMatchesFilters(movedTask, filters)) {
+          return removeTaskFromList(payload, taskId);
+        }
+
+        return replaceTaskInList(payload, taskId, movedTask);
+      });
 
       const boardKey = taskQueryKeys.board(userScope);
       const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
@@ -986,13 +998,25 @@ export function useMoveTaskOnBoard(
     },
     onSuccess: (result, variables, context) => {
       if (context?.optimisticTaskId) {
-        collectMatchingQueries(queryClient, userScope, (payload) =>
-          updateTaskInList(payload, context.optimisticTaskId as string, {
+        collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+          const existing = payload.items.find((item) => item.id === context.optimisticTaskId);
+          if (!existing) {
+            return payload;
+          }
+
+          const movedTask: TaskListItem = {
+            ...existing,
             _optimistic: false,
             status: variables.targetStatus,
             updatedAt: new Date().toISOString(),
-          }),
-        );
+          };
+
+          if (!taskMatchesFilters(movedTask, filters)) {
+            return removeTaskFromList(payload, context.optimisticTaskId as string);
+          }
+
+          return updateTaskInList(payload, context.optimisticTaskId as string, movedTask);
+        });
       }
 
       queryClient.setQueryData(taskQueryKeys.board(userScope), result);
