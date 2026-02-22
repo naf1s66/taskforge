@@ -418,12 +418,47 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       DONE: [],
     };
 
+    if (boardQuery.data) {
+      const detailedTaskMap = new Map(tasksQuery.tasks.map((task) => [task.id, task]));
+      const seen = new Set<string>();
+
+      for (const column of boardQuery.data.columns) {
+        for (const boardTask of column.tasks) {
+          const detailed = detailedTaskMap.get(boardTask.id);
+          if (detailed) {
+            grouped[column.status].push(detailed);
+          } else {
+            grouped[column.status].push({
+              id: boardTask.id,
+              title: boardTask.title,
+              description: undefined,
+              status: boardTask.status,
+              priority: boardTask.priority,
+              dueDate: boardTask.dueDate,
+              tags: boardTask.tags,
+              createdAt: boardTask.updatedAt,
+              updatedAt: boardTask.updatedAt,
+            });
+          }
+          seen.add(boardTask.id);
+        }
+      }
+
+      for (const task of tasksQuery.tasks) {
+        if (!seen.has(task.id)) {
+          grouped[task.status].push(task);
+        }
+      }
+
+      return grouped;
+    }
+
     for (const task of tasksQuery.tasks) {
       grouped[task.status].push(task);
     }
 
     return grouped;
-  }, [tasksQuery.tasks]);
+  }, [boardQuery.data, tasksQuery.tasks]);
 
   useEffect(() => {
     setColumnOrder((prev) => {
@@ -488,13 +523,19 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     [visibleColumns],
   );
 
-  const totalTasks = tasksQuery.data?.total ?? tasksQuery.tasks.length;
-  const completedTasks = useMemo(() => tasksQuery.tasks.filter((task) => task.status === 'DONE').length, [tasksQuery.tasks]);
-  const activeTasks = useMemo(
-    () => tasksQuery.tasks.filter((task) => task.status === 'IN_PROGRESS').length,
-    [tasksQuery.tasks],
+  const totalTasks = boardQuery.data?.summary.totalTasks ?? tasksQuery.data?.total ?? tasksQuery.tasks.length;
+  const completedTasks = useMemo(
+    () => boardQuery.data?.summary.totalsByStatus.DONE ?? tasksByStatus.DONE.length,
+    [boardQuery.data, tasksByStatus.DONE.length],
   );
-  const todoTasks = useMemo(() => tasksQuery.tasks.filter((task) => task.status === 'TODO').length, [tasksQuery.tasks]);
+  const activeTasks = useMemo(
+    () => boardQuery.data?.summary.totalsByStatus.IN_PROGRESS ?? tasksByStatus.IN_PROGRESS.length,
+    [boardQuery.data, tasksByStatus.IN_PROGRESS.length],
+  );
+  const todoTasks = useMemo(
+    () => boardQuery.data?.summary.totalsByStatus.TODO ?? tasksByStatus.TODO.length,
+    [boardQuery.data, tasksByStatus.TODO.length],
+  );
 
   const firstName = user.name?.split(' ')[0] ?? 'there';
 
