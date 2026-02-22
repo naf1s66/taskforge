@@ -385,6 +385,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     return next;
   }, [boardQuery.data]);
 
+  const isBoardReady = Boolean(boardOrder);
+
   useEffect(() => {
     if (!boardOrder || activeId) {
       return;
@@ -522,7 +524,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (moveTask.isPending) {
+    if (moveTask.isPending || !isBoardReady) {
       return;
     }
 
@@ -534,7 +536,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over) {
+    if (!over || moveTask.isPending || !isBoardReady) {
       return;
     }
 
@@ -586,6 +588,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const { active, over } = event;
     const activeTaskId = active.id as string;
     setActiveId(null);
+
+    if (moveTask.isPending || !isBoardReady) {
+      dragSnapshotRef.current = null;
+      return;
+    }
 
     if (!over) {
       if (dragSnapshotRef.current) {
@@ -971,7 +978,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   meta={column.meta}
                   tasks={column.tasks}
                   index={index}
-                  dragActive={dragActive}
+                  dragActive={dragActive && !moveTask.isPending && isBoardReady}
                   activeId={activeId}
                 />
               ))}
