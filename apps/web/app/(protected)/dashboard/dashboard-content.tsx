@@ -686,28 +686,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const destinationStatus = overStatus;
     const initialIndex = sourceStatus ? initialSnapshot?.[sourceStatus].indexOf(activeTaskId) ?? -1 : -1;
 
-    let nextOrder = columnOrderRef.current;
-    let targetIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
-
-    if (sourceStatus === destinationStatus) {
-      const activeIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
-      const overIndex =
-        overId.startsWith(columnIdPrefix) ? activeIndex : nextOrder[destinationStatus].indexOf(overId);
-
-      if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
-        const updated = arrayMove(nextOrder[destinationStatus], activeIndex, overIndex);
-        targetIndex = updated.indexOf(activeTaskId);
-        setColumnOrder((prev) => {
-          const next = { ...prev, [destinationStatus]: updated };
-          columnOrderRef.current = next;
-          return next;
-        });
-        nextOrder = { ...nextOrder, [destinationStatus]: updated };
-      }
-    }
+    const nextOrder = columnOrderRef.current;
+    const targetIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
 
     const hasMoved =
-      sourceStatus !== destinationStatus || (sourceStatus === destinationStatus && initialIndex !== targetIndex);
+      targetIndex !== -1 && (sourceStatus !== destinationStatus || (sourceStatus === destinationStatus && initialIndex !== targetIndex));
 
     let clearSnapshotAfterDragEnd = true;
 
