@@ -213,7 +213,15 @@ function sortTasks(tasks: TaskListItem[], sortBy: SortOption): TaskListItem[] {
   return copy;
 }
 
-function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }) {
+function TaskCard({
+  task,
+  dragging,
+  editable = true,
+}: {
+  task: TaskListItem;
+  dragging?: boolean;
+  editable?: boolean;
+}) {
   return (
     <Card
       className={cn(
@@ -247,11 +255,11 @@ function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }
               size="sm"
               variant="ghost"
               className="gap-2 px-2 text-xs"
-              data-task-dialog="edit"
-              data-task-id={task.id}
-              aria-label={`Edit task ${task.title}`}
+              disabled={!editable}
+              {...(editable ? { 'data-task-dialog': 'edit', 'data-task-id': task.id } : {})}
+              aria-label={editable ? `Edit task ${task.title}` : `Task ${task.title} cannot be edited from this view`}
             >
-              <PenSquare className="h-3.5 w-3.5" /> Edit
+              <PenSquare className="h-3.5 w-3.5" /> {editable ? 'Edit' : 'View only'}
             </Button>
           </div>
         </div>
@@ -260,7 +268,15 @@ function TaskCard({ task, dragging }: { task: TaskListItem; dragging?: boolean }
   );
 }
 
-function SortableTaskCard({ task, columnStatus }: { task: TaskListItem; columnStatus: TaskStatus }) {
+function SortableTaskCard({
+  task,
+  columnStatus,
+  editable,
+}: {
+  task: TaskListItem;
+  columnStatus: TaskStatus;
+  editable: boolean;
+}) {
   const isOptimistic = Boolean(task._optimistic);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -282,7 +298,7 @@ function SortableTaskCard({ task, columnStatus }: { task: TaskListItem; columnSt
       aria-disabled={isOptimistic}
       className={cn(isOptimistic ? 'cursor-not-allowed opacity-90' : 'cursor-grab active:cursor-grabbing')}
     >
-      <TaskCard task={task} dragging={isDragging} />
+      <TaskCard task={task} dragging={isDragging} editable={editable} />
     </article>
   );
 }
@@ -294,6 +310,7 @@ function BoardColumn({
   index,
   dragActive,
   activeId,
+  editableTaskIds,
 }: {
   status: TaskStatus;
   meta: { title: string; description: string };
@@ -301,6 +318,7 @@ function BoardColumn({
   index: number;
   dragActive: boolean;
   activeId: string | null;
+  editableTaskIds: ReadonlySet<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: getColumnId(status),
@@ -343,7 +361,12 @@ function BoardColumn({
         ) : null}
         <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} columnStatus={status} />
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              columnStatus={status}
+              editable={editableTaskIds.has(task.id)}
+            />
           ))}
         </SortableContext>
         {dragActive && tasks.length === 0 && activeId ? (
@@ -543,6 +566,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const dragActive = Boolean(activeId);
 
   const taskMap = useMemo(() => new Map(tasksQuery.tasks.map((task) => [task.id, task])), [tasksQuery.tasks]);
+  const editableTaskIds = useMemo(() => new Set(tasksQuery.tasks.map((task) => task.id)), [tasksQuery.tasks]);
   const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
 
   const buildPositionAnnouncement = (taskId: string, status: TaskStatus) => {
@@ -1021,6 +1045,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   index={index}
                   dragActive={dragActive && !moveTask.isPending && isBoardReady}
                   activeId={activeId}
+                  editableTaskIds={editableTaskIds}
                 />
               ))}
             </section>
