@@ -395,6 +395,51 @@ function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
   };
 }
 
+function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoardResponse {
+  const columns = board.columns.map((column) => {
+    const nextTasks = column.tasks.filter((task) => task.id !== taskId);
+    if (nextTasks.length === column.tasks.length) {
+      return column;
+    }
+
+    return {
+      ...column,
+      tasks: nextTasks.map((task, index) => ({ ...task, position: index })),
+      total: Math.max(0, column.total - (column.tasks.length - nextTasks.length)),
+    };
+  });
+
+  let removedCount = 0;
+  const totalsByStatus = { ...board.summary.totalsByStatus };
+
+  for (const previousColumn of board.columns) {
+    const nextColumn = columns.find((column) => column.status === previousColumn.status);
+    if (!nextColumn) {
+      continue;
+    }
+
+    const removedInColumn = previousColumn.tasks.length - nextColumn.tasks.length;
+    if (removedInColumn > 0) {
+      totalsByStatus[previousColumn.status] = Math.max(0, totalsByStatus[previousColumn.status] - removedInColumn);
+      removedCount += removedInColumn;
+    }
+  }
+
+  if (removedCount === 0) {
+    return board;
+  }
+
+  return {
+    ...board,
+    columns,
+    summary: {
+      ...board.summary,
+      totalsByStatus,
+      totalTasks: Math.max(0, board.summary.totalTasks - removedCount),
+    },
+  };
+}
+
 function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
   const columns = board.columns.map((column) => ({ ...column, tasks: [...column.tasks] }));
   let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
@@ -1069,7 +1114,14 @@ export function useDeleteTask(
         removeTaskFromList(payload, id),
       );
 
-      return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
+      const boardKey = taskQueryKeys.board(userScope);
+      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+
+      if (boardSnapshot) {
+        queryClient.setQueryData<TaskBoardResponse>(boardKey, removeTaskFromBoard(boardSnapshot, id));
+      }
+
+      return { touchedQueries, optimisticTaskId: id, boardSnapshot } satisfies TaskMutationContext;
     },
     onError: (error, variables, context) => {
       if (context) {
