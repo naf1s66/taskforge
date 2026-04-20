@@ -4,16 +4,17 @@
   "type": "module",
   "scripts": {
     "prisma:generate": "prisma generate --schema ../api/prisma/schema.prisma",
-    "predev": "pnpm run prisma:generate",
+    "predev": "pnpm run prisma:generate:if-present",
     "dev": "next dev --hostname 0.0.0.0 -p 3000",
-    "prebuild": "pnpm run prisma:generate",
+    "prebuild": "pnpm run prisma:generate:if-present",
     "build": "next build",
-    "prestart": "pnpm run prisma:generate",
+    "prestart": "pnpm run prisma:generate:if-present",
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "prisma:generate:if-present": "node -e \"const fs=require('node:fs'); if (fs.existsSync('../api/prisma/schema.prisma')) { require('node:child_process').execSync('pnpm run prisma:generate', { stdio: 'inherit' }); } else { console.log('Skipping prisma generate: ../api/prisma/schema.prisma not found'); }\""
   },
   "prisma": {
     "schema": "../api/prisma/schema.prisma"
