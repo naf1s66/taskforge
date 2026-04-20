@@ -449,7 +449,15 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         for (const boardTask of column.tasks) {
           const detailed = detailedTaskMap.get(boardTask.id);
           if (detailed) {
-            grouped[column.status].push(detailed);
+            grouped[column.status].push({
+              ...detailed,
+              title: boardTask.title,
+              status: column.status,
+              priority: boardTask.priority,
+              dueDate: boardTask.dueDate,
+              tags: boardTask.tags,
+              updatedAt: boardTask.updatedAt,
+            });
           } else {
             grouped[column.status].push({
               id: boardTask.id,
