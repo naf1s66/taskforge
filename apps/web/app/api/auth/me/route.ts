@@ -11,29 +11,29 @@ interface ApiMeResponse {
 }
 
 export async function GET() {
+  if (isDevAuthBypassEnabled()) {
+    const bypassUser = await getCurrentUser();
+    if (bypassUser) {
+      try {
+        const accessToken = await getBridgedAccessToken(bypassUser);
+        const response = NextResponse.json({
+          user: {
+            id: bypassUser.id,
+            email: bypassUser.email,
+          },
+        } satisfies ApiMeResponse);
+        response.cookies.set({ ...getSessionCookieOptions(), value: accessToken });
+        return response;
+      } catch (error) {
+        console.error('[auth] Failed to bridge dev bypass session', error);
+      }
+    }
+  }
+
   const cookieStore = cookies();
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
 
   if (!sessionCookie?.value) {
-    if (isDevAuthBypassEnabled()) {
-      const bypassUser = await getCurrentUser();
-      if (bypassUser) {
-        try {
-          const accessToken = await getBridgedAccessToken(bypassUser);
-          const response = NextResponse.json({
-            user: {
-              id: bypassUser.id,
-              email: bypassUser.email,
-            },
-          } satisfies ApiMeResponse);
-          response.cookies.set({ ...getSessionCookieOptions(), value: accessToken });
-          return response;
-        } catch (error) {
-          console.error('[auth] Failed to bridge dev bypass session', error);
-        }
-      }
-    }
-
     return NextResponse.json({ user: null } satisfies ApiMeResponse);
   }
 
