@@ -443,18 +443,20 @@ function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoar
 function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
   const columns = board.columns.map((column) => ({ ...column, tasks: [...column.tasks] }));
   let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
+  let sourceStatus: TaskStatus | null = null;
 
   for (const column of columns) {
     const index = column.tasks.findIndex((task) => task.id === input.taskId);
     if (index !== -1) {
       const [task] = column.tasks.splice(index, 1);
+      sourceStatus = task.status;
       movedTask = { ...task, status: input.targetStatus };
       column.total = column.tasks.length;
       break;
     }
   }
 
-  if (!movedTask) {
+  if (!movedTask || !sourceStatus) {
     return board;
   }
 
@@ -467,9 +469,19 @@ function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVar
   targetColumn.tasks.splice(insertIndex, 0, movedTask);
   targetColumn.total = targetColumn.tasks.length;
 
+  const nextTotalsByStatus = { ...board.summary.totalsByStatus };
+  if (sourceStatus !== input.targetStatus) {
+    nextTotalsByStatus[sourceStatus] = Math.max(0, nextTotalsByStatus[sourceStatus] - 1);
+    nextTotalsByStatus[input.targetStatus] = nextTotalsByStatus[input.targetStatus] + 1;
+  }
+
   return {
     ...board,
     columns,
+    summary: {
+      ...board.summary,
+      totalsByStatus: nextTotalsByStatus,
+    },
     updatedAt: new Date().toISOString(),
   };
 }
