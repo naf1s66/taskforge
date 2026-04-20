@@ -3,7 +3,6 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/server-auth';
 import { SESSION_COOKIE_NAME } from '@/lib/env';
-import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
 import { isSessionTokenExpired } from '@/lib/session-bridge';
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
@@ -33,9 +32,8 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
 
   const cookieStore = cookies();
   const existing = cookieStore.get(SESSION_COOKIE_NAME);
-  const devAuthBypassEnabled = isDevAuthBypassEnabled();
 
-  if (!devAuthBypassEnabled && (!existing?.value || isSessionTokenExpired(existing.value))) {
+  if (!existing?.value || isSessionTokenExpired(existing.value)) {
     const search = new URLSearchParams({ from: fromPath });
     redirect(`/auth/session-bridge?${search.toString()}`);
   }
