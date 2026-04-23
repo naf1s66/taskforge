@@ -14,21 +14,19 @@ export async function GET() {
   if (isDevAuthBypassEnabled()) {
     const bypassUser = await getCurrentUser();
     if (bypassUser) {
-      const bypassPayload = {
-        user: {
-          id: bypassUser.id,
-          email: bypassUser.email,
-        },
-      } satisfies ApiMeResponse;
-
       try {
         const accessToken = await getFreshBridgedAccessToken(bypassUser);
-        const response = NextResponse.json(bypassPayload);
+        const response = NextResponse.json({
+          user: {
+            id: bypassUser.id,
+            email: bypassUser.email,
+          },
+        } satisfies ApiMeResponse);
         response.cookies.set({ ...getSessionCookieOptions(), value: accessToken });
         return response;
       } catch (error) {
         console.error('[auth] Failed to bridge dev bypass session', error);
-        return NextResponse.json(bypassPayload);
+        return NextResponse.json({ user: null } satisfies ApiMeResponse);
       }
     }
   }

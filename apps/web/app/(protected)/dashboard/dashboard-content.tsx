@@ -272,13 +272,15 @@ function SortableTaskCard({
   task,
   columnStatus,
   editable,
+  draggable,
 }: {
   task: TaskListItem;
   columnStatus: TaskStatus;
   editable: boolean;
+  draggable: boolean;
 }) {
   const isOptimistic = Boolean(task._optimistic);
-  const dragDisabled = isOptimistic || !editable;
+  const dragDisabled = isOptimistic || !draggable;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { status: columnStatus },
@@ -312,6 +314,7 @@ function BoardColumn({
   dragActive,
   activeId,
   editableTaskIds,
+  draggableTaskIds,
 }: {
   status: TaskStatus;
   meta: { title: string; description: string };
@@ -320,6 +323,7 @@ function BoardColumn({
   dragActive: boolean;
   activeId: string | null;
   editableTaskIds: ReadonlySet<string>;
+  draggableTaskIds: ReadonlySet<string>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: getColumnId(status),
@@ -367,6 +371,7 @@ function BoardColumn({
               task={task}
               columnStatus={status}
               editable={editableTaskIds.has(task.id)}
+              draggable={draggableTaskIds.has(task.id)}
             />
           ))}
         </SortableContext>
@@ -575,7 +580,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const dragActive = Boolean(activeId);
 
   const taskMap = useMemo(() => new Map(tasksQuery.tasks.map((task) => [task.id, task])), [tasksQuery.tasks]);
-  const editableTaskIds = useMemo(() => {
+  const editableTaskIds = useMemo(() => new Set(tasksQuery.tasks.map((task) => task.id)), [tasksQuery.tasks]);
+  const draggableTaskIds = useMemo(() => {
     const ids = new Set(tasksQuery.tasks.map((task) => task.id));
 
     if (boardQuery.data) {
@@ -1050,6 +1056,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   dragActive={dragActive && !moveTask.isPending && isBoardReady}
                   activeId={activeId}
                   editableTaskIds={editableTaskIds}
+                  draggableTaskIds={draggableTaskIds}
                 />
               ))}
             </section>
