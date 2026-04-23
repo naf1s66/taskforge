@@ -26,7 +26,7 @@ export async function GET() {
         return response;
       } catch (error) {
         console.error('[auth] Failed to bridge dev bypass session', error);
-        return NextResponse.json({ user: null } satisfies ApiMeResponse);
+        return NextResponse.json({ user: null } satisfies ApiMeResponse, { status: 500 });
       }
     }
   }

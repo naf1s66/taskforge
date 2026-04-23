@@ -782,6 +782,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     setActiveId(null);
   };
 
+  const refetchBoardAndTasks = () => Promise.all([tasksQuery.refetch(), boardQuery.refetch()]);
+
   return (
     <div className="space-y-10">
       <section className="grid gap-6 md:grid-cols-[2fr,1fr] md:items-start">
@@ -810,11 +812,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               type="button"
               variant="ghost"
               className="gap-2"
-              onClick={() => tasksQuery.refetch()}
-              disabled={tasksQuery.isFetching}
+              onClick={() => void refetchBoardAndTasks()}
+              disabled={tasksQuery.isFetching || boardQuery.isFetching}
             >
-              <RefreshCcw className={cn('h-4 w-4', tasksQuery.isFetching && 'animate-spin')} />
-              {tasksQuery.isFetching ? 'Refreshing' : 'Refresh'}
+              <RefreshCcw className={cn('h-4 w-4', (tasksQuery.isFetching || boardQuery.isFetching) && 'animate-spin')} />
+              {tasksQuery.isFetching || boardQuery.isFetching ? 'Refreshing' : 'Refresh'}
             </Button>
           </div>
         </motion.div>
@@ -913,7 +915,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            {tasksQuery.isFetching && !tasksQuery.isLoading ? (
+            {(tasksQuery.isFetching || boardQuery.isFetching) && !tasksQuery.isLoading ? (
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Syncing latest changes…
               </span>
@@ -938,7 +940,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                 variant="outline"
                 size="sm"
                 className="ml-3"
-                onClick={() => tasksQuery.refetch()}
+                onClick={() => void refetchBoardAndTasks()}
               >
                 Try again
               </Button>
