@@ -5,8 +5,50 @@ import { cookies } from 'next/headers';
 
 import { auth } from './auth';
 import { getApiUrl, SESSION_COOKIE_NAME } from './env';
+import { isDevAuthBypassEnabled } from './dev-auth-bypass';
+import { getPrismaClient } from './prisma';
 
 export type AuthenticatedUser = NonNullable<Session['user']>;
+
+const devAuthBypassEnabled = isDevAuthBypassEnabled();
+
+if (devAuthBypassEnabled) {
+  console.warn('[auth] TF_DEV_BYPASS_AUTH is enabled. Do not use in production.');
+}
+
+const DEV_BYPASS_EMAIL = 'demo@taskforge.dev';
+
+async function getDevBypassUser(): Promise<AuthenticatedUser | null> {
+  try {
+    const prisma = getPrismaClient();
+    const user = await prisma.user.upsert({
+      where: { email: DEV_BYPASS_EMAIL },
+      update: {
+        name: 'TaskForge Demo',
+      },
+      create: {
+        email: DEV_BYPASS_EMAIL,
+        name: 'TaskForge Demo',
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+      },
+    });
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name ?? user.email,
+      image: user.image ?? null,
+    } satisfies AuthenticatedUser;
+  } catch (error) {
+    console.error('[auth] Failed to provision dev bypass user', error);
+    return null;
+  }
+}
 
 async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
   const cookieStore = cookies();
@@ -51,6 +93,10 @@ async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
 }
 
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
+  if (devAuthBypassEnabled) {
+    return getDevBypassUser();
+  }
+
   const session = await auth();
   if (session?.user) {
     return session.user as AuthenticatedUser;
