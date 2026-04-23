@@ -18,18 +18,23 @@ import {
   createTask,
   deleteTask,
   listTasks,
+  getTaskBoard,
+  moveTaskOnBoard,
   updateTask,
   TaskClientError,
 } from './tasks-client';
 import type {
+  BoardMoveInput,
   CreateTaskInput,
   TaskClientErrorKind,
   TaskListQuery,
   TaskListResponse,
+  TaskBoardResponse,
   TaskRecordDTO,
   UpdateTaskInput,
 } from './tasks-client';
 import { useAuth } from './use-auth';
+import type { TaskStatus } from '@taskforge/shared';
 
 export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean };
 
@@ -40,17 +45,25 @@ export interface TaskListData extends Omit<TaskListResponse, 'items'> {
 type TaskQueryFnData = TaskListData;
 
 type TaskQueryKey = ReturnType<typeof taskQueryKeys.list>;
+type TaskBoardQueryKey = ReturnType<typeof taskQueryKeys.board>;
 
 type TaskQueryOptions = Omit<
   UseQueryOptions<TaskQueryFnData, TaskClientError, TaskQueryFnData, TaskQueryKey>,
   'queryKey' | 'queryFn'
 >;
 
+type TaskBoardQueryOptions = Omit<
+  UseQueryOptions<TaskBoardResponse, TaskClientError, TaskBoardResponse, TaskBoardQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
 type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
+type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
 
 interface TaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
+  boardSnapshot?: TaskBoardResponse;
 }
 
 export interface TaskOperationError {
@@ -74,6 +87,20 @@ export interface UseTasksQueryResult {
   fetchStatus: TaskListQueryResult['fetchStatus'];
   refetch: TaskListQueryResult['refetch'];
   queryKey: TaskQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
+export interface UseTaskBoardQueryResult {
+  data: TaskBoardResponse | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TaskBoardQueryResult['status'];
+  fetchStatus: TaskBoardQueryResult['fetchStatus'];
+  refetch: TaskBoardQueryResult['refetch'];
+  queryKey: TaskBoardQueryKey;
   error: TaskOperationError | null;
   rawError: unknown;
 }
@@ -114,6 +141,7 @@ const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
+  board: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
 };
 
 const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
@@ -214,6 +242,10 @@ function extractFiltersFromKey(queryKey: QueryKey): NormalizedTaskListFilters | 
   }
 
   return undefined;
+}
+
+function isTaskListQueryKey(queryKey: QueryKey, userScope: string): boolean {
+  return Array.isArray(queryKey) && queryKey[0] === TASK_QUERY_SCOPE && queryKey[1] === userScope && queryKey[2] === 'list';
 }
 
 function createTaskClientErrorMessage(error: TaskClientError): string {
@@ -363,6 +395,97 @@ function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
   };
 }
 
+function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoardResponse {
+  const columns = board.columns.map((column) => {
+    const nextTasks = column.tasks.filter((task) => task.id !== taskId);
+    if (nextTasks.length === column.tasks.length) {
+      return column;
+    }
+
+    return {
+      ...column,
+      tasks: nextTasks.map((task, index) => ({ ...task, position: index })),
+      total: Math.max(0, column.total - (column.tasks.length - nextTasks.length)),
+    };
+  });
+
+  let removedCount = 0;
+  const totalsByStatus = { ...board.summary.totalsByStatus };
+
+  for (const previousColumn of board.columns) {
+    const nextColumn = columns.find((column) => column.status === previousColumn.status);
+    if (!nextColumn) {
+      continue;
+    }
+
+    const removedInColumn = previousColumn.tasks.length - nextColumn.tasks.length;
+    if (removedInColumn > 0) {
+      totalsByStatus[previousColumn.status] = Math.max(0, totalsByStatus[previousColumn.status] - removedInColumn);
+      removedCount += removedInColumn;
+    }
+  }
+
+  if (removedCount === 0) {
+    return board;
+  }
+
+  return {
+    ...board,
+    columns,
+    summary: {
+      ...board.summary,
+      totalsByStatus,
+      totalTasks: Math.max(0, board.summary.totalTasks - removedCount),
+    },
+  };
+}
+
+function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({ ...column, tasks: [...column.tasks] }));
+  let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
+  let sourceStatus: TaskStatus | null = null;
+
+  for (const column of columns) {
+    const index = column.tasks.findIndex((task) => task.id === input.taskId);
+    if (index !== -1) {
+      const [task] = column.tasks.splice(index, 1);
+      sourceStatus = task.status;
+      movedTask = { ...task, status: input.targetStatus };
+      column.total = column.tasks.length;
+      break;
+    }
+  }
+
+  if (!movedTask || !sourceStatus) {
+    return board;
+  }
+
+  const targetColumn = columns.find((column) => column.status === input.targetStatus);
+  if (!targetColumn) {
+    return board;
+  }
+
+  const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
+  targetColumn.tasks.splice(insertIndex, 0, movedTask);
+  targetColumn.total = targetColumn.tasks.length;
+
+  const nextTotalsByStatus = { ...board.summary.totalsByStatus };
+  if (sourceStatus !== input.targetStatus) {
+    nextTotalsByStatus[sourceStatus] = Math.max(0, nextTotalsByStatus[sourceStatus] - 1);
+    nextTotalsByStatus[input.targetStatus] = nextTotalsByStatus[input.targetStatus] + 1;
+  }
+
+  return {
+    ...board,
+    columns,
+    summary: {
+      ...board.summary,
+      totalsByStatus: nextTotalsByStatus,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function taskMatchesFilters(task: TaskListItem, filters?: NormalizedTaskListFilters): boolean {
   if (!filters) {
     return true;
@@ -496,6 +619,62 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
   };
 }
 
+export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoardQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(() => taskQueryKeys.board(userScope), [userScope]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => getTaskBoard(),
+    staleTime: 15_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
 function buildOptimisticTask(input: CreateTaskInput): TaskListItem {
   const now = new Date().toISOString();
   const randomId =
@@ -525,7 +704,7 @@ function collectMatchingQueries(
   const touched: Array<[QueryKey, TaskListData | undefined]> = [];
 
   for (const [key, data] of candidates) {
-    if (!data) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
@@ -551,8 +730,8 @@ function selectTaskFromCache(
   }
 
   const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
-  for (const [, data] of candidates) {
-    if (!data) {
+  for (const [key, data] of candidates) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
@@ -739,6 +918,7 @@ export function useUpdateTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: ({ id, input }) => updateTask(id, input),
@@ -765,9 +945,13 @@ export function useUpdateTask(
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
+        }
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context);
     },
     onSuccess: (result, variables, context) => {
       const taskItem: TaskListItem = { ...result };
@@ -780,13 +964,127 @@ export function useUpdateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
+  });
+
+  const friendlyError = toTaskOperationError(mutation.error);
+
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    reset: mutation.reset,
+    status: mutation.status,
+    isPending: mutation.isPending,
+    isSuccess: mutation.isSuccess,
+    isError: mutation.isError,
+    data: mutation.data,
+    variables: mutation.variables,
+    error: friendlyError,
+    rawError: mutation.error,
+  };
+}
+
+interface MoveTaskVariables extends BoardMoveInput {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
+}
+
+export function useMoveTaskOnBoard(
+  options?: UseMutationOptions<TaskBoardResponse, TaskClientError, MoveTaskVariables, TaskMutationContext>,
+): UseTaskMutationResult<TaskBoardResponse, MoveTaskVariables> {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+  const { onMutate, onError, onSuccess, onSettled, ...restOptions } = options ?? {};
+
+  const mutation = useMutation({
+    mutationFn: (input) => moveTaskOnBoard(input),
+    onMutate: async (variables) => {
+      const { taskId, targetStatus } = variables;
+      await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+
+      const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+        const existing = payload.items.find((item) => item.id === taskId);
+        if (!existing) {
+          return payload;
+        }
+
+        const movedTask: TaskListItem = {
+          ...existing,
+          status: targetStatus,
+          updatedAt: new Date().toISOString(),
+          _optimistic: true,
+        };
+
+        if (!taskMatchesFilters(movedTask, filters)) {
+          return removeTaskFromList(payload, taskId);
+        }
+
+        return replaceTaskInList(payload, taskId, movedTask);
+      });
+
+      const boardKey = taskQueryKeys.board(userScope);
+      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+      if (boardSnapshot) {
+        queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
+      }
+
+      const context = { touchedQueries, optimisticTaskId: taskId, boardSnapshot } satisfies TaskMutationContext;
+      await onMutate?.(variables);
+      return context;
+    },
+    onError: (error, variables, context) => {
+      if (context) {
+        for (const [key, snapshot] of context.touchedQueries) {
+          queryClient.setQueryData(key, snapshot);
+        }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
+        }
+      }
+
+      onError?.(error, variables, context);
+    },
+    onSuccess: (result, variables, context) => {
+      if (context?.optimisticTaskId) {
+        collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+          const existing = payload.items.find((item) => item.id === context.optimisticTaskId);
+          if (!existing) {
+            return payload;
+          }
+
+          const movedTask: TaskListItem = {
+            ...existing,
+            _optimistic: false,
+            status: variables.targetStatus,
+            updatedAt: new Date().toISOString(),
+          };
+
+          if (!taskMatchesFilters(movedTask, filters)) {
+            return removeTaskFromList(payload, context.optimisticTaskId as string);
+          }
+
+          return updateTaskInList(payload, context.optimisticTaskId as string, movedTask);
+        });
+      }
+
+      queryClient.setQueryData(taskQueryKeys.board(userScope), result);
+
+      onSuccess?.(result, variables, context);
+    },
+    onSettled: (result, error, variables, context) => {
+      onSettled?.(result, error, variables, context);
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+    },
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
@@ -817,6 +1115,7 @@ export function useDeleteTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
   const mutation = useMutation({
     mutationFn: ({ id }) => deleteTask(id),
@@ -827,25 +1126,36 @@ export function useDeleteTask(
         removeTaskFromList(payload, id),
       );
 
-      return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
+      const boardKey = taskQueryKeys.board(userScope);
+      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+
+      if (boardSnapshot) {
+        queryClient.setQueryData<TaskBoardResponse>(boardKey, removeTaskFromBoard(boardSnapshot, id));
+      }
+
+      return { touchedQueries, optimisticTaskId: id, boardSnapshot } satisfies TaskMutationContext;
     },
     onError: (error, variables, context) => {
       if (context) {
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
+
+        if (context.boardSnapshot) {
+          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
+        }
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context);
     },
     onSuccess: (result, variables, context) => {
-      options?.onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context);
     },
     onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+      onSettled?.(result, error, variables, context);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
