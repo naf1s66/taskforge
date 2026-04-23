@@ -7,6 +7,7 @@ import {
   type TaskStatus,
 } from '@taskforge/shared';
 import { z } from 'zod';
+import type { AsyncLocalStorage } from 'async_hooks';
 
 import { getApiBaseUrl } from './env';
 
@@ -260,14 +261,14 @@ export interface TaskClientRequestOptions extends TaskClientAuthState {
 let manualServerAuthState: TaskClientAuthState | undefined;
 let triedLoadingNextCookies = false;
 let nextCookiesGetter: (() => { get(name: string): { value?: string } | undefined } | undefined) | undefined;
-let serverAuthStoragePromise: Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
-let serverAuthStorage: import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null | undefined;
+let serverAuthStoragePromise: Promise<AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
+let serverAuthStorage: AsyncLocalStorage<TaskClientAuthState> | null | undefined;
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.document !== 'undefined';
 }
 
-async function loadServerAuthStorage(): Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> {
+async function loadServerAuthStorage(): Promise<AsyncLocalStorage<TaskClientAuthState> | null> {
   if (isBrowser()) {
     return null;
   }
@@ -280,7 +281,7 @@ async function loadServerAuthStorage(): Promise<import('node:async_hooks').Async
     return serverAuthStoragePromise;
   }
 
-  serverAuthStoragePromise = import('node:async_hooks')
+  serverAuthStoragePromise = import(/* webpackIgnore: true */ 'async_hooks')
     .then((module) => {
       serverAuthStorage = new module.AsyncLocalStorage<TaskClientAuthState>();
       return serverAuthStorage;
