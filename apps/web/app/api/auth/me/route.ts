@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
 import { getCurrentUser } from '@/lib/server-auth';
-import { getBridgedAccessToken, getSessionCookieOptions } from '@/lib/session-bridge';
+import { expireApiSessionCookie, getBridgedAccessToken, getSessionCookieOptions } from '@/lib/session-bridge';
 
 interface ApiMeResponse {
   user: { id: string; email: string | null; createdAt?: string } | null;
@@ -15,6 +15,7 @@ export async function GET() {
     const bypassUser = await getCurrentUser();
     if (bypassUser) {
       try {
+        expireApiSessionCookie();
         const accessToken = await getBridgedAccessToken(bypassUser);
         const response = NextResponse.json({
           user: {

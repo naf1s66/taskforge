@@ -278,10 +278,11 @@ function SortableTaskCard({
   editable: boolean;
 }) {
   const isOptimistic = Boolean(task._optimistic);
+  const dragDisabled = isOptimistic || !editable;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { status: columnStatus },
-    disabled: isOptimistic,
+    disabled: dragDisabled,
   });
 
   const style = {
@@ -295,8 +296,8 @@ function SortableTaskCard({
       style={style}
       {...attributes}
       {...listeners}
-      aria-disabled={isOptimistic}
-      className={cn(isOptimistic ? 'cursor-not-allowed opacity-90' : 'cursor-grab active:cursor-grabbing')}
+      aria-disabled={dragDisabled}
+      className={cn(dragDisabled ? 'cursor-not-allowed opacity-90' : 'cursor-grab active:cursor-grabbing')}
     >
       <TaskCard task={task} dragging={isDragging} editable={editable} />
     </article>
