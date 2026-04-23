@@ -575,7 +575,19 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const dragActive = Boolean(activeId);
 
   const taskMap = useMemo(() => new Map(tasksQuery.tasks.map((task) => [task.id, task])), [tasksQuery.tasks]);
-  const editableTaskIds = useMemo(() => new Set(tasksQuery.tasks.map((task) => task.id)), [tasksQuery.tasks]);
+  const editableTaskIds = useMemo(() => {
+    const ids = new Set(tasksQuery.tasks.map((task) => task.id));
+
+    if (boardQuery.data) {
+      for (const column of boardQuery.data.columns) {
+        for (const task of column.tasks) {
+          ids.add(task.id);
+        }
+      }
+    }
+
+    return ids;
+  }, [boardQuery.data, tasksQuery.tasks]);
   const activeTask = activeId ? taskMap.get(activeId) ?? null : null;
 
   const buildPositionAnnouncement = (taskId: string, status: TaskStatus) => {

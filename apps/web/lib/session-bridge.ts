@@ -107,6 +107,10 @@ export function isSessionTokenExpired(token: string): boolean {
   return expiration <= Date.now();
 }
 
+export async function getFreshBridgedAccessToken(user: AuthenticatedUser): Promise<string> {
+  return requestBridgeToken(user);
+}
+
 export async function getBridgedAccessToken(user: AuthenticatedUser): Promise<string> {
   const cookieStore = cookies();
   const existing = cookieStore.get(SESSION_COOKIE_NAME);
