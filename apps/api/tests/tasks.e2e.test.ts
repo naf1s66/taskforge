@@ -414,6 +414,24 @@ describe("Tasks API", () => {
       expect(response.body).toEqual({ error: "Unauthorized" });
     });
 
+    it("requires authentication to move tasks on the board", async () => {
+      const created = await createTask({
+        title: "Unauthenticated board move",
+        status: "TODO",
+      });
+
+      const response = await agent
+        .patch("/api/taskforge/v1/tasks/board/move")
+        .send({
+          taskId: created.task.id,
+          targetStatus: "IN_PROGRESS",
+          targetIndex: 0,
+        })
+        .expect(401);
+
+      expect(response.body).toEqual({ error: "Unauthorized" });
+    });
+
     it("supports same-lane reorder and cross-lane move through board move endpoint", async () => {
       const auth = await register();
       const todoA = await createTask({
