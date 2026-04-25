@@ -467,11 +467,6 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
-  const lastMoveRef = useRef<{
-    taskId: string;
-    targetStatus: TaskStatus;
-    targetIndex: number;
-  } | null>(null);
 
   const tasksQuery = useTasksQuery({ pageSize: 50 });
   const boardQuery = useTaskBoardQuery();
@@ -849,7 +844,6 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         targetStatus: destinationStatus,
         targetIndex: Math.max(0, targetIndex),
       };
-      lastMoveRef.current = movePayload;
 
       const rollbackSnapshot = dragSnapshotRef.current
         ? cloneColumnOrder(dragSnapshotRef.current)
@@ -872,11 +866,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             action: (
               <ToastAction
                 altText="Retry move"
-                onClick={() => {
-                  if (lastMoveRef.current) {
-                    moveTask.mutate(lastMoveRef.current);
-                  }
-                }}
+                onClick={() => moveTask.mutate(movePayload)}
               >
                 Retry
               </ToastAction>
