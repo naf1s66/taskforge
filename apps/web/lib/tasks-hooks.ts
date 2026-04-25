@@ -381,6 +381,128 @@ function updateTaskInList(list: TaskListData, taskId: string, patch: Partial<Tas
   return next;
 }
 
+function summarizeBoardTaskTags(tasks: TaskBoardResponse['columns'][number]['tasks']) {
+  const counts = new Map<string, number>();
+
+  for (const task of tasks) {
+    for (const label of task.tags) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+}
+
+function isBoardTaskOverdue(task: TaskBoardResponse['columns'][number]['tasks'][number], now: Date): boolean {
+  if (!task.dueDate || task.status === 'DONE') {
+    return false;
+  }
+
+  const due = Date.parse(task.dueDate);
+  if (Number.isNaN(due)) {
+    return false;
+  }
+
+  return due < now.getTime();
+}
+
+function rebuildBoardColumns(columns: TaskBoardResponse['columns'], now: Date): TaskBoardResponse['columns'] {
+  return columns.map((column) => {
+    const tasks = column.tasks.map((task, index) => ({
+      ...task,
+      position: index,
+    }));
+
+    return {
+      ...column,
+      tasks,
+      total: tasks.length,
+      overdueCount: tasks.filter((task) => isBoardTaskOverdue(task, now)).length,
+      tags: summarizeBoardTaskTags(tasks),
+    };
+  });
+}
+
+function buildBoardSummary(columns: TaskBoardResponse['columns']): TaskBoardResponse['summary'] {
+  const totalsByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies TaskBoardResponse['summary']['totalsByStatus'];
+  const overdueByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies TaskBoardResponse['summary']['overdueByStatus'];
+
+  for (const column of columns) {
+    totalsByStatus[column.status] = column.total;
+    overdueByStatus[column.status] = column.overdueCount;
+  }
+
+  return {
+    totalsByStatus,
+    overdueByStatus,
+    totalTasks: Object.values(totalsByStatus).reduce((sum, value) => sum + value, 0),
+    totalOverdue: Object.values(overdueByStatus).reduce((sum, value) => sum + value, 0),
+  };
+}
+
+function applyTaskUpdateToBoard(
+  board: TaskBoardResponse,
+  taskId: string,
+  patch: Partial<TaskListItem>,
+  now: Date = new Date(),
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((task) => ({ ...task })),
+  }));
+  const sourceColumn = columns.find((column) => column.tasks.some((task) => task.id === taskId));
+
+  if (!sourceColumn) {
+    return board;
+  }
+
+  const sourceIndex = sourceColumn.tasks.findIndex((task) => task.id === taskId);
+  const existingTask = sourceColumn.tasks[sourceIndex];
+  const hasDueDatePatch = Object.prototype.hasOwnProperty.call(patch, 'dueDate');
+  const hasTagsPatch = Object.prototype.hasOwnProperty.call(patch, 'tags');
+  const nextStatus = patch.status ?? existingTask.status;
+  const updatedTask = {
+    ...existingTask,
+    title: patch.title ?? existingTask.title,
+    status: nextStatus,
+    priority: patch.priority ?? existingTask.priority,
+    dueDate: hasDueDatePatch ? patch.dueDate : existingTask.dueDate,
+    tags: hasTagsPatch ? patch.tags ?? [] : existingTask.tags,
+    updatedAt: patch.updatedAt ?? existingTask.updatedAt,
+  };
+
+  sourceColumn.tasks.splice(sourceIndex, 1);
+
+  if (nextStatus === sourceColumn.status) {
+    sourceColumn.tasks.splice(sourceIndex, 0, updatedTask);
+  } else {
+    const targetColumn = columns.find((column) => column.status === nextStatus);
+    if (!targetColumn) {
+      return board;
+    }
+
+    targetColumn.tasks.push(updatedTask);
+  }
+
+  const nextColumns = rebuildBoardColumns(columns, now);
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: patch.updatedAt ?? now.toISOString(),
+  };
+}
+
 function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
   const index = list.items.findIndex((item) => item.id === taskId);
   if (index === -1) {
@@ -924,6 +1046,7 @@ export function useUpdateTask(
     mutationFn: ({ id, input }) => updateTask(id, input),
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+      const optimisticUpdatedAt = new Date().toISOString();
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) => {
         const existing = payload.items.find((item) => item.id === id);
@@ -933,12 +1056,25 @@ export function useUpdateTask(
 
         return updateTaskInList(payload, id, {
           ...input,
-          updatedAt: new Date().toISOString(),
+          updatedAt: optimisticUpdatedAt,
           _optimistic: true,
         });
       });
 
-      return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
+      const boardKey = taskQueryKeys.board(userScope);
+      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+
+      if (boardSnapshot) {
+        queryClient.setQueryData<TaskBoardResponse>(
+          boardKey,
+          applyTaskUpdateToBoard(boardSnapshot, id, {
+            ...input,
+            updatedAt: optimisticUpdatedAt,
+          }),
+        );
+      }
+
+      return { touchedQueries, optimisticTaskId: id, boardSnapshot } satisfies TaskMutationContext;
     },
     onError: (error, variables, context) => {
       if (context) {
@@ -963,6 +1099,10 @@ export function useUpdateTask(
 
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
+
+      queryClient.setQueryData<TaskBoardResponse | undefined>(taskQueryKeys.board(userScope), (board) =>
+        board ? applyTaskUpdateToBoard(board, variables.id, taskItem) : board,
+      );
 
       onSuccess?.(result, variables, context);
     },
@@ -1185,6 +1325,7 @@ export const __testing = {
   addTaskToList,
   replaceTaskInList,
   updateTaskInList,
+  applyTaskUpdateToBoard,
   removeTaskFromList,
   taskQueryKeys,
 };
