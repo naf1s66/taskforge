@@ -64,6 +64,7 @@ interface TaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
   boardSnapshot?: TaskBoardResponse;
+  taskSnapshot?: TaskListItem | null;
 }
 
 export interface TaskOperationError {
@@ -379,6 +380,19 @@ function updateTaskInList(list: TaskListData, taskId: string, patch: Partial<Tas
   const next = cloneTaskList(list);
   next.items[index] = { ...next.items[index], ...patch };
   return next;
+}
+
+function reconcileTaskInList(
+  list: TaskListData,
+  task: TaskListItem,
+  filters: NormalizedTaskListFilters | undefined,
+  previousId?: string,
+): TaskListData {
+  if (!taskMatchesFilters(task, filters)) {
+    return removeTaskFromList(list, previousId ?? task.id);
+  }
+
+  return replaceTaskInList(list, previousId, task);
 }
 
 function summarizeBoardTaskTags(tasks: TaskBoardResponse['columns'][number]['tasks']) {
@@ -1149,25 +1163,23 @@ export function useMoveTaskOnBoard(
     onMutate: async (variables) => {
       const { taskId, targetStatus } = variables;
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+      const optimisticUpdatedAt = new Date().toISOString();
+      const taskSnapshot = selectTaskFromCache(queryClient, userScope, taskId);
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload, filters) => {
-        const existing = payload.items.find((item) => item.id === taskId);
-        if (!existing) {
+        const sourceTask = payload.items.find((item) => item.id === taskId) ?? taskSnapshot;
+        if (!sourceTask) {
           return payload;
         }
 
         const movedTask: TaskListItem = {
-          ...existing,
+          ...sourceTask,
           status: targetStatus,
-          updatedAt: new Date().toISOString(),
+          updatedAt: optimisticUpdatedAt,
           _optimistic: true,
         };
 
-        if (!taskMatchesFilters(movedTask, filters)) {
-          return removeTaskFromList(payload, taskId);
-        }
-
-        return replaceTaskInList(payload, taskId, movedTask);
+        return reconcileTaskInList(payload, movedTask, filters, taskId);
       });
 
       const boardKey = taskQueryKeys.board(userScope);
@@ -1176,7 +1188,12 @@ export function useMoveTaskOnBoard(
         queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
       }
 
-      const context = { touchedQueries, optimisticTaskId: taskId, boardSnapshot } satisfies TaskMutationContext;
+      const context = {
+        touchedQueries,
+        optimisticTaskId: taskId,
+        boardSnapshot,
+        taskSnapshot,
+      } satisfies TaskMutationContext;
       await onMutate?.(variables);
       return context;
     },
@@ -1195,24 +1212,35 @@ export function useMoveTaskOnBoard(
     },
     onSuccess: (result, variables, context) => {
       if (context?.optimisticTaskId) {
+        const boardTask =
+          result.columns
+            .flatMap((column) => column.tasks)
+            .find((task) => task.id === context.optimisticTaskId) ?? null;
+
         collectMatchingQueries(queryClient, userScope, (payload, filters) => {
-          const existing = payload.items.find((item) => item.id === context.optimisticTaskId);
-          if (!existing) {
+          const sourceTask =
+            payload.items.find((item) => item.id === context.optimisticTaskId) ?? context.taskSnapshot;
+          if (!sourceTask) {
             return payload;
           }
 
           const movedTask: TaskListItem = {
-            ...existing,
+            ...sourceTask,
             _optimistic: false,
-            status: variables.targetStatus,
-            updatedAt: new Date().toISOString(),
+            title: boardTask?.title ?? sourceTask.title,
+            status: boardTask?.status ?? variables.targetStatus,
+            priority: boardTask?.priority ?? sourceTask.priority,
+            dueDate: boardTask?.dueDate ?? sourceTask.dueDate,
+            tags: boardTask?.tags ?? sourceTask.tags,
+            updatedAt: boardTask?.updatedAt ?? new Date().toISOString(),
           };
 
-          if (!taskMatchesFilters(movedTask, filters)) {
-            return removeTaskFromList(payload, context.optimisticTaskId as string);
-          }
-
-          return updateTaskInList(payload, context.optimisticTaskId as string, movedTask);
+          return reconcileTaskInList(
+            payload,
+            movedTask,
+            filters,
+            context.optimisticTaskId as string,
+          );
         });
       }
 
@@ -1325,6 +1353,7 @@ export const __testing = {
   addTaskToList,
   replaceTaskInList,
   updateTaskInList,
+  reconcileTaskInList,
   applyTaskUpdateToBoard,
   removeTaskFromList,
   taskQueryKeys,

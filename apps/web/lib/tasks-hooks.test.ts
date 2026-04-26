@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TaskBoardResponse } from './tasks-client';
+import type { TaskListData, TaskListItem } from './tasks-hooks';
 import { __testing } from './tasks-hooks';
 
 const board: TaskBoardResponse = {
@@ -148,5 +149,48 @@ describe('tasks-hooks board cache helpers', () => {
     });
     expect(updated.updatedAt).toBe('2024-06-15T12:00:00.000Z');
     expect(updated.generatedAt).toBe('2024-05-02T00:00:00.000Z');
+  });
+
+  it('inserts a moved task into matching cached lists when it was not already present', () => {
+    const list: TaskListData = {
+      items: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          title: 'Existing in-progress task',
+          description: 'Already in the filtered cache',
+          status: 'IN_PROGRESS',
+          priority: 'LOW',
+          dueDate: undefined,
+          tags: ['ops'],
+          createdAt: '2024-05-01T00:00:00.000Z',
+          updatedAt: '2024-05-01T00:00:00.000Z',
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    };
+    const movedTask: TaskListItem = {
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Draft contract',
+      description: 'Moves into the matching filtered cache',
+      status: 'IN_PROGRESS',
+      priority: 'HIGH',
+      dueDate: undefined,
+      tags: ['api'],
+      createdAt: '2024-05-01T00:00:00.000Z',
+      updatedAt: '2024-06-16T00:00:00.000Z',
+      _optimistic: false,
+    };
+
+    const updated = __testing.reconcileTaskInList(
+      list,
+      movedTask,
+      { status: 'IN_PROGRESS' },
+      movedTask.id,
+    );
+
+    expect(updated.items).toEqual([movedTask, list.items[0]]);
+    expect(updated.total).toBe(2);
   });
 });
