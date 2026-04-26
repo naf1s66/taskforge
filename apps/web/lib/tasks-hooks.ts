@@ -398,6 +398,20 @@ function reconcileTaskInList(
   return replaceTaskInList(list, previousId, task);
 }
 
+function taskListItemFromBoardTask(task: TaskBoardResponse['columns'][number]['tasks'][number]): TaskListItem {
+  return {
+    id: task.id,
+    title: task.title,
+    description: undefined,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    tags: [...task.tags],
+    createdAt: task.updatedAt,
+    updatedAt: task.updatedAt,
+  };
+}
+
 function mergeMutationContext<TContext extends object>(
   internalContext: InternalTaskMutationContext,
   externalContext: TContext | undefined,
@@ -894,6 +908,14 @@ function selectTaskFromCache(
     }
   }
 
+  const board = queryClient.getQueryData<TaskBoardResponse>(taskQueryKeys.board(userScope));
+  const boardTask = board?.columns
+    .flatMap((column) => column.tasks)
+    .find((task) => task.id === taskId);
+  if (boardTask) {
+    return taskListItemFromBoardTask(boardTask);
+  }
+
   return null;
 }
 
@@ -1376,6 +1398,8 @@ export const __testing = {
   replaceTaskInList,
   updateTaskInList,
   reconcileTaskInList,
+  taskListItemFromBoardTask,
+  selectTaskFromCache,
   mergeMutationContext,
   applyTaskUpdateToBoard,
   removeTaskFromList,

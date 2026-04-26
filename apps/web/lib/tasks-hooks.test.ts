@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 
 import type { TaskBoardResponse } from './tasks-client';
@@ -214,5 +215,22 @@ describe('tasks-hooks board cache helpers', () => {
       taskSnapshot: null,
       touchedQueries: [],
     });
+  });
+
+  it('falls back to board cache when resolving a task outside the first list page', () => {
+    const queryClient = new QueryClient();
+    const userScope = 'user-123';
+
+    queryClient.setQueryData(__testing.taskQueryKeys.board(userScope), board);
+
+    const resolved = __testing.selectTaskFromCache(
+      queryClient,
+      userScope,
+      '11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(resolved).toEqual(
+      __testing.taskListItemFromBoardTask(board.columns[0].tasks[0]),
+    );
   });
 });

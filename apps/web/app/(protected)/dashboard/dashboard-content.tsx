@@ -680,8 +680,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     return map;
   }, [orderedTasksByStatus]);
   const editableTaskIds = useMemo(
-    () => new Set(tasksQuery.tasks.map((task) => task.id)),
-    [tasksQuery.tasks],
+    () => new Set(renderedTaskMap.keys()),
+    [renderedTaskMap],
   );
   const draggableTaskIds = useMemo(() => {
     const ids = new Set<string>();
