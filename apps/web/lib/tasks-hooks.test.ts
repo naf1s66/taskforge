@@ -193,4 +193,26 @@ describe('tasks-hooks board cache helpers', () => {
     expect(updated.items).toEqual([movedTask, list.items[0]]);
     expect(updated.total).toBe(2);
   });
+
+  it('preserves caller mutation context when merging board-move internal context', () => {
+    const merged = __testing.mergeMutationContext(
+      {
+        touchedQueries: [],
+        optimisticTaskId: '11111111-1111-4111-8111-111111111111',
+        taskSnapshot: null,
+      },
+      {
+        rollbackToastId: 'toast-123',
+        sourceColumnId: 'todo-column',
+      },
+    );
+
+    expect(merged).toMatchObject({
+      rollbackToastId: 'toast-123',
+      sourceColumnId: 'todo-column',
+      optimisticTaskId: '11111111-1111-4111-8111-111111111111',
+      taskSnapshot: null,
+      touchedQueries: [],
+    });
+  });
 });

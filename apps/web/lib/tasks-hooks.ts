@@ -60,12 +60,15 @@ type TaskBoardQueryOptions = Omit<
 type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
 type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
 
-interface TaskMutationContext {
+interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
   boardSnapshot?: TaskBoardResponse;
   taskSnapshot?: TaskListItem | null;
 }
+
+type TaskMutationContext<TContext extends object = Record<string, never>> =
+  TContext & InternalTaskMutationContext;
 
 export interface TaskOperationError {
   message: string;
@@ -393,6 +396,20 @@ function reconcileTaskInList(
   }
 
   return replaceTaskInList(list, previousId, task);
+}
+
+function mergeMutationContext<TContext extends object>(
+  internalContext: InternalTaskMutationContext,
+  externalContext: TContext | undefined,
+): TaskMutationContext<TContext> {
+  if (!externalContext) {
+    return internalContext as TaskMutationContext<TContext>;
+  }
+
+  return {
+    ...externalContext,
+    ...internalContext,
+  };
 }
 
 function summarizeBoardTaskTags(tasks: TaskBoardResponse['columns'][number]['tasks']) {
@@ -1150,8 +1167,13 @@ interface MoveTaskVariables extends BoardMoveInput {
   targetIndex: number;
 }
 
-export function useMoveTaskOnBoard(
-  options?: UseMutationOptions<TaskBoardResponse, TaskClientError, MoveTaskVariables, TaskMutationContext>,
+export function useMoveTaskOnBoard<TContext extends object = Record<string, never>>(
+  options?: UseMutationOptions<
+    TaskBoardResponse,
+    TaskClientError,
+    MoveTaskVariables,
+    TaskMutationContext<TContext>
+  >,
 ): UseTaskMutationResult<TaskBoardResponse, MoveTaskVariables> {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -1188,14 +1210,14 @@ export function useMoveTaskOnBoard(
         queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
       }
 
-      const context = {
+      const internalContext = {
         touchedQueries,
         optimisticTaskId: taskId,
         boardSnapshot,
         taskSnapshot,
-      } satisfies TaskMutationContext;
-      await onMutate?.(variables);
-      return context;
+      } satisfies InternalTaskMutationContext;
+      const externalContext = await onMutate?.(variables);
+      return mergeMutationContext(internalContext, externalContext);
     },
     onError: (error, variables, context) => {
       if (context) {
@@ -1354,6 +1376,7 @@ export const __testing = {
   replaceTaskInList,
   updateTaskInList,
   reconcileTaskInList,
+  mergeMutationContext,
   applyTaskUpdateToBoard,
   removeTaskFromList,
   taskQueryKeys,
