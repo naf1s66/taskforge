@@ -586,67 +586,47 @@ function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
 }
 
 function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoardResponse {
-  const columns = board.columns.map((column) => {
-    const nextTasks = column.tasks.filter((task) => task.id !== taskId);
-    if (nextTasks.length === column.tasks.length) {
-      return column;
-    }
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.filter((task) => task.id !== taskId).map((task) => ({ ...task })),
+  }));
 
-    return {
-      ...column,
-      tasks: nextTasks.map((task, index) => ({ ...task, position: index })),
-      total: Math.max(0, column.total - (column.tasks.length - nextTasks.length)),
-    };
-  });
-
-  let removedCount = 0;
-  const totalsByStatus = { ...board.summary.totalsByStatus };
-
-  for (const previousColumn of board.columns) {
-    const nextColumn = columns.find((column) => column.status === previousColumn.status);
-    if (!nextColumn) {
-      continue;
-    }
-
-    const removedInColumn = previousColumn.tasks.length - nextColumn.tasks.length;
-    if (removedInColumn > 0) {
-      totalsByStatus[previousColumn.status] = Math.max(0, totalsByStatus[previousColumn.status] - removedInColumn);
-      removedCount += removedInColumn;
-    }
-  }
+  const removedCount = board.columns.reduce((count, column) => {
+    const remaining = columns.find((nextColumn) => nextColumn.status === column.status);
+    return count + (column.tasks.length - (remaining?.tasks.length ?? 0));
+  }, 0);
 
   if (removedCount === 0) {
     return board;
   }
 
+  const now = new Date();
+  const nextColumns = rebuildBoardColumns(columns, now);
   return {
     ...board,
-    columns,
-    summary: {
-      ...board.summary,
-      totalsByStatus,
-      totalTasks: Math.max(0, board.summary.totalTasks - removedCount),
-    },
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: now.toISOString(),
   };
 }
 
 function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
-  const columns = board.columns.map((column) => ({ ...column, tasks: [...column.tasks] }));
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((task) => ({ ...task })),
+  }));
   let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
-  let sourceStatus: TaskStatus | null = null;
 
   for (const column of columns) {
     const index = column.tasks.findIndex((task) => task.id === input.taskId);
     if (index !== -1) {
       const [task] = column.tasks.splice(index, 1);
-      sourceStatus = task.status;
       movedTask = { ...task, status: input.targetStatus };
-      column.total = column.tasks.length;
       break;
     }
   }
 
-  if (!movedTask || !sourceStatus) {
+  if (!movedTask) {
     return board;
   }
 
@@ -657,22 +637,14 @@ function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVar
 
   const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
   targetColumn.tasks.splice(insertIndex, 0, movedTask);
-  targetColumn.total = targetColumn.tasks.length;
-
-  const nextTotalsByStatus = { ...board.summary.totalsByStatus };
-  if (sourceStatus !== input.targetStatus) {
-    nextTotalsByStatus[sourceStatus] = Math.max(0, nextTotalsByStatus[sourceStatus] - 1);
-    nextTotalsByStatus[input.targetStatus] = nextTotalsByStatus[input.targetStatus] + 1;
-  }
+  const now = new Date();
+  const nextColumns = rebuildBoardColumns(columns, now);
 
   return {
     ...board,
-    columns,
-    summary: {
-      ...board.summary,
-      totalsByStatus: nextTotalsByStatus,
-    },
-    updatedAt: new Date().toISOString(),
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: now.toISOString(),
   };
 }
 
@@ -1494,6 +1466,8 @@ export const __testing = {
   selectTaskFromCache,
   mergeMutationContext,
   applyTaskUpdateToBoard,
+  applyOptimisticMoveToBoard,
   removeTaskFromList,
+  removeTaskFromBoard,
   taskQueryKeys,
 };
