@@ -120,6 +120,29 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
     }
   });
 
+  router.get('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid identifier' });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const task = await repository.getTask(user.id, params.data.id);
+      if (!task) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      res.json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.patch('/board/move', async (req, res, next) => {
     const parsed = TaskBoardMoveSchema.safeParse(req.body);
     if (!parsed.success) {

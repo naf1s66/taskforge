@@ -599,6 +599,28 @@ export async function listTasks(
   );
 }
 
+export async function getTask(
+  id: string,
+  options?: TaskClientRequestOptions,
+): Promise<TaskRecordDTO> {
+  const validatedId = TaskIdSchema.safeParse(id);
+  if (!validatedId.success) {
+    throw new TaskClientError('Task identifier was invalid.', {
+      kind: 'validation',
+      issues: validatedId.error.issues,
+    });
+  }
+
+  return requestJson(
+    `v1/tasks/${validatedId.data}`,
+    {
+      method: 'GET',
+      schema: TaskRecordSchema,
+    },
+    options,
+  );
+}
+
 export async function getTaskBoard(options?: TaskClientRequestOptions): Promise<BoardReadModelDTO> {
   return requestJson(
     'v1/tasks/board',

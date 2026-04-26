@@ -17,6 +17,7 @@ import type { ZodIssue } from 'zod';
 import {
   createTask,
   deleteTask,
+  getTask,
   listTasks,
   getTaskBoard,
   moveTaskOnBoard,
@@ -46,6 +47,7 @@ type TaskQueryFnData = TaskListData;
 
 type TaskQueryKey = ReturnType<typeof taskQueryKeys.list>;
 type TaskBoardQueryKey = ReturnType<typeof taskQueryKeys.board>;
+type TaskDetailQueryKey = ReturnType<typeof taskQueryKeys.detail>;
 
 type TaskQueryOptions = Omit<
   UseQueryOptions<TaskQueryFnData, TaskClientError, TaskQueryFnData, TaskQueryKey>,
@@ -57,8 +59,14 @@ type TaskBoardQueryOptions = Omit<
   'queryKey' | 'queryFn'
 >;
 
+type TaskDetailQueryOptions = Omit<
+  UseQueryOptions<TaskListItem, TaskClientError, TaskListItem, TaskDetailQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
 type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
 type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
+type TaskDetailQueryResult = UseQueryResult<TaskListItem, TaskClientError>;
 
 interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
@@ -109,6 +117,20 @@ export interface UseTaskBoardQueryResult {
   rawError: unknown;
 }
 
+export interface UseTaskRecordQueryResult {
+  data: TaskListItem | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TaskDetailQueryResult['status'];
+  fetchStatus: TaskDetailQueryResult['fetchStatus'];
+  refetch: TaskDetailQueryResult['refetch'];
+  queryKey: TaskDetailQueryKey | null;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
 export interface UseTaskMutationResult<TData, TVariables>
   extends Pick<
       UseMutationResult<TData, TaskClientError, TVariables, TaskMutationContext>,
@@ -146,6 +168,7 @@ const taskQueryKeys = {
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
   board: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
+  detail: (userKey: string, taskId: string) => [...taskQueryKeys.all(userKey), 'detail', taskId] as const,
 };
 
 const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
@@ -842,6 +865,70 @@ export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoard
   };
 }
 
+export function useTaskRecordQuery(
+  taskId?: string,
+  options?: TaskDetailQueryOptions,
+): UseTaskRecordQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(
+    () => (taskId ? taskQueryKeys.detail(userScope, taskId) : null),
+    [taskId, userScope],
+  );
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled && Boolean(taskId) && Boolean(queryKey);
+
+  const query = useQuery({
+    queryKey: queryKey ?? taskQueryKeys.detail(userScope, '__disabled__'),
+    queryFn: async () => {
+      const payload = await getTask(taskId as string);
+      return { ...payload } satisfies TaskListItem;
+    },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
 function buildOptimisticTask(input: CreateTaskInput): TaskListItem {
   const now = new Date().toISOString();
   const randomId =
@@ -906,6 +993,11 @@ function selectTaskFromCache(
     if (match) {
       return match;
     }
+  }
+
+  const detail = queryClient.getQueryData<TaskListItem>(taskQueryKeys.detail(userScope, taskId));
+  if (detail) {
+    return detail;
   }
 
   const board = queryClient.getQueryData<TaskBoardResponse>(taskQueryKeys.board(userScope));

@@ -4,6 +4,7 @@ import {
   clearManualTaskClientAuthState,
   createTask,
   deleteTask,
+  getTask,
   listTasks,
   TaskClientError,
   updateTask,
@@ -174,6 +175,23 @@ describe('tasks-client', () => {
       await expect(
         updateTask(sampleTask.id, { status: 'DONE' }, { baseUrl: API_BASE_URL, fetchImpl: fetchMock }),
       ).rejects.toMatchObject({ kind: 'serialization' satisfies TaskClientError['kind'] });
+    });
+  });
+
+  describe('getTask', () => {
+    it('requests a single task record by id', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sampleTask));
+
+      const result = await getTask(sampleTask.id, {
+        baseUrl: API_BASE_URL,
+        fetchImpl: fetchMock,
+      });
+
+      expect(result).toEqual(sampleTask);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tasks/${sampleTask.id}`);
+      expect((init as RequestInit)?.method).toBe('GET');
     });
   });
 

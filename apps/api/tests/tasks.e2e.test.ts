@@ -681,6 +681,56 @@ describe("Tasks API", () => {
     });
   });
 
+  describe("get by id", () => {
+    it("returns a single task for the authenticated user", async () => {
+      const auth = await register();
+      const created = await createTask({
+        userId: auth.userId,
+        title: "Inspect backlog item",
+        description: "Needs the full task payload",
+        status: "IN_PROGRESS",
+        priority: "MEDIUM",
+        dueDate: "2024-03-10T10:00:00.000Z",
+        tags: ["detail", "view"],
+      });
+
+      const response = await withAuth(
+        agent.get(`/api/taskforge/v1/tasks/${created.task.id}`),
+        auth,
+      ).expect(200);
+
+      expect(response.body).toEqual({
+        id: created.task.id,
+        title: "Inspect backlog item",
+        description: "Needs the full task payload",
+        status: "IN_PROGRESS",
+        priority: "MEDIUM",
+        dueDate: "2024-03-10T10:00:00.000Z",
+        tags: ["detail", "view"],
+        createdAt: created.task.createdAt,
+        updatedAt: created.task.updatedAt,
+      });
+    });
+
+    it("returns 404 when retrieving another user's task", async () => {
+      const auth = await register();
+      const someoneElse = await createUser({
+        email: "view-other@example.com",
+      });
+      const foreignTask = await createTask({
+        userId: someoneElse.user.id,
+        title: "Private detail",
+      });
+
+      const response = await withAuth(
+        agent.get(`/api/taskforge/v1/tasks/${foreignTask.task.id}`),
+        auth,
+      ).expect(404);
+
+      expect(response.body).toEqual({ error: "Not found" });
+    });
+  });
+
   describe("delete", () => {
     it("deletes a task and returns a confirmation payload", async () => {
       const auth = await register();
