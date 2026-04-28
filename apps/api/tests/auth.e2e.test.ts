@@ -172,6 +172,22 @@ describe('Auth API', () => {
     expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
   });
 
+  it('prefers the dev bypass token when a stale session cookie is present', async () => {
+    const registered = await registerTestUser(agent, { email: 'dev-bypass-stale-cookie@example.com' });
+    const devBypassToken = createDevBypassClientToken(
+      { userId: registered.user.id, email: registered.user.email },
+      devBypassClientSecret,
+    );
+
+    const tasks = await agent
+      .get('/api/taskforge/v1/tasks')
+      .set('Cookie', `${getSessionCookieName()}=stale-or-invalid-cookie`)
+      .set('x-taskforge-dev-bypass', devBypassToken)
+      .expect(200);
+
+    expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
+  });
+
   it('rejects protected requests without a token', async () => {
     await agent.get('/api/taskforge/v1/auth/me').expect(401);
     await agent.get('/api/taskforge/v1/tasks').expect(401);
