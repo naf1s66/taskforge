@@ -232,6 +232,7 @@ describe('tasks-hooks board cache helpers', () => {
     expect(resolved).toEqual(
       __testing.taskListItemFromBoardTask(board.columns[0].tasks[0]),
     );
+    expect(resolved?._partial).toBe(true);
   });
 
   it('recomputes overdue summary when applying an optimistic board move', () => {

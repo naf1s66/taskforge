@@ -37,7 +37,7 @@ import type {
 import { useAuth } from './use-auth';
 import type { TaskStatus } from '@taskforge/shared';
 
-export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean };
+export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean; _partial?: boolean };
 
 export interface TaskListData extends Omit<TaskListResponse, 'items'> {
   items: TaskListItem[];
@@ -432,6 +432,7 @@ function taskListItemFromBoardTask(task: TaskBoardResponse['columns'][number]['t
     tags: [...task.tags],
     createdAt: task.updatedAt,
     updatedAt: task.updatedAt,
+    _partial: true,
   };
 }
 

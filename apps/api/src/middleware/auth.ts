@@ -4,26 +4,57 @@ import { getSessionCookieName } from '@taskforge/shared';
 
 import type { TokenService } from '../auth/token';
 import type { UserStore } from '../auth/user-store';
+import { verifyDevBypassClientToken } from '../auth/dev-bypass-client-token';
 
 export interface AuthMiddlewareOptions {
   tokenService: TokenService;
   userStore: UserStore;
+  devBypassEnabled?: boolean;
+  devBypassClientSecret?: string;
 }
 
-export function createAuthMiddleware({ tokenService, userStore }: AuthMiddlewareOptions) {
+export function createAuthMiddleware({
+  tokenService,
+  userStore,
+  devBypassEnabled = false,
+  devBypassClientSecret,
+}: AuthMiddlewareOptions) {
   const sessionCookieName = getSessionCookieName();
+  const devBypassHeaderName = 'x-taskforge-dev-bypass';
+
   return async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     // Try to get token from HttpOnly cookie first, then fallback to Authorization header
     let token = req.cookies?.[sessionCookieName];
-    
+
     if (!token) {
       const header = req.headers.authorization;
       if (header && header.startsWith('Bearer ')) {
         token = header.slice('Bearer '.length).trim();
       }
     }
-    
+
     if (!token) {
+      const devBypassToken = req.get(devBypassHeaderName);
+      if (devBypassToken && devBypassEnabled && devBypassClientSecret) {
+        try {
+          const claims = verifyDevBypassClientToken(devBypassToken, devBypassClientSecret);
+          const user = await userStore.findById(claims.userId);
+          if (!user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+          }
+
+          res.locals.user = {
+            id: user.id,
+            email: user.email,
+            createdAt: user.createdAt.toISOString(),
+          };
+          res.locals.token = devBypassToken;
+          return next();
+        } catch {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      }
+
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -40,8 +71,8 @@ export function createAuthMiddleware({ tokenService, userStore }: AuthMiddleware
         createdAt: user.createdAt.toISOString(),
       };
       res.locals.token = token;
-      next();
-    } catch (error) {
+      return next();
+    } catch {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   };

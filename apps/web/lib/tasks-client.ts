@@ -247,6 +247,7 @@ export class TaskClientError extends Error {
 export interface TaskClientAuthState {
   sessionCookie?: string;
   accessToken?: string;
+  devBypassToken?: string;
 }
 
 export interface TaskClientRequestOptions extends TaskClientAuthState {
@@ -259,6 +260,7 @@ export interface TaskClientRequestOptions extends TaskClientAuthState {
 }
 
 let manualServerAuthState: TaskClientAuthState | undefined;
+let browserAuthState: TaskClientAuthState | undefined;
 let triedLoadingNextCookies = false;
 let nextCookiesGetter: (() => { get(name: string): { value?: string } | undefined } | undefined) | undefined;
 let serverAuthStoragePromise: Promise<AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
@@ -308,6 +310,14 @@ async function getServerAuthState(): Promise<TaskClientAuthState | undefined> {
   }
 
   return manualServerAuthState;
+}
+
+function getBrowserAuthState(): TaskClientAuthState | undefined {
+  if (!isBrowser()) {
+    return undefined;
+  }
+
+  return browserAuthState;
 }
 
 async function tryReadNextSessionCookie(): Promise<string | undefined> {
@@ -360,8 +370,25 @@ async function resolveAccessToken(options?: TaskClientRequestOptions): Promise<s
     return options.accessToken;
   }
 
+  if (isBrowser()) {
+    return getBrowserAuthState()?.accessToken;
+  }
+
   const state = await getServerAuthState();
   return state?.accessToken;
+}
+
+async function resolveDevBypassToken(options?: TaskClientRequestOptions): Promise<string | undefined> {
+  if (options?.devBypassToken) {
+    return options.devBypassToken;
+  }
+
+  if (isBrowser()) {
+    return getBrowserAuthState()?.devBypassToken;
+  }
+
+  const state = await getServerAuthState();
+  return state?.devBypassToken;
 }
 
 function ensureBaseUrl(options?: TaskClientRequestOptions): string {
@@ -454,6 +481,11 @@ async function applyAuth(headers: Headers, options?: TaskClientRequestOptions): 
   const accessToken = await resolveAccessToken(options);
   if (accessToken) {
     headers.set('authorization', accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`);
+  } else {
+    const devBypassToken = await resolveDevBypassToken(options);
+    if (devBypassToken) {
+      headers.set('x-taskforge-dev-bypass', devBypassToken);
+    }
   }
 
   if (options?.credentials) {
@@ -753,4 +785,12 @@ export async function withTaskClientAuth<T>(
 
 export function clearManualTaskClientAuthState(): void {
   manualServerAuthState = undefined;
+}
+
+export function setBrowserTaskClientAuthState(auth: TaskClientAuthState | undefined): void {
+  browserAuthState = auth;
+}
+
+export function clearBrowserTaskClientAuthState(): void {
+  browserAuthState = undefined;
 }

@@ -66,6 +66,8 @@ export interface AuthRouterOptions {
   jwtSecret?: string;
   jwtRefreshSecret?: string;
   sessionBridgeSecret?: string;
+  devBypassEnabled?: boolean;
+  devBypassClientSecret?: string;
   bcryptSaltRounds?: number;
   accessTokenExpiresIn?: string | number;
   refreshTokenExpiresIn?: string | number;
@@ -128,7 +130,12 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   if (!bridgeSecret) {
     console.warn('Session bridge endpoint disabled: SESSION_BRIDGE_SECRET is not configured.');
   }
-  const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
+  const authMiddleware = createAuthMiddleware({
+    tokenService: tokens,
+    userStore: store,
+    devBypassEnabled: options.devBypassEnabled ?? (process.env.NODE_ENV !== 'production' && process.env.TF_DEV_BYPASS_AUTH === 'true'),
+    devBypassClientSecret: options.devBypassClientSecret ?? process.env.TF_DEV_BYPASS_CLIENT_SECRET,
+  });
 
   const router = Router();
 
