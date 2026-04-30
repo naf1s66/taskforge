@@ -5,7 +5,7 @@ import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 import { createDevBypassClientToken } from '@/lib/dev-bypass-client-token';
 import { isDevAuthBypassEnabled } from '@/lib/dev-auth-bypass';
 import { getCurrentUser } from '@/lib/server-auth';
-import { getFreshBridgedAccessToken, getSessionCookieOptions } from '@/lib/session-bridge';
+import { getBridgedAccessToken, getSessionCookieOptions } from '@/lib/session-bridge';
 
 interface ApiMeResponse {
   user: { id: string; email: string | null; createdAt?: string } | null;
@@ -60,10 +60,19 @@ async function readApiSessionUser(): Promise<SessionLookupResult> {
 export async function GET() {
   const devBypassEnabled = isDevAuthBypassEnabled();
   const bypassUser = devBypassEnabled ? await getCurrentUser() : null;
+  const sessionLookup = await readApiSessionUser();
+
+  if (sessionLookup.kind === 'success') {
+    if (bypassUser && sessionLookup.payload.user?.id !== bypassUser.id) {
+      console.warn('[auth] Ignoring cookie session that does not match the active dev bypass user.');
+    } else {
+      return NextResponse.json(sessionLookup.payload satisfies ApiMeResponse);
+    }
+  }
 
   if (devBypassEnabled && bypassUser) {
     try {
-      const accessToken = await getFreshBridgedAccessToken(bypassUser);
+      const accessToken = await getBridgedAccessToken(bypassUser);
       const response = NextResponse.json({
         user: {
           id: bypassUser.id,
@@ -74,16 +83,6 @@ export async function GET() {
       return response;
     } catch (error) {
       console.error('[auth] Failed to bridge dev bypass session', error);
-    }
-  }
-
-  const sessionLookup = await readApiSessionUser();
-
-  if (sessionLookup.kind === 'success') {
-    if (bypassUser && sessionLookup.payload.user?.id !== bypassUser.id) {
-      console.warn('[auth] Ignoring cookie session that does not match the active dev bypass user.');
-    } else {
-      return NextResponse.json(sessionLookup.payload satisfies ApiMeResponse);
     }
   }
 
