@@ -13,4 +13,5 @@
 
 ## Notes
 - Reuse shadcn/ui cards/badges for task items so the board matches the rest of the design system.
-- Provide sensible empty states per column (“Nothing in progress yet”) so the board still feels polished without data.
+- Provide sensible empty states per column ("Nothing in progress yet") so the board still feels polished without data.
+- Follow-up behavior for sorted views is tracked separately in `05-sorted-board-drag-rules.md`.

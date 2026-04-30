@@ -13,4 +13,5 @@
 
 ## Notes
 - Consider transactional updates (Prisma $transaction) when reordering so concurrent drags cannot corrupt indices.
+- Sorted-view drag behavior is tracked in `05-sorted-board-drag-rules.md`; the move endpoint should keep accepting a deterministic `targetIndex` even when the UI treats a move as status-only.
 - Document the endpoints in OpenAPI and add `.http` examples so QA can exercise the flows without the UI.

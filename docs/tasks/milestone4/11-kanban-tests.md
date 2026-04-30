@@ -9,6 +9,7 @@
 ## Acceptance Criteria
 - [ ] API tests seed tags/tasks, hit the board endpoints, and assert grouping + counts.
 - [ ] Frontend tests (Playwright/React Testing Library) simulate drag/drop and verify optimistic updates roll back on failure.
+- [ ] Frontend tests cover `05-sorted-board-drag-rules.md`: manual same-lane reorder, sorted same-lane drag disabled, and sorted cross-lane status move.
 - [ ] CI executes the suites within acceptable time (<5 minutes) and reports flaky retries if they occur.
 
 ## Notes

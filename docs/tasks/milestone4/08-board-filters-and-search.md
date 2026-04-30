@@ -14,3 +14,4 @@
 ## Notes
 - Align filter tokens with the `/tasks` list page so both surfaces share the same semantics and DTOs.
 - Consider storing the last-used filter combo in localStorage to make returning to the board feel seamless.
+- Keep filter behavior consistent with `05-sorted-board-drag-rules.md`: derived views can move cards across statuses, but should not imply manual placement.

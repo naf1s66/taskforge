@@ -9,7 +9,7 @@
 ## Acceptance Criteria
 - [ ] PRD includes Kanban goals, success metrics, and UX notes that mirror the shipped implementation.
 - [ ] README gains setup/testing instructions for the board (e.g., enabling drag/drop in Docker, running the `.http` pack).
-- [ ] Any new decisions about tags/board ordering are captured in an ADR amendment or a new ADR.
+- [ ] Any new decisions about tags/board ordering are captured in an ADR amendment or a new ADR, including the sorted-view drag behavior from `05-sorted-board-drag-rules.md`.
 
 ## Notes
 - Link to the manual/automated test checklists so QA can validate Milestone 4 quickly.
