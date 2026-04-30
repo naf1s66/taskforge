@@ -275,6 +275,10 @@ function isTaskListQueryKey(queryKey: QueryKey, userScope: string): boolean {
   return Array.isArray(queryKey) && queryKey[0] === TASK_QUERY_SCOPE && queryKey[1] === userScope && queryKey[2] === 'list';
 }
 
+function isOptimisticIdMapQueryKey(queryKey: QueryKey, userScope: string): boolean {
+  return Array.isArray(queryKey) && queryKey[0] === OPTIMISTIC_ID_MAP_SCOPE && queryKey[1] === userScope;
+}
+
 function createTaskClientErrorMessage(error: TaskClientError): string {
   switch (error.kind) {
     case 'validation':
@@ -1134,7 +1138,7 @@ export function useTaskReplacementId(optimisticTask: TaskListItem | null): strin
 
       const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
         const key = event.query?.queryKey;
-        if (Array.isArray(key) && key[0] === TASK_QUERY_SCOPE && key[1] === userScope) {
+        if (key && isOptimisticIdMapQueryKey(key, userScope)) {
           onStoreChange();
         }
       });
