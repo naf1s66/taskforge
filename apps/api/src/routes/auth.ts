@@ -73,6 +73,13 @@ export interface AuthRouterOptions {
   refreshTokenExpiresIn?: string | number;
 }
 
+function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') &&
+    env.TF_DEV_BYPASS_AUTH === 'true'
+  );
+}
+
 function resolveSaltRounds(explicit?: number): number {
   if (explicit && Number.isFinite(explicit) && explicit > 0) {
     return explicit;
@@ -133,7 +140,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   const authMiddleware = createAuthMiddleware({
     tokenService: tokens,
     userStore: store,
-    devBypassEnabled: options.devBypassEnabled ?? (process.env.NODE_ENV !== 'production' && process.env.TF_DEV_BYPASS_AUTH === 'true'),
+    devBypassEnabled: options.devBypassEnabled ?? isDevBypassEnabled(),
     devBypassClientSecret: options.devBypassClientSecret ?? process.env.TF_DEV_BYPASS_CLIENT_SECRET,
   });
 

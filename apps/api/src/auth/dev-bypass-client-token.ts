@@ -40,6 +40,10 @@ function parsePayload(token: string): { payload: DevBypassTokenPayload; payloadS
   return { payload, payloadSegment, signature };
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function createDevBypassClientToken(
   claims: DevBypassClientTokenClaims,
   secret: string,
@@ -80,6 +84,22 @@ export function verifyDevBypassClientToken(
 
   if (payload.aud !== DEV_BYPASS_TOKEN_AUDIENCE) {
     throw new Error('Invalid dev bypass token audience');
+  }
+
+  if (typeof payload.sub !== 'string' || payload.sub.trim().length === 0) {
+    throw new Error('Invalid dev bypass token subject');
+  }
+
+  if (payload.email !== null && typeof payload.email !== 'string') {
+    throw new Error('Invalid dev bypass token email');
+  }
+
+  if (!isFiniteNumber(payload.iat)) {
+    throw new Error('Invalid dev bypass token issued-at timestamp');
+  }
+
+  if (!isFiniteNumber(payload.exp)) {
+    throw new Error('Invalid dev bypass token expiration');
   }
 
   const nowInSeconds = Math.floor(now / 1000);
