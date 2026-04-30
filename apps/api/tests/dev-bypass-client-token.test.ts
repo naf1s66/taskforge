@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto';
 import {
   createDevBypassClientToken,
   verifyDevBypassClientToken,
-} from './dev-bypass-client-token';
+} from '../src/auth/dev-bypass-client-token';
 
 const SECRET = 'test-dev-bypass-client-secret';
 

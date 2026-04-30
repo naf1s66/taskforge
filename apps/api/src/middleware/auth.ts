@@ -50,10 +50,6 @@ export function createAuthMiddleware({
   return async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     const devBypassToken = req.get(devBypassHeaderName);
 
-    if (devBypassToken && (await authenticateWithDevBypassToken(devBypassToken, res, next))) {
-      return;
-    }
-
     // Try to get token from HttpOnly cookie first, then fallback to Authorization header
     let token = req.cookies?.[sessionCookieName];
 
@@ -65,6 +61,10 @@ export function createAuthMiddleware({
     }
 
     if (!token) {
+      if (devBypassToken && (await authenticateWithDevBypassToken(devBypassToken, res, next))) {
+        return;
+      }
+
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
