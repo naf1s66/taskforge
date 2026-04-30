@@ -9,6 +9,12 @@ import { isDevAuthBypassEnabled } from './dev-auth-bypass';
 import { getPrismaClient } from './prisma';
 
 export type AuthenticatedUser = NonNullable<Session['user']>;
+export type CurrentUserSource = 'nextauth' | 'api-cookie' | 'dev-bypass' | null;
+
+export interface CurrentUserResolution {
+  user: AuthenticatedUser | null;
+  source: CurrentUserSource;
+}
 
 const devAuthBypassEnabled = isDevAuthBypassEnabled();
 
@@ -93,14 +99,39 @@ async function getApiUserFromCookie(): Promise<AuthenticatedUser | null> {
 }
 
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
-  if (devAuthBypassEnabled) {
-    return getDevBypassUser();
-  }
+  const resolution = await getCurrentUserContext();
+  return resolution.user;
+}
 
+export async function getCurrentUserContext(): Promise<CurrentUserResolution> {
   const session = await auth();
   if (session?.user) {
-    return session.user as AuthenticatedUser;
+    return {
+      user: session.user as AuthenticatedUser,
+      source: 'nextauth',
+    };
   }
 
-  return getApiUserFromCookie();
+  const apiUser = await getApiUserFromCookie();
+  if (apiUser) {
+    return {
+      user: apiUser,
+      source: 'api-cookie',
+    };
+  }
+
+  if (devAuthBypassEnabled) {
+    const bypassUser = await getDevBypassUser();
+    if (bypassUser) {
+      return {
+        user: bypassUser,
+        source: 'dev-bypass',
+      };
+    }
+  }
+
+  return {
+    user: null,
+    source: null,
+  };
 }
