@@ -501,7 +501,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   }, [boardQuery.data]);
 
   const isBoardReady = Boolean(boardOrder);
-  const canDragTasks = isBoardReady && !boardQuery.error && !moveTask.isPending;
+  const canDragTasks = isBoardReady && !boardQuery.error;
 
   useEffect(() => {
     if (!boardOrder || activeId) {
