@@ -398,6 +398,7 @@ function BoardColumn({
   activeId,
   editableTaskIds,
   draggableTaskIds,
+  preciseDropPreview,
 }: {
   status: TaskStatus;
   meta: { title: string; description: string };
@@ -407,6 +408,7 @@ function BoardColumn({
   activeId: string | null;
   editableTaskIds: ReadonlySet<string>;
   draggableTaskIds: ReadonlySet<string>;
+  preciseDropPreview: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: getColumnId(status),
@@ -441,7 +443,11 @@ function BoardColumn({
         aria-label={`${meta.title} drop zone`}
         className={cn(
           "space-y-3 rounded-lg border border-dashed border-border/40 bg-background/40 p-3 transition-colors",
-          isOver ? "border-primary/60 bg-primary/5 ring-2 ring-primary/30" : "",
+          isOver
+            ? preciseDropPreview
+              ? "border-primary/60 bg-primary/5 ring-2 ring-primary/30"
+              : "border-primary/80 bg-primary/10 ring-2 ring-primary/45"
+            : "",
         )}
       >
         {tasks.length === 0 ? (
@@ -482,6 +488,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const [inFlightTaskIds, setInFlightTaskIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const isManualSort = sortBy === "manual";
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
   const inFlightTaskIdsRef = useRef<Set<string>>(new Set());
@@ -857,7 +864,6 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
 
     setActiveId(currentId);
-    setSortBy("manual");
     dragSnapshotRef.current = cloneColumnOrder(columnOrderRef.current);
   };
 
@@ -873,6 +879,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const overStatus = findStatusForTask(overId);
 
     if (!activeStatus || !overStatus) {
+      return;
+    }
+
+    if (activeStatus === overStatus && !isManualSort) {
       return;
     }
 
@@ -903,9 +913,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     setColumnOrder((prev) => {
       const activeItems = prev[activeStatus].filter((id) => id !== activeId);
       const overItems = [...prev[overStatus]];
-      const overIndex = overId.startsWith(columnIdPrefix)
-        ? overItems.length
-        : overItems.indexOf(overId);
+      const overIndex = isManualSort
+        ? overId.startsWith(columnIdPrefix)
+          ? overItems.length
+          : overItems.indexOf(overId)
+        : overItems.length;
       const nextIndex = overIndex >= 0 ? overIndex : overItems.length;
       overItems.splice(nextIndex, 0, activeId);
 
@@ -966,13 +978,19 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const hasMoved =
       targetIndex !== -1 &&
       (sourceStatus !== destinationStatus ||
-        (sourceStatus === destinationStatus && initialIndex !== targetIndex));
+        (isManualSort &&
+          sourceStatus === destinationStatus &&
+          initialIndex !== targetIndex));
 
     if (hasMoved && targetIndex !== -1) {
+      const persistedTargetIndex =
+        isManualSort || sourceStatus === destinationStatus
+          ? Math.max(0, targetIndex)
+          : Math.max(0, nextOrder[destinationStatus].length - 1);
       const movePayload = {
         taskId: activeTaskId,
         targetStatus: destinationStatus,
-        targetIndex: Math.max(0, targetIndex),
+        targetIndex: persistedTargetIndex,
       };
 
       const rollback =
@@ -1199,6 +1217,15 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               : ""}
             .
           </p>
+          {!isManualSort ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Sorted by{" "}
+              {sortOptions.find((option) => option.value === sortBy)?.label ??
+                "selected order"}
+              . Cards are placed automatically after you move them. Switch to
+              Board order to reorder cards yourself.
+            </p>
+          ) : null}
         </div>
 
         {tasksQuery.error ? (
@@ -1300,7 +1327,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             accessibility={{
               screenReaderInstructions: {
                 draggable:
-                  "Focus a task drag handle, then press space or enter to pick it up. Use arrow keys to move between columns. Press space or enter again to drop.",
+                  isManualSort
+                    ? "Focus a task drag handle, then press space or enter to pick it up. Use arrow keys to move between columns. Press space or enter again to drop."
+                    : "Focus a task drag handle, then press space or enter to pick it up. Use arrow keys to move to another status column. Press space or enter again to move the task.",
               },
               announcements: {
                 onDragStart: ({ active }) => {
@@ -1309,10 +1338,12 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   if (!task || !status) {
                     return "Task picked up.";
                   }
-                  return `Picked up ${task.title}. ${statusLabels[status]} lane. ${buildPositionAnnouncement(
-                    task.id,
-                    status,
-                  )}`;
+                  return isManualSort
+                    ? `Picked up ${task.title}. ${statusLabels[status]} lane. ${buildPositionAnnouncement(
+                        task.id,
+                        status,
+                      )}`
+                    : `Picked up ${task.title} from ${statusLabels[status]} lane. Move to another lane to change its status.`;
                 },
                 onDragOver: ({ active, over }) => {
                   if (!over) {
@@ -1323,9 +1354,14 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                     return "Dragging task.";
                   }
                   const task = renderedTaskMap.get(active.id as string);
+                  if (isManualSort) {
+                    return task
+                      ? `Moving ${task.title} over ${statusLabels[status]} lane.`
+                      : `Moving over ${statusLabels[status]} lane.`;
+                  }
                   return task
-                    ? `Moving ${task.title} over ${statusLabels[status]} lane.`
-                    : `Moving over ${statusLabels[status]} lane.`;
+                    ? `Moving ${task.title} to ${statusLabels[status]} lane.`
+                    : `Moving to ${statusLabels[status]} lane.`;
                 },
                 onDragEnd: ({ active, over }) => {
                   if (!over) {
@@ -1336,7 +1372,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   if (!task || !status) {
                     return "Task dropped.";
                   }
-                  return `Dropped ${task.title} in ${statusLabels[status]} lane.`;
+                  return isManualSort
+                    ? `Dropped ${task.title} in ${statusLabels[status]} lane.`
+                    : `Moved ${task.title} to ${statusLabels[status]} status.`;
                 },
                 onDragCancel: () => "Task movement cancelled.",
               },
@@ -1354,6 +1392,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   activeId={activeId}
                   editableTaskIds={editableTaskIds}
                   draggableTaskIds={draggableTaskIds}
+                  preciseDropPreview={isManualSort}
                 />
               ))}
             </section>
