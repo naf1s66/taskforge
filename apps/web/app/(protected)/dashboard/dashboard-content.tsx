@@ -158,6 +158,12 @@ interface BoardMovePayload {
   targetIndex: number;
 }
 
+interface BoardMoveRollback {
+  taskId: string;
+  sourceStatus: TaskStatus;
+  sourceIndex: number;
+}
+
 function getInitials(user: DashboardUser) {
   return (
     user.name
@@ -763,40 +769,65 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     return findTaskStatusInOrder(columnOrderRef.current, id);
   };
 
-  const submitBoardMove = (
+  const rollbackTaskMove = (rollback: BoardMoveRollback | null) => {
+    if (!rollback) {
+      return;
+    }
+
+    setColumnOrder((prev) => {
+      const next = cloneColumnOrder(prev);
+      let found = false;
+
+      for (const status of statusOrder) {
+        const filtered = next[status].filter((id) => id !== rollback.taskId);
+        if (filtered.length !== next[status].length) {
+          found = true;
+        }
+        next[status] = filtered;
+      }
+
+      if (!found) {
+        return prev;
+      }
+
+      const sourceItems = next[rollback.sourceStatus];
+      const insertIndex = Math.max(
+        0,
+        Math.min(rollback.sourceIndex, sourceItems.length),
+      );
+      sourceItems.splice(insertIndex, 0, rollback.taskId);
+      columnOrderRef.current = next;
+      return next;
+    });
+  };
+
+  const submitBoardMove = async (
     movePayload: BoardMovePayload,
-    rollbackSnapshot: ColumnOrderState | null,
+    rollback: BoardMoveRollback | null,
   ) => {
     trackTaskMutationStart(movePayload.taskId);
-    moveTask.mutate(movePayload, {
-      onError: () => {
-        if (rollbackSnapshot) {
-          setColumnOrder(() => {
-            columnOrderRef.current = rollbackSnapshot;
-            return rollbackSnapshot;
-          });
-        }
+    try {
+      await moveTask.mutateAsync(movePayload);
+    } catch {
+      rollbackTaskMove(rollback);
 
-        toast({
-          variant: "destructive",
-          title: "Unable to move task",
-          description:
-            "Your card was moved back because the server rejected the optimistic move. Please try again.",
-          action: (
-            <ToastAction
-              altText="Retry move"
-              onClick={() => submitBoardMove(movePayload, rollbackSnapshot)}
-            >
-              Retry
-            </ToastAction>
-          ),
-        });
-      },
-      onSettled: () => {
-        trackTaskMutationEnd(movePayload.taskId);
-        dragSnapshotRef.current = null;
-      },
-    });
+      toast({
+        variant: "destructive",
+        title: "Unable to move task",
+        description:
+          "Your card was moved back because the server rejected the optimistic move. Please try again.",
+        action: (
+          <ToastAction
+            altText="Retry move"
+            onClick={() => void submitBoardMove(movePayload, rollback)}
+          >
+            Retry
+          </ToastAction>
+        ),
+      });
+    } finally {
+      trackTaskMutationEnd(movePayload.taskId);
+    }
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -921,8 +952,6 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       (sourceStatus !== destinationStatus ||
         (sourceStatus === destinationStatus && initialIndex !== targetIndex));
 
-    let clearSnapshotAfterDragEnd = true;
-
     if (hasMoved && targetIndex !== -1) {
       const movePayload = {
         taskId: activeTaskId,
@@ -930,17 +959,19 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         targetIndex: Math.max(0, targetIndex),
       };
 
-      const rollbackSnapshot = dragSnapshotRef.current
-        ? cloneColumnOrder(dragSnapshotRef.current)
-        : null;
-      clearSnapshotAfterDragEnd = false;
+      const rollback =
+        initialIndex >= 0
+          ? {
+              taskId: activeTaskId,
+              sourceStatus,
+              sourceIndex: initialIndex,
+            }
+          : null;
 
-      submitBoardMove(movePayload, rollbackSnapshot);
+      void submitBoardMove(movePayload, rollback);
     }
 
-    if (clearSnapshotAfterDragEnd) {
-      dragSnapshotRef.current = null;
-    }
+    dragSnapshotRef.current = null;
   };
 
   const handleDragCancel = () => {
