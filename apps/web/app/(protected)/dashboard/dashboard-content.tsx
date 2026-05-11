@@ -150,6 +150,8 @@ const sortOptions = [
 
 type SortOption = (typeof sortOptions)[number]["value"];
 
+const isDevMode = process.env.NODE_ENV !== "production";
+
 function getInitials(user: DashboardUser) {
   return (
     user.name
@@ -465,6 +467,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     cloneColumnOrder(emptyColumnOrder),
   );
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [inFlightTaskIds, setInFlightTaskIds] = useState<Set<string>>(() => new Set());
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
 
@@ -490,7 +493,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   }, [boardQuery.data]);
 
   const isBoardReady = Boolean(boardOrder);
-  const canDragTasks = isBoardReady && !boardQuery.error && !moveTask.isPending;
+  const canDragTasks = isBoardReady && !boardQuery.error;
 
   useEffect(() => {
     if (!boardOrder || activeId) {
@@ -689,10 +692,12 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       return ids;
     }
     for (const taskId of renderedTaskMap.keys()) {
-      ids.add(taskId);
+      if (!inFlightTaskIds.has(taskId)) {
+        ids.add(taskId);
+      }
     }
     return ids;
-  }, [canDragTasks, renderedTaskMap]);
+  }, [canDragTasks, inFlightTaskIds, renderedTaskMap]);
   const activeTask = activeId ? (renderedTaskMap.get(activeId) ?? null) : null;
 
   const buildPositionAnnouncement = (taskId: string, status: TaskStatus) => {
@@ -709,6 +714,33 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  const trackTaskMutationStart = (taskId: string) => {
+    setInFlightTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+
+    if (isDevMode) {
+      console.info("[board-move] optimistic mutation started", { taskId });
+    }
+  };
+
+  const trackTaskMutationEnd = (taskId: string) => {
+    setInFlightTaskIds((prev) => {
+      if (!prev.has(taskId)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
+
+    if (isDevMode) {
+      console.info("[board-move] mutation settled", { taskId });
+    }
+  };
 
   const findStatusForTask = (id: string) => {
     if (id.startsWith(columnIdPrefix)) {
@@ -850,6 +882,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         : null;
       clearSnapshotAfterDragEnd = false;
 
+      trackTaskMutationStart(activeTaskId);
       moveTask.mutate(movePayload, {
         onError: () => {
           if (rollbackSnapshot) {
@@ -862,7 +895,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
           toast({
             variant: "destructive",
             title: "Unable to move task",
-            description: "We could not save that move. Please try again.",
+            description:
+              "Your card was moved back because the server rejected the optimistic move. Please try again.",
             action: (
               <ToastAction
                 altText="Retry move"
@@ -874,6 +908,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
           });
         },
         onSettled: () => {
+          trackTaskMutationEnd(activeTaskId);
           dragSnapshotRef.current = null;
         },
       });

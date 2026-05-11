@@ -163,6 +163,7 @@ interface NormalizedTaskListFilters {
 const TASK_QUERY_SCOPE = 'tasks';
 
 const FALLBACK_USER_KEY = 'anonymous';
+const isDevMode = process.env.NODE_ENV !== 'production';
 
 const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
@@ -1067,6 +1068,22 @@ export function useCreateTask(
     },
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.board(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
@@ -1232,6 +1249,22 @@ export function useUpdateTask(
     },
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.board(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
@@ -1365,6 +1398,22 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
     },
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.board(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
@@ -1436,6 +1485,22 @@ export function useDeleteTask(
     },
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.board(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
