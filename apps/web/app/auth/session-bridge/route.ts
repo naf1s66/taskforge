@@ -22,7 +22,9 @@ function sanitizeReturnPath(value: string | null): string {
   return trimmed;
 }
 
-async function hasUsableApiSessionCookie(token: string): Promise<boolean> {
+type ApiSessionCookieProbe = 'valid' | 'invalid' | 'unknown';
+
+async function probeApiSessionCookie(token: string): Promise<ApiSessionCookieProbe> {
   try {
     const response = await fetch(getApiUrl('v1/me'), {
       method: 'GET',
@@ -32,10 +34,18 @@ async function hasUsableApiSessionCookie(token: string): Promise<boolean> {
       cache: 'no-store',
     });
 
-    return response.ok;
+    if (response.ok) {
+      return 'valid';
+    }
+
+    if (response.status === 401) {
+      return 'invalid';
+    }
+
+    return 'unknown';
   } catch (error) {
     console.error('[auth] Failed to validate existing API session cookie', error);
-    return false;
+    return 'unknown';
   }
 }
 
@@ -44,11 +54,15 @@ export async function GET(request: NextRequest) {
   const fromPath = sanitizeReturnPath(fromParam);
 
   const existingCookie = request.cookies.get(SESSION_COOKIE_NAME);
+  const existingCookieProbe =
+    existingCookie?.value && !isSessionTokenExpired(existingCookie.value)
+      ? await probeApiSessionCookie(existingCookie.value)
+      : 'invalid';
 
   if (
     existingCookie?.value &&
     !isSessionTokenExpired(existingCookie.value) &&
-    (await hasUsableApiSessionCookie(existingCookie.value))
+    existingCookieProbe !== 'invalid'
   ) {
     return NextResponse.redirect(new URL(fromPath, request.nextUrl.origin));
   }
