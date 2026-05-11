@@ -73,7 +73,14 @@ interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
   boardSnapshot?: TaskBoardResponse;
+  boardRollback?: BoardMoveRollback;
   taskSnapshot?: TaskListItem | null;
+}
+
+interface BoardMoveRollback {
+  taskId: string;
+  sourceStatus: TaskStatus;
+  sourceIndex: number;
 }
 
 type TaskMutationContext<TContext extends object = object> =
@@ -163,6 +170,7 @@ interface NormalizedTaskListFilters {
 const TASK_QUERY_SCOPE = 'tasks';
 
 const FALLBACK_USER_KEY = 'anonymous';
+const isDevMode = process.env.NODE_ENV !== 'production';
 
 const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
@@ -616,6 +624,21 @@ function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoar
   };
 }
 
+function getBoardMoveRollback(board: TaskBoardResponse, taskId: string): BoardMoveRollback | undefined {
+  for (const column of board.columns) {
+    const sourceIndex = column.tasks.findIndex((task) => task.id === taskId);
+    if (sourceIndex !== -1) {
+      return {
+        taskId,
+        sourceStatus: column.status,
+        sourceIndex,
+      };
+    }
+  }
+
+  return undefined;
+}
+
 function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
   const columns = board.columns.map((column) => ({
     ...column,
@@ -643,6 +666,47 @@ function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVar
 
   const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
   targetColumn.tasks.splice(insertIndex, 0, movedTask);
+  const now = new Date();
+  const nextColumns = rebuildBoardColumns(columns, now);
+
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: now.toISOString(),
+  };
+}
+
+function rollbackOptimisticMoveOnBoard(
+  board: TaskBoardResponse,
+  rollback: BoardMoveRollback,
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((task) => ({ ...task })),
+  }));
+  let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
+
+  for (const column of columns) {
+    const index = column.tasks.findIndex((task) => task.id === rollback.taskId);
+    if (index !== -1) {
+      const [task] = column.tasks.splice(index, 1);
+      movedTask = { ...task, status: rollback.sourceStatus };
+      break;
+    }
+  }
+
+  if (!movedTask) {
+    return board;
+  }
+
+  const sourceColumn = columns.find((column) => column.status === rollback.sourceStatus);
+  if (!sourceColumn) {
+    return board;
+  }
+
+  const insertIndex = Math.max(0, Math.min(rollback.sourceIndex, sourceColumn.tasks.length));
+  sourceColumn.tasks.splice(insertIndex, 0, movedTask);
   const now = new Date();
   const nextColumns = rebuildBoardColumns(columns, now);
 
@@ -1299,6 +1363,7 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
 
       const boardKey = taskQueryKeys.board(userScope);
       const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+      const boardRollback = boardSnapshot ? getBoardMoveRollback(boardSnapshot, taskId) : undefined;
       if (boardSnapshot) {
         queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
       }
@@ -1307,6 +1372,7 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
         touchedQueries,
         optimisticTaskId: taskId,
         boardSnapshot,
+        boardRollback,
         taskSnapshot,
       } satisfies InternalTaskMutationContext;
       const externalContext = await onMutate?.(variables, mutationContext);
@@ -1318,7 +1384,12 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
           queryClient.setQueryData(key, snapshot);
         }
 
-        if (context.boardSnapshot) {
+        const boardRollback = context.boardRollback;
+        if (boardRollback) {
+          queryClient.setQueryData<TaskBoardResponse | undefined>(taskQueryKeys.board(userScope), (board) =>
+            board ? rollbackOptimisticMoveOnBoard(board, boardRollback) : board,
+          );
+        } else if (context.boardSnapshot) {
           queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
         }
       }
@@ -1365,6 +1436,22 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
     },
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.board(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
