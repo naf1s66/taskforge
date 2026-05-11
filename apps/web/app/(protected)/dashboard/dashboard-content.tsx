@@ -152,6 +152,12 @@ type SortOption = (typeof sortOptions)[number]["value"];
 
 const isDevMode = process.env.NODE_ENV !== "production";
 
+interface BoardMovePayload {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
+}
+
 function getInitials(user: DashboardUser) {
   return (
     user.name
@@ -467,7 +473,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     cloneColumnOrder(emptyColumnOrder),
   );
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [inFlightTaskIds, setInFlightTaskIds] = useState<Set<string>>(() => new Set());
+  const [inFlightTaskIds, setInFlightTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
 
@@ -493,7 +501,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   }, [boardQuery.data]);
 
   const isBoardReady = Boolean(boardOrder);
-  const canDragTasks = isBoardReady && !boardQuery.error;
+  const canDragTasks = isBoardReady && !boardQuery.error && !moveTask.isPending;
 
   useEffect(() => {
     if (!boardOrder || activeId) {
@@ -682,10 +690,15 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
     return map;
   }, [orderedTasksByStatus]);
-  const editableTaskIds = useMemo(
-    () => new Set(renderedTaskMap.keys()),
-    [renderedTaskMap],
-  );
+  const editableTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const taskId of renderedTaskMap.keys()) {
+      if (!inFlightTaskIds.has(taskId)) {
+        ids.add(taskId);
+      }
+    }
+    return ids;
+  }, [inFlightTaskIds, renderedTaskMap]);
   const draggableTaskIds = useMemo(() => {
     const ids = new Set<string>();
     if (!canDragTasks) {
@@ -750,12 +763,52 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     return findTaskStatusInOrder(columnOrderRef.current, id);
   };
 
+  const submitBoardMove = (
+    movePayload: BoardMovePayload,
+    rollbackSnapshot: ColumnOrderState | null,
+  ) => {
+    trackTaskMutationStart(movePayload.taskId);
+    moveTask.mutate(movePayload, {
+      onError: () => {
+        if (rollbackSnapshot) {
+          setColumnOrder(() => {
+            columnOrderRef.current = rollbackSnapshot;
+            return rollbackSnapshot;
+          });
+        }
+
+        toast({
+          variant: "destructive",
+          title: "Unable to move task",
+          description:
+            "Your card was moved back because the server rejected the optimistic move. Please try again.",
+          action: (
+            <ToastAction
+              altText="Retry move"
+              onClick={() => submitBoardMove(movePayload, rollbackSnapshot)}
+            >
+              Retry
+            </ToastAction>
+          ),
+        });
+      },
+      onSettled: () => {
+        trackTaskMutationEnd(movePayload.taskId);
+        dragSnapshotRef.current = null;
+      },
+    });
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     if (!canDragTasks) {
       return;
     }
 
     const currentId = event.active.id as string;
+    if (inFlightTaskIds.has(currentId)) {
+      return;
+    }
+
     setActiveId(currentId);
     setSortBy("manual");
     dragSnapshotRef.current = cloneColumnOrder(columnOrderRef.current);
@@ -882,36 +935,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         : null;
       clearSnapshotAfterDragEnd = false;
 
-      trackTaskMutationStart(activeTaskId);
-      moveTask.mutate(movePayload, {
-        onError: () => {
-          if (rollbackSnapshot) {
-            setColumnOrder(() => {
-              columnOrderRef.current = rollbackSnapshot;
-              return rollbackSnapshot;
-            });
-          }
-
-          toast({
-            variant: "destructive",
-            title: "Unable to move task",
-            description:
-              "Your card was moved back because the server rejected the optimistic move. Please try again.",
-            action: (
-              <ToastAction
-                altText="Retry move"
-                onClick={() => moveTask.mutate(movePayload)}
-              >
-                Retry
-              </ToastAction>
-            ),
-          });
-        },
-        onSettled: () => {
-          trackTaskMutationEnd(activeTaskId);
-          dragSnapshotRef.current = null;
-        },
-      });
+      submitBoardMove(movePayload, rollbackSnapshot);
     }
 
     if (clearSnapshotAfterDragEnd) {
