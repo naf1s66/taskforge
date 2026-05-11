@@ -14,3 +14,4 @@
 ## Notes
 - Track in-flight operations per task to avoid double-drags; disable cards while the server is still updating.
 - Instrument with console/info logs (guarded for dev) so regressions are easier to trace.
+- When `05-sorted-board-drag-rules.md` lands, optimistic updates should distinguish exact manual reorders from sorted-view status moves.

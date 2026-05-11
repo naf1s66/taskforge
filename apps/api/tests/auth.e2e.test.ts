@@ -4,15 +4,21 @@ import type { SuperTest, Test } from 'supertest';
 
 import { getSessionCookieName } from '@taskforge/shared';
 
+import { createDevBypassClientToken } from '../src/auth/dev-bypass-client-token';
 import { createTestAgent } from './utils/test-app';
 import { loginTestUser, registerTestUser, extractSessionCookie } from './utils/auth';
 
 describe('Auth API', () => {
   let agent: SuperTest<Test>;
   const sessionBridgeSecret = 'test-bridge-secret';
+  const devBypassClientSecret = 'test-dev-bypass-client-secret';
 
   beforeEach(() => {
-    const context = createTestAgent({ sessionBridgeSecret });
+    const context = createTestAgent({
+      sessionBridgeSecret,
+      devBypassEnabled: true,
+      devBypassClientSecret,
+    });
     agent = context.agent;
   });
 
@@ -146,6 +152,37 @@ describe('Auth API', () => {
     const tasks = await agent
       .get('/api/taskforge/v1/tasks')
       .set('Authorization', `Bearer ${registered.tokens.accessToken}`)
+      .expect(200);
+
+    expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
+  });
+
+  it('allows access to tasks with a dev bypass client token when enabled', async () => {
+    const registered = await registerTestUser(agent, { email: 'dev-bypass@example.com' });
+    const devBypassToken = createDevBypassClientToken(
+      { userId: registered.user.id, email: registered.user.email },
+      devBypassClientSecret,
+    );
+
+    const tasks = await agent
+      .get('/api/taskforge/v1/tasks')
+      .set('x-taskforge-dev-bypass', devBypassToken)
+      .expect(200);
+
+    expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
+  });
+
+  it('prefers the dev bypass token when a stale session cookie is present', async () => {
+    const registered = await registerTestUser(agent, { email: 'dev-bypass-stale-cookie@example.com' });
+    const devBypassToken = createDevBypassClientToken(
+      { userId: registered.user.id, email: registered.user.email },
+      devBypassClientSecret,
+    );
+
+    const tasks = await agent
+      .get('/api/taskforge/v1/tasks')
+      .set('Cookie', `${getSessionCookieName()}=stale-or-invalid-cookie`)
+      .set('x-taskforge-dev-bypass', devBypassToken)
       .expect(200);
 
     expect(tasks.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));

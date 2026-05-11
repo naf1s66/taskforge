@@ -66,9 +66,18 @@ export interface AuthRouterOptions {
   jwtSecret?: string;
   jwtRefreshSecret?: string;
   sessionBridgeSecret?: string;
+  devBypassEnabled?: boolean;
+  devBypassClientSecret?: string;
   bcryptSaltRounds?: number;
   accessTokenExpiresIn?: string | number;
   refreshTokenExpiresIn?: string | number;
+}
+
+function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (
+    (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') &&
+    env.TF_DEV_BYPASS_AUTH === 'true'
+  );
 }
 
 function resolveSaltRounds(explicit?: number): number {
@@ -128,7 +137,12 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   if (!bridgeSecret) {
     console.warn('Session bridge endpoint disabled: SESSION_BRIDGE_SECRET is not configured.');
   }
-  const authMiddleware = createAuthMiddleware({ tokenService: tokens, userStore: store });
+  const authMiddleware = createAuthMiddleware({
+    tokenService: tokens,
+    userStore: store,
+    devBypassEnabled: options.devBypassEnabled ?? isDevBypassEnabled(),
+    devBypassClientSecret: options.devBypassClientSecret ?? process.env.TF_DEV_BYPASS_CLIENT_SECRET,
+  });
 
   const router = Router();
 

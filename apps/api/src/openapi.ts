@@ -961,6 +961,67 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
     },
     '/api/taskforge/v1/tasks/{id}': {
+      get: {
+        tags: ['Tasks'],
+        summary: 'Retrieve a task',
+        description:
+          'Returns a single task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Task retrieved',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskCreatedExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid identifier',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidIdentifier: invalidIdentifierExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Task not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
+              },
+            },
+          },
+        },
+      },
       patch: {
         tags: ['Tasks'],
         summary: 'Update a task',

@@ -1,16 +1,27 @@
 import {
   getSessionCookieName,
   type BoardReadModelDTO,
+  type TaskBoardItemDTO,
   type TaskDTO,
   type TaskRecordDTO,
   type TaskPriority,
   type TaskStatus,
 } from '@taskforge/shared';
 import { z } from 'zod';
+import type { AsyncLocalStorage } from 'async_hooks';
 
 import { getApiBaseUrl } from './env';
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
+
+export type {
+  BoardReadModelDTO,
+  TaskBoardItemDTO,
+  TaskDTO,
+  TaskPriority,
+  TaskRecordDTO,
+  TaskStatus,
+} from '@taskforge/shared';
 
 const TaskStatusSchema = z.union([z.literal('TODO'), z.literal('IN_PROGRESS'), z.literal('DONE')]);
 const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.literal('HIGH')]);
@@ -32,28 +43,41 @@ const NullableString = z
   .nullable()
   .transform((value) => value ?? undefined);
 
-const TaskRecordSchema = z.object({
-  id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  description: NullableString,
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+const TaskRecordSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    description: NullableString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    description: value.description ?? undefined,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskRecordDTO>;
 
-const TaskBoardItemSchema = z.object({
-  id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  position: z.number().int().min(0),
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  updatedAt: z.string().datetime(),
-});
+const TaskBoardItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    position: z.number().int().min(0),
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskBoardItemDTO>;
 
 const TagSummarySchema = z.object({
   label: NonEmptyTrimmedString,
@@ -235,7 +259,6 @@ export class TaskClientError extends Error {
     this.issues = init.issues;
 
     if (init.cause !== undefined) {
-      // @ts-expect-error Node 18 target may not include the cause property
       this.cause = init.cause;
     }
 
@@ -246,6 +269,7 @@ export class TaskClientError extends Error {
 export interface TaskClientAuthState {
   sessionCookie?: string;
   accessToken?: string;
+  devBypassToken?: string;
 }
 
 export interface TaskClientRequestOptions extends TaskClientAuthState {
@@ -258,16 +282,17 @@ export interface TaskClientRequestOptions extends TaskClientAuthState {
 }
 
 let manualServerAuthState: TaskClientAuthState | undefined;
+let browserAuthState: TaskClientAuthState | undefined;
 let triedLoadingNextCookies = false;
 let nextCookiesGetter: (() => { get(name: string): { value?: string } | undefined } | undefined) | undefined;
-let serverAuthStoragePromise: Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
-let serverAuthStorage: import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null | undefined;
+let serverAuthStoragePromise: Promise<AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
+let serverAuthStorage: AsyncLocalStorage<TaskClientAuthState> | null | undefined;
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.document !== 'undefined';
 }
 
-async function loadServerAuthStorage(): Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> {
+async function loadServerAuthStorage(): Promise<AsyncLocalStorage<TaskClientAuthState> | null> {
   if (isBrowser()) {
     return null;
   }
@@ -280,7 +305,7 @@ async function loadServerAuthStorage(): Promise<import('node:async_hooks').Async
     return serverAuthStoragePromise;
   }
 
-  serverAuthStoragePromise = import('node:async_hooks')
+  serverAuthStoragePromise = import(/* webpackIgnore: true */ 'async_hooks')
     .then((module) => {
       serverAuthStorage = new module.AsyncLocalStorage<TaskClientAuthState>();
       return serverAuthStorage;
@@ -307,6 +332,14 @@ async function getServerAuthState(): Promise<TaskClientAuthState | undefined> {
   }
 
   return manualServerAuthState;
+}
+
+function getBrowserAuthState(): TaskClientAuthState | undefined {
+  if (!isBrowser()) {
+    return undefined;
+  }
+
+  return browserAuthState;
 }
 
 async function tryReadNextSessionCookie(): Promise<string | undefined> {
@@ -359,8 +392,25 @@ async function resolveAccessToken(options?: TaskClientRequestOptions): Promise<s
     return options.accessToken;
   }
 
+  if (isBrowser()) {
+    return getBrowserAuthState()?.accessToken;
+  }
+
   const state = await getServerAuthState();
   return state?.accessToken;
+}
+
+async function resolveDevBypassToken(options?: TaskClientRequestOptions): Promise<string | undefined> {
+  if (options?.devBypassToken) {
+    return options.devBypassToken;
+  }
+
+  if (isBrowser()) {
+    return getBrowserAuthState()?.devBypassToken;
+  }
+
+  const state = await getServerAuthState();
+  return state?.devBypassToken;
 }
 
 function ensureBaseUrl(options?: TaskClientRequestOptions): string {
@@ -453,6 +503,11 @@ async function applyAuth(headers: Headers, options?: TaskClientRequestOptions): 
   const accessToken = await resolveAccessToken(options);
   if (accessToken) {
     headers.set('authorization', accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`);
+  } else {
+    const devBypassToken = await resolveDevBypassToken(options);
+    if (devBypassToken) {
+      headers.set('x-taskforge-dev-bypass', devBypassToken);
+    }
   }
 
   if (options?.credentials) {
@@ -598,6 +653,28 @@ export async function listTasks(
   );
 }
 
+export async function getTask(
+  id: string,
+  options?: TaskClientRequestOptions,
+): Promise<TaskRecordDTO> {
+  const validatedId = TaskIdSchema.safeParse(id);
+  if (!validatedId.success) {
+    throw new TaskClientError('Task identifier was invalid.', {
+      kind: 'validation',
+      issues: validatedId.error.issues,
+    });
+  }
+
+  return requestJson(
+    `v1/tasks/${validatedId.data}`,
+    {
+      method: 'GET',
+      schema: TaskRecordSchema,
+    },
+    options,
+  );
+}
+
 export async function getTaskBoard(options?: TaskClientRequestOptions): Promise<BoardReadModelDTO> {
   return requestJson(
     'v1/tasks/board',
@@ -730,4 +807,12 @@ export async function withTaskClientAuth<T>(
 
 export function clearManualTaskClientAuthState(): void {
   manualServerAuthState = undefined;
+}
+
+export function setBrowserTaskClientAuthState(auth: TaskClientAuthState | undefined): void {
+  browserAuthState = auth;
+}
+
+export function clearBrowserTaskClientAuthState(): void {
+  browserAuthState = undefined;
 }

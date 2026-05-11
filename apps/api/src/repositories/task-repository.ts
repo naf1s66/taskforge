@@ -53,6 +53,7 @@ export interface TaskListResult {
 
 export interface TaskRepository {
   listTasks(userId: string, options?: TaskListOptions): Promise<TaskListResult>;
+  getTask(userId: string, taskId: string): Promise<TaskRecordDTO | null>;
   getTaskBoard(userId: string): Promise<BoardReadModelDTO>;
   moveTaskOnBoard(
     userId: string,
@@ -201,6 +202,15 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
         items: tasks.map(toTaskRecordDTO),
         total,
       };
+    },
+
+    async getTask(userId, taskId) {
+      const task = await prisma.task.findFirst({
+        where: { id: taskId, userId },
+        include: taskWithTagsInclude,
+      });
+
+      return task ? toTaskRecordDTO(task) : null;
     },
 
     async getTaskBoard(userId) {

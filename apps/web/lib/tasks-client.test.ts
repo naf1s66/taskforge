@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  clearBrowserTaskClientAuthState,
   clearManualTaskClientAuthState,
   createTask,
   deleteTask,
+  getTask,
   listTasks,
+  setBrowserTaskClientAuthState,
   TaskClientError,
   updateTask,
   withTaskClientAuth,
@@ -37,6 +40,7 @@ const originalWindow = globalThis.window;
 
 describe('tasks-client', () => {
   afterEach(() => {
+    clearBrowserTaskClientAuthState();
     clearManualTaskClientAuthState();
     if (originalWindow) {
       globalThis.window = originalWindow;
@@ -108,6 +112,20 @@ describe('tasks-client', () => {
         ),
       ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
     });
+
+    it('attaches the dev bypass token header on the browser when present', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({ items: [], page: 1, pageSize: 20, total: 0 }),
+      );
+
+      setBrowserTaskClientAuthState({ devBypassToken: 'dev-bypass-token-123' });
+
+      await listTasks(undefined, { baseUrl: API_BASE_URL, fetchImpl: fetchMock });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Headers;
+      expect(headers.get('x-taskforge-dev-bypass')).toBe('dev-bypass-token-123');
+    });
   });
 
   describe('createTask', () => {
@@ -115,7 +133,6 @@ describe('tasks-client', () => {
       await expect(
         createTask(
           {
-            // @ts-expect-error intentionally invalid title
             title: '   ',
           },
           { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },
@@ -174,6 +191,23 @@ describe('tasks-client', () => {
       await expect(
         updateTask(sampleTask.id, { status: 'DONE' }, { baseUrl: API_BASE_URL, fetchImpl: fetchMock }),
       ).rejects.toMatchObject({ kind: 'serialization' satisfies TaskClientError['kind'] });
+    });
+  });
+
+  describe('getTask', () => {
+    it('requests a single task record by id', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sampleTask));
+
+      const result = await getTask(sampleTask.id, {
+        baseUrl: API_BASE_URL,
+        fetchImpl: fetchMock,
+      });
+
+      expect(result).toEqual(sampleTask);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tasks/${sampleTask.id}`);
+      expect((init as RequestInit)?.method).toBe('GET');
     });
   });
 

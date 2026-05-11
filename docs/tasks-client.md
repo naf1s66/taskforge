@@ -27,6 +27,16 @@ base URL with the optional `TaskClientRequestOptions` argument.
 On the browser the client automatically opts into `credentials: 'include'` so the `tf_session` cookie is forwarded
 without any additional wiring.
 
+When `TF_DEV_BYPASS_AUTH=true` is enabled outside production and both the web and API apps share the same
+`TF_DEV_BYPASS_CLIENT_SECRET`, `/api/auth/me` can return a short-lived dev bypass token. The browser client attaches
+that token through the `x-taskforge-dev-bypass` header so task and board requests continue to work even if the normal
+session bridge cookie cannot be minted locally.
+
+The shared development env examples currently enable this by default. Production should leave
+`TF_DEV_BYPASS_AUTH` disabled and should not configure `TF_DEV_BYPASS_CLIENT_SECRET`.
+
+See [dev-auth-bypass.md](./dev-auth-bypass.md) for the setup and deployment split.
+
 On the server the client attempts to read the session cookie from:
 
 1. The contextual auth passed to `withTaskClientAuth` (preferred).

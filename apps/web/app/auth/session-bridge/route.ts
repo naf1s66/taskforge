@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { SESSION_COOKIE_NAME } from '@/lib/env';
+import { getApiUrl, SESSION_COOKIE_NAME } from '@/lib/env';
 import {
-  getBridgedAccessToken,
+  getFreshBridgedAccessToken,
   getSessionCookieOptions,
   isSessionTokenExpired,
 } from '@/lib/session-bridge';
@@ -22,13 +22,48 @@ function sanitizeReturnPath(value: string | null): string {
   return trimmed;
 }
 
+type ApiSessionCookieProbe = 'valid' | 'invalid' | 'unknown';
+
+async function probeApiSessionCookie(token: string): Promise<ApiSessionCookieProbe> {
+  try {
+    const response = await fetch(getApiUrl('v1/me'), {
+      method: 'GET',
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (response.ok) {
+      return 'valid';
+    }
+
+    if (response.status === 401) {
+      return 'invalid';
+    }
+
+    return 'unknown';
+  } catch (error) {
+    console.error('[auth] Failed to validate existing API session cookie', error);
+    return 'unknown';
+  }
+}
+
 export async function GET(request: NextRequest) {
   const fromParam = request.nextUrl.searchParams.get('from');
   const fromPath = sanitizeReturnPath(fromParam);
 
   const existingCookie = request.cookies.get(SESSION_COOKIE_NAME);
+  const existingCookieProbe =
+    existingCookie?.value && !isSessionTokenExpired(existingCookie.value)
+      ? await probeApiSessionCookie(existingCookie.value)
+      : 'invalid';
 
-  if (existingCookie?.value && !isSessionTokenExpired(existingCookie.value)) {
+  if (
+    existingCookie?.value &&
+    !isSessionTokenExpired(existingCookie.value) &&
+    existingCookieProbe !== 'invalid'
+  ) {
     return NextResponse.redirect(new URL(fromPath, request.nextUrl.origin));
   }
 
@@ -42,7 +77,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const accessToken = await getBridgedAccessToken(user);
+    const accessToken = await getFreshBridgedAccessToken(user);
     const redirectUrl = new URL(fromPath, request.nextUrl.origin);
     const response = NextResponse.redirect(redirectUrl);
     const options = getSessionCookieOptions();
