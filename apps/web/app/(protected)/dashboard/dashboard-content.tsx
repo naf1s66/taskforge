@@ -484,6 +484,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   );
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
+  const inFlightTaskIdsRef = useRef<Set<string>>(new Set());
 
   const tasksQuery = useTasksQuery({ pageSize: 50 });
   const boardQuery = useTaskBoardQuery();
@@ -735,6 +736,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   );
 
   const trackTaskMutationStart = (taskId: string) => {
+    if (inFlightTaskIdsRef.current.has(taskId)) {
+      return false;
+    }
+
+    inFlightTaskIdsRef.current.add(taskId);
     setInFlightTaskIds((prev) => {
       const next = new Set(prev);
       next.add(taskId);
@@ -744,9 +750,16 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     if (isDevMode) {
       console.info("[board-move] optimistic mutation started", { taskId });
     }
+
+    return true;
   };
 
   const trackTaskMutationEnd = (taskId: string) => {
+    if (!inFlightTaskIdsRef.current.has(taskId)) {
+      return;
+    }
+
+    inFlightTaskIdsRef.current.delete(taskId);
     setInFlightTaskIds((prev) => {
       if (!prev.has(taskId)) {
         return prev;
@@ -805,7 +818,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     movePayload: BoardMovePayload,
     rollback: BoardMoveRollback | null,
   ) => {
-    trackTaskMutationStart(movePayload.taskId);
+    if (!trackTaskMutationStart(movePayload.taskId)) {
+      return;
+    }
+
     try {
       await moveTask.mutateAsync(movePayload);
     } catch {

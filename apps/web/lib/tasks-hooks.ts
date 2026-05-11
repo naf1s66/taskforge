@@ -1380,19 +1380,8 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
     },
     onError: (error, variables, context, mutationContext) => {
       if (context) {
-        if (context.taskSnapshot) {
-          const restoredTask: TaskListItem = {
-            ...context.taskSnapshot,
-            _optimistic: false,
-          };
-
-          collectMatchingQueries(queryClient, userScope, (payload, filters) =>
-            reconcileTaskInList(payload, restoredTask, filters, variables.taskId),
-          );
-        } else {
-          for (const [key, snapshot] of context.touchedQueries) {
-            queryClient.setQueryData(key, snapshot);
-          }
+        for (const [key, snapshot] of context.touchedQueries) {
+          queryClient.setQueryData(key, snapshot);
         }
 
         const boardRollback = context.boardRollback;
