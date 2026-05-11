@@ -1,8 +1,7 @@
 import 'server-only';
 
-import type { Account, NextAuthConfig, Session } from 'next-auth';
+import type { NextAuthConfig } from 'next-auth';
 import type { Adapter, AdapterAccount, AdapterUser } from 'next-auth/adapters';
-import type { JWT } from 'next-auth/jwt';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
@@ -73,6 +72,7 @@ function normalizeEmail(value: string | null | undefined): string | null {
 
 function mapAccountToPrisma(account: AdapterAccount) {
   const expiresAt = typeof account.expires_at === 'number' ? Math.floor(account.expires_at) : null;
+  const sessionState = typeof account.session_state === 'string' ? account.session_state : null;
 
   return {
     userId: account.userId,
@@ -85,7 +85,7 @@ function mapAccountToPrisma(account: AdapterAccount) {
     tokenType: account.token_type ?? null,
     scope: account.scope ?? null,
     idToken: account.id_token ?? null,
-    sessionState: account.session_state ?? null,
+    sessionState,
   };
 }
 
@@ -213,7 +213,7 @@ const adapter: Adapter = {
       provider: linked.provider,
     });
 
-    return linked;
+    return undefined;
   },
 };
 
@@ -229,26 +229,19 @@ export const authConfig = {
   secret: process.env.NEXTAUTH_SECRET,
   trustHost: true,
   callbacks: {
-    async signIn({
-      user,
-      account,
-      profile,
-    }: {
-      user: AdapterUser;
-      account: Account | null;
-      profile?: Record<string, unknown> | null;
-    }) {
+    async signIn({ user, account, profile }) {
       if (!account || account.type !== 'oauth') {
         return true;
       }
 
+      const adapterUser = user as AdapterUser;
       const typedProfile = (profile ?? {}) as {
         email?: unknown;
         email_verified?: unknown;
       };
 
       const profileEmail = typeof typedProfile.email === 'string' ? typedProfile.email : null;
-      const normalizedEmail = normalizeEmail(user?.email ?? profileEmail);
+      const normalizedEmail = normalizeEmail(adapterUser.email ?? profileEmail);
 
       if (!normalizedEmail) {
         console.warn('[auth] OAuth sign-in missing email', {
@@ -280,12 +273,12 @@ export const authConfig = {
         return false;
       }
 
-      user.email = normalizedEmail;
-      user.emailVerified = emailVerified ? new Date() : null;
+      adapterUser.email = normalizedEmail;
+      adapterUser.emailVerified = emailVerified ? new Date() : null;
 
       return true;
     },
-    async jwt({ token, user }: { token: JWT; user?: AdapterUser | null }) {
+    async jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;
         console.info('[auth] JWT callback user matched', {
@@ -295,16 +288,8 @@ export const authConfig = {
 
       return token;
     },
-    async session({
-      session,
-      user,
-      token,
-    }: {
-      session: Session;
-      user?: AdapterUser | null;
-      token: JWT;
-    }) {
-      let resolvedUserId = user?.id ?? token?.sub ?? session.user?.id;
+    async session({ session, user, token }) {
+      let resolvedUserId: string | undefined = user?.id ?? token?.sub ?? session.user?.id;
 
       if (!resolvedUserId && session.user?.email) {
         const existingUser = await prisma.user.findUnique({
@@ -327,19 +312,13 @@ export const authConfig = {
     },
   },
   events: {
-    async signIn({
-      user,
-      isNewUser,
-    }: {
-      user: AdapterUser;
-      isNewUser?: boolean;
-    }) {
+    async signIn({ user, isNewUser }) {
       console.info('[auth] Sign-in completed', {
         userId: user.id,
         isNewUser,
       });
     },
-    async linkAccount({ user }: { user: AdapterUser }) {
+    async linkAccount({ user }) {
       console.info('[auth] Account linked for user', user.id);
     },
   },

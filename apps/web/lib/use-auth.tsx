@@ -16,6 +16,8 @@ import { clearBrowserTaskClientAuthState, setBrowserTaskClientAuthState } from '
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'error';
 
+const DEV_BYPASS_CLIENT_AUTH_REFRESH_MS = 12 * 60 * 1000;
+
 type ApiMeResponse = {
   user: { id: string; email: string | null } | null;
   clientAuth?: { strategy: 'dev-bypass'; token: string } | null;
@@ -67,6 +69,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let cancelled = false;
+    let devBypassRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     if (sessionStatus === 'loading') {
       setIsCheckingApi(true);
@@ -103,6 +106,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (payload?.user?.id) {
           if (payload.clientAuth?.strategy === 'dev-bypass' && payload.clientAuth.token) {
             setBrowserTaskClientAuthState({ devBypassToken: payload.clientAuth.token });
+            devBypassRefreshTimer = setTimeout(refresh, DEV_BYPASS_CLIENT_AUTH_REFRESH_MS);
           } else {
             clearBrowserTaskClientAuthState();
           }
@@ -157,8 +161,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       cancelled = true;
+      if (devBypassRefreshTimer) {
+        clearTimeout(devBypassRefreshTimer);
+      }
     };
-  }, [sessionStatus, refreshNonce]);
+  }, [refresh, sessionStatus, refreshNonce]);
 
   const resolvedUser = sessionUser ?? apiUser;
 

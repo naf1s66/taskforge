@@ -133,7 +133,6 @@ describe('tasks-client', () => {
       await expect(
         createTask(
           {
-            // @ts-expect-error intentionally invalid title
             title: '   ',
           },
           { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },

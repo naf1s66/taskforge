@@ -11,6 +11,8 @@ Right now the shared development examples enable the bypass by default:
 
 That is intentional for the current stage of the project. We are still in development, and local setup should prioritize a working dashboard, task board, and task mutations over strict production auth parity.
 
+The bypass is also intended for short-lived Codex Cloud PR previews so automation can open the app and attach screenshots after code changes. It should not be treated as a staging or production authentication mode.
+
 ## What it does
 
 When `TF_DEV_BYPASS_AUTH=true` and `NODE_ENV` is not `production`:
@@ -77,7 +79,7 @@ That keeps the user-visible auth state aligned with a real usable API session.
 
 Development and production have different goals.
 
-- Development goal: keep engineers unblocked while auth infrastructure is still moving.
+- Development and preview goal: keep engineers and Codex Cloud screenshot automation unblocked while auth infrastructure is still moving.
 - Production goal: only show a user as signed in when the real API session path works end to end.
 
 This bypass is meant to serve the first goal without weakening the second one.

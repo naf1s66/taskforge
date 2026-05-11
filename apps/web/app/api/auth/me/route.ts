@@ -18,7 +18,7 @@ interface ApiMeResponse {
 
 type SessionLookupResult =
   | { kind: 'success'; payload: ApiMeResponse }
-  | { kind: 'missing' }
+  | { kind: 'missing'; hadCookie: boolean }
   | { kind: 'error' };
 
 async function readApiSessionUser(): Promise<SessionLookupResult> {
@@ -26,7 +26,7 @@ async function readApiSessionUser(): Promise<SessionLookupResult> {
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
 
   if (!sessionCookie?.value) {
-    return { kind: 'missing' };
+    return { kind: 'missing', hadCookie: false };
   }
 
   try {
@@ -39,7 +39,7 @@ async function readApiSessionUser(): Promise<SessionLookupResult> {
     });
 
     if (response.status === 401) {
-      return { kind: 'missing' };
+      return { kind: 'missing', hadCookie: true };
     }
 
     if (!response.ok) {
@@ -51,7 +51,7 @@ async function readApiSessionUser(): Promise<SessionLookupResult> {
     const payload = (await response.json().catch(() => null)) as ApiMeResponse | null;
 
     if (!payload?.user) {
-      return { kind: 'missing' };
+      return { kind: 'missing', hadCookie: true };
     }
 
     return { kind: 'success', payload: payload satisfies ApiMeResponse };
@@ -66,6 +66,7 @@ export async function GET() {
   const bypassUser = devBypassEnabled ? await getCurrentUser() : null;
   const sessionLookup = await readApiSessionUser();
   let sessionUserMismatch = false;
+  const rejectedSessionCookie = sessionLookup.kind === 'missing' && sessionLookup.hadCookie;
 
   if (sessionLookup.kind === 'success') {
     if (bypassUser && sessionLookup.payload.user?.id !== bypassUser.id) {
@@ -78,13 +79,13 @@ export async function GET() {
 
   if (devBypassEnabled && bypassUser) {
     try {
-      const accessToken = sessionUserMismatch
+      const accessToken = sessionUserMismatch || rejectedSessionCookie
         ? await getFreshBridgedAccessToken(bypassUser)
         : await getBridgedAccessToken(bypassUser);
       const response = NextResponse.json({
         user: {
           id: bypassUser.id,
-          email: bypassUser.email,
+          email: bypassUser.email ?? null,
         },
       } satisfies ApiMeResponse);
       response.cookies.set({ ...getSessionCookieOptions(), value: accessToken });
@@ -101,16 +102,25 @@ export async function GET() {
   if (bypassUser) {
     const devBypassToken = createDevBypassClientToken(bypassUser);
     if (devBypassToken) {
-      return NextResponse.json({
+      const response = NextResponse.json({
         user: {
           id: bypassUser.id,
-          email: bypassUser.email,
+          email: bypassUser.email ?? null,
         },
         clientAuth: {
           strategy: 'dev-bypass',
           token: devBypassToken,
         },
       } satisfies ApiMeResponse);
+      if (rejectedSessionCookie) {
+        response.cookies.set({
+          ...getSessionCookieOptions(),
+          value: '',
+          maxAge: 0,
+          expires: new Date(0),
+        });
+      }
+      return response;
     }
   }
 

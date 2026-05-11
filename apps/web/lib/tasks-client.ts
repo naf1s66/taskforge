@@ -1,6 +1,7 @@
 import {
   getSessionCookieName,
   type BoardReadModelDTO,
+  type TaskBoardItemDTO,
   type TaskDTO,
   type TaskRecordDTO,
   type TaskPriority,
@@ -12,6 +13,15 @@ import type { AsyncLocalStorage } from 'async_hooks';
 import { getApiBaseUrl } from './env';
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
+
+export type {
+  BoardReadModelDTO,
+  TaskBoardItemDTO,
+  TaskDTO,
+  TaskPriority,
+  TaskRecordDTO,
+  TaskStatus,
+} from '@taskforge/shared';
 
 const TaskStatusSchema = z.union([z.literal('TODO'), z.literal('IN_PROGRESS'), z.literal('DONE')]);
 const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.literal('HIGH')]);
@@ -33,28 +43,41 @@ const NullableString = z
   .nullable()
   .transform((value) => value ?? undefined);
 
-const TaskRecordSchema = z.object({
-  id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  description: NullableString,
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+const TaskRecordSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    description: NullableString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    description: value.description ?? undefined,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskRecordDTO>;
 
-const TaskBoardItemSchema = z.object({
-  id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  position: z.number().int().min(0),
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  updatedAt: z.string().datetime(),
-});
+const TaskBoardItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    position: z.number().int().min(0),
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskBoardItemDTO>;
 
 const TagSummarySchema = z.object({
   label: NonEmptyTrimmedString,
@@ -236,7 +259,6 @@ export class TaskClientError extends Error {
     this.issues = init.issues;
 
     if (init.cause !== undefined) {
-      // @ts-expect-error Node 18 target may not include the cause property
       this.cause = init.cause;
     }
 
