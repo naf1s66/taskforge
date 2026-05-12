@@ -350,9 +350,9 @@ async function tryReadNextSessionCookie(): Promise<string | undefined> {
   if (!triedLoadingNextCookies) {
     triedLoadingNextCookies = true;
     try {
-      const module = await import('next/headers');
-      if (typeof module.cookies === 'function') {
-        nextCookiesGetter = module.cookies;
+      const headersModule = await import('next/headers');
+      if (typeof headersModule.cookies === 'function') {
+        nextCookiesGetter = headersModule.cookies;
       } else {
         nextCookiesGetter = undefined;
       }

@@ -115,6 +115,19 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     return (row?.max ?? -1) + 1;
   };
 
+  const updateBoardOrderOnly = (
+    tx: Prisma.TransactionClient,
+    userId: string,
+    taskId: string,
+    boardOrder: number,
+  ) =>
+    tx.$executeRaw`
+      UPDATE "Task"
+      SET "boardOrder" = ${boardOrder}
+      WHERE "id" = CAST(${taskId} AS uuid)
+        AND "userId" = CAST(${userId} AS uuid)
+    `;
+
   const buildTaskBoard = async (userId: string): Promise<BoardReadModelDTO> => {
     const tasks = await prisma.task.findMany({
       where: { userId },
@@ -251,10 +264,12 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
           await Promise.all(
             nextIds.map((id, index) =>
-              tx.task.update({
-                where: { id },
-                data: { boardOrder: index },
-              }),
+              id === task.id
+                ? tx.task.update({
+                    where: { id },
+                    data: { boardOrder: index },
+                  })
+                : updateBoardOrderOnly(tx, userId, id, index),
             ),
           );
 
@@ -282,19 +297,18 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
         await Promise.all([
           ...sourceIds.map((id, index) =>
-            tx.task.update({
-              where: { id },
-              data: { boardOrder: index },
-            }),
+            updateBoardOrderOnly(tx, userId, id, index),
           ),
           ...nextTargetIds.map((id, index) =>
-            tx.task.update({
-              where: { id },
-              data: {
-                boardOrder: index,
-                ...(id === task.id ? { status: targetStatus } : {}),
-              },
-            }),
+            id === task.id
+              ? tx.task.update({
+                  where: { id },
+                  data: {
+                    boardOrder: index,
+                    status: targetStatus,
+                  },
+                })
+              : updateBoardOrderOnly(tx, userId, id, index),
           ),
         ]);
 

@@ -5,7 +5,9 @@ import {
   cloneColumnOrder,
   emptyColumnOrder,
   findTaskStatusInOrder,
+  getColumnEndTargetIndex,
   getStatusFromColumnId,
+  moveTaskToColumnEnd,
 } from './board-order-utils';
 
 describe('Kanban Drag and Drop helpers', () => {
@@ -33,5 +35,24 @@ describe('Kanban Drag and Drop helpers', () => {
     expect(emptyColumnOrder.TODO).toEqual([]);
     expect(areArraysEqual(['a', 'b'], ['a', 'b'])).toBe(true);
     expect(areArraysEqual(['a', 'b'], ['b', 'a'])).toBe(false);
+  });
+
+  test('should preview sorted-view status moves at the destination lane end', () => {
+    const order = {
+      TODO: ['a', 'b'],
+      IN_PROGRESS: ['c'],
+      DONE: [],
+    };
+
+    const moved = moveTaskToColumnEnd(order, 'a', 'IN_PROGRESS');
+
+    expect(moved).toEqual({
+      TODO: ['b'],
+      IN_PROGRESS: ['c', 'a'],
+      DONE: [],
+    });
+    expect(getColumnEndTargetIndex(order, 'a', 'IN_PROGRESS')).toBe(1);
+    expect(getColumnEndTargetIndex(moved, 'a', 'IN_PROGRESS')).toBe(1);
+    expect(moveTaskToColumnEnd(order, 'a', 'TODO')).toBe(order);
   });
 });

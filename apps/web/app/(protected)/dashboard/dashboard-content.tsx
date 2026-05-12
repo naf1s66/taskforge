@@ -23,6 +23,7 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  useDraggable,
   useSensor,
   useSensors,
   useDroppable,
@@ -77,7 +78,9 @@ import {
   emptyColumnOrder,
   findTaskStatusInOrder,
   getColumnId,
+  getColumnEndTargetIndex,
   getStatusFromColumnId,
+  moveTaskToColumnEnd,
   type ColumnOrderState,
   statusOrder,
 } from "./board-order-utils";
@@ -358,7 +361,6 @@ function SortableTaskCard({
     <article
       ref={setNodeRef}
       style={style}
-      aria-disabled={dragDisabled}
       className={cn(dragDisabled ? "opacity-90" : "")}
     >
       <TaskCard
@@ -389,6 +391,70 @@ function SortableTaskCard({
   );
 }
 
+function DraggableTaskCard({
+  task,
+  columnStatus,
+  editable,
+  draggable,
+}: {
+  task: TaskListItem;
+  columnStatus: TaskStatus;
+  editable: boolean;
+  draggable: boolean;
+}) {
+  const isOptimistic = Boolean(task._optimistic);
+  const dragDisabled = isOptimistic || !draggable;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: task.id,
+    data: { status: columnStatus },
+    disabled: dragDisabled,
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+  };
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      className={cn(dragDisabled ? "opacity-90" : "")}
+    >
+      <TaskCard
+        task={task}
+        dragging={isDragging}
+        editable={editable}
+        dragHandle={
+          <Button
+            ref={setActivatorNodeRef}
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 cursor-grab text-muted-foreground active:cursor-grabbing"
+            aria-label={
+              dragDisabled
+                ? `Task ${task.title} cannot be dragged right now`
+                : `Move task ${task.title} to another status`
+            }
+            disabled={dragDisabled}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </Button>
+        }
+      />
+    </article>
+  );
+}
+
 function BoardColumn({
   status,
   meta,
@@ -399,6 +465,7 @@ function BoardColumn({
   editableTaskIds,
   draggableTaskIds,
   preciseDropPreview,
+  statusDropTarget,
 }: {
   status: TaskStatus;
   meta: { title: string; description: string };
@@ -409,6 +476,7 @@ function BoardColumn({
   editableTaskIds: ReadonlySet<string>;
   draggableTaskIds: ReadonlySet<string>;
   preciseDropPreview: boolean;
+  statusDropTarget: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: getColumnId(status),
@@ -443,10 +511,11 @@ function BoardColumn({
         aria-label={`${meta.title} drop zone`}
         className={cn(
           "space-y-3 rounded-lg border border-dashed border-border/40 bg-background/40 p-3 transition-colors",
-          isOver
-            ? preciseDropPreview
-              ? "border-primary/60 bg-primary/5 ring-2 ring-primary/30"
-              : "border-primary/80 bg-primary/10 ring-2 ring-primary/45"
+          preciseDropPreview && isOver
+            ? "border-primary/60 bg-primary/5 ring-2 ring-primary/30"
+            : "",
+          !preciseDropPreview && statusDropTarget
+            ? "border-primary/80 bg-primary/10 ring-2 ring-primary/45"
             : "",
         )}
       >
@@ -455,20 +524,32 @@ function BoardColumn({
             {statusEmptyCopy[status]}
           </div>
         ) : null}
-        <SortableContext
-          items={tasks.map((task) => task.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {tasks.map((task) => (
-            <SortableTaskCard
+        {preciseDropPreview ? (
+          <SortableContext
+            items={tasks.map((task) => task.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {tasks.map((task) => (
+              <SortableTaskCard
+                key={task.id}
+                task={task}
+                columnStatus={status}
+                editable={editableTaskIds.has(task.id)}
+                draggable={draggableTaskIds.has(task.id)}
+              />
+            ))}
+          </SortableContext>
+        ) : (
+          tasks.map((task) => (
+            <DraggableTaskCard
               key={task.id}
               task={task}
               columnStatus={status}
               editable={editableTaskIds.has(task.id)}
               draggable={draggableTaskIds.has(task.id)}
             />
-          ))}
-        </SortableContext>
+          ))
+        )}
         {dragActive && tasks.length === 0 && activeId ? (
           <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-6 text-center text-xs text-primary/80">
             Drop the task here
@@ -487,6 +568,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [inFlightTaskIds, setInFlightTaskIds] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [overColumnStatus, setOverColumnStatus] = useState<TaskStatus | null>(
+    null,
   );
   const isManualSort = sortBy === "manual";
   const columnOrderRef = useRef(columnOrder);
@@ -735,11 +819,16 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       : `Position ${position + 1} of ${tasks.length}.`;
   };
 
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 8 },
+  });
+  const sortableKeyboardSensor = useSensor(KeyboardSensor, {
+    coordinateGetter: sortableKeyboardCoordinates,
+  });
+  const statusKeyboardSensor = useSensor(KeyboardSensor);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
+    pointerSensor,
+    isManualSort ? sortableKeyboardSensor : statusKeyboardSensor,
   );
 
   const trackTaskMutationStart = (taskId: string) => {
@@ -864,6 +953,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
 
     setActiveId(currentId);
+    setOverColumnStatus(null);
     dragSnapshotRef.current = cloneColumnOrder(columnOrderRef.current);
   };
 
@@ -882,7 +972,43 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       return;
     }
 
-    if (activeStatus === overStatus && !isManualSort) {
+    if (!isManualSort) {
+      const initialStatus = dragSnapshotRef.current
+        ? findTaskStatusInOrder(dragSnapshotRef.current, activeId)
+        : activeStatus;
+
+      if (!initialStatus) {
+        return;
+      }
+
+      if (initialStatus === overStatus) {
+        setOverColumnStatus(null);
+        if (dragSnapshotRef.current) {
+          const snapshot = dragSnapshotRef.current;
+          setColumnOrder((prev) => {
+            if (
+              statusOrder.every((status) =>
+                areArraysEqual(prev[status], snapshot[status]),
+              )
+            ) {
+              return prev;
+            }
+            columnOrderRef.current = snapshot;
+            return snapshot;
+          });
+        }
+        return;
+      }
+
+      setOverColumnStatus(overStatus);
+      setColumnOrder((prev) => {
+        const nextOrder = moveTaskToColumnEnd(prev, activeId, overStatus);
+        if (nextOrder === prev) {
+          return prev;
+        }
+        columnOrderRef.current = nextOrder;
+        return nextOrder;
+      });
       return;
     }
 
@@ -935,6 +1061,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const { active, over } = event;
     const activeTaskId = active.id as string;
     setActiveId(null);
+    setOverColumnStatus(null);
 
     if (!canDragTasks) {
       dragSnapshotRef.current = null;
@@ -973,24 +1100,22 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       : -1;
 
     const nextOrder = columnOrderRef.current;
-    const targetIndex = nextOrder[destinationStatus].indexOf(activeTaskId);
+    const targetIndex = isManualSort
+      ? nextOrder[destinationStatus].indexOf(activeTaskId)
+      : getColumnEndTargetIndex(nextOrder, activeTaskId, destinationStatus);
 
     const hasMoved =
-      targetIndex !== -1 &&
-      (sourceStatus !== destinationStatus ||
-        (isManualSort &&
-          sourceStatus === destinationStatus &&
-          initialIndex !== targetIndex));
+      isManualSort
+        ? targetIndex !== -1 &&
+          (sourceStatus !== destinationStatus ||
+            (sourceStatus === destinationStatus && initialIndex !== targetIndex))
+        : sourceStatus !== destinationStatus;
 
     if (hasMoved && targetIndex !== -1) {
-      const persistedTargetIndex =
-        isManualSort || sourceStatus === destinationStatus
-          ? Math.max(0, targetIndex)
-          : Math.max(0, nextOrder[destinationStatus].length - 1);
       const movePayload = {
         taskId: activeTaskId,
         targetStatus: destinationStatus,
-        targetIndex: persistedTargetIndex,
+        targetIndex: Math.max(0, targetIndex),
       };
 
       const rollback =
@@ -1018,6 +1143,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
     dragSnapshotRef.current = null;
     setActiveId(null);
+    setOverColumnStatus(null);
   };
 
   const refetchBoardAndTasks = () =>
@@ -1374,7 +1500,13 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   }
                   return isManualSort
                     ? `Dropped ${task.title} in ${statusLabels[status]} lane.`
-                    : `Moved ${task.title} to ${statusLabels[status]} status.`;
+                    : dragSnapshotRef.current &&
+                        findTaskStatusInOrder(
+                          dragSnapshotRef.current,
+                          active.id as string,
+                        ) === status
+                      ? `${task.title} remains in ${statusLabels[status]} status.`
+                      : `Moved ${task.title} to ${statusLabels[status]} status.`;
                 },
                 onDragCancel: () => "Task movement cancelled.",
               },
@@ -1393,6 +1525,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   editableTaskIds={editableTaskIds}
                   draggableTaskIds={draggableTaskIds}
                   preciseDropPreview={isManualSort}
+                  statusDropTarget={overColumnStatus === column.status}
                 />
               ))}
             </section>

@@ -54,3 +54,27 @@ export function findTaskStatusInOrder(order: ColumnOrderState, taskId: string): 
 
   return null;
 }
+
+export function moveTaskToColumnEnd(
+  order: ColumnOrderState,
+  taskId: string,
+  targetStatus: TaskStatus,
+): ColumnOrderState {
+  const sourceStatus = findTaskStatusInOrder(order, taskId);
+  if (!sourceStatus || sourceStatus === targetStatus) {
+    return order;
+  }
+
+  const next = cloneColumnOrder(order);
+  next[sourceStatus] = next[sourceStatus].filter((id) => id !== taskId);
+  next[targetStatus] = [...next[targetStatus].filter((id) => id !== taskId), taskId];
+  return next;
+}
+
+export function getColumnEndTargetIndex(
+  order: ColumnOrderState,
+  taskId: string,
+  targetStatus: TaskStatus,
+): number {
+  return order[targetStatus].filter((id) => id !== taskId).length;
+}

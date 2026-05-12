@@ -51,7 +51,11 @@ export function createAuthMiddleware({
     const devBypassToken = req.get(devBypassHeaderName);
 
     // Try to get token from HttpOnly cookie first, then fallback to Authorization header
-    let token = req.cookies?.[sessionCookieName];
+    const cookieToken =
+      typeof req.cookies?.[sessionCookieName] === 'string'
+        ? req.cookies[sessionCookieName]
+        : undefined;
+    let token: string | undefined = cookieToken;
 
     if (!token) {
       const header = req.headers.authorization;
