@@ -39,6 +39,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { TaskPriority, TaskStatus } from "@taskforge/shared";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -69,6 +70,8 @@ import {
   type TaskListItem,
 } from "@/lib/tasks-hooks";
 import { cn } from "@/lib/utils";
+import { sanitizeTags } from "@/lib/task-tags";
+import { TaskTagSelector } from "@/components/tasks/task-tag-selector";
 
 import type { DashboardUser } from "./types";
 import {
@@ -297,6 +300,20 @@ function TaskCard({
             <p className="text-xs text-muted-foreground">
               Due {formatDueDate(task.dueDate)}
             </p>
+            {task.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {task.tags.map((tag) => (
+                  <Badge
+                    key={`${task.id}-${tag}`}
+                    variant="outline"
+                    title={tag}
+                    className="max-w-28 truncate border-violet-300/60 bg-violet-500/10 text-violet-900 dark:border-violet-200/40 dark:text-violet-100"
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             {dragHandle}
@@ -560,7 +577,11 @@ function BoardColumn({
   );
 }
 export function DashboardContent({ user }: { user: DashboardUser }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>("manual");
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() =>
     cloneColumnOrder(emptyColumnOrder),
@@ -577,7 +598,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
   const inFlightTaskIdsRef = useRef<Set<string>>(new Set());
 
-  const tasksQuery = useTasksQuery({ pageSize: 50 });
+  const tasksQuery = useTasksQuery({
+    pageSize: 50,
+    tag: tagFilters.length > 0 ? tagFilters : undefined,
+  });
   const boardQuery = useTaskBoardQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
@@ -770,6 +794,40 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       boardQuery.data?.summary.totalsByStatus.TODO ?? tasksByStatus.TODO.length,
     [boardQuery.data, tasksByStatus.TODO.length],
   );
+
+  useEffect(() => {
+    const urlTags = sanitizeTags(searchParams.getAll("tag"));
+    setTagFilters((previous) =>
+      previous.length === urlTags.length &&
+      previous.every((value, index) => value === urlTags[index])
+        ? previous
+        : urlTags,
+    );
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("tag");
+    for (const tag of tagFilters) {
+      params.append("tag", tag);
+    }
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [pathname, router, searchParams, tagFilters]);
+
+  const availableTags = useMemo(() => {
+    const collected: string[] = [];
+    for (const task of tasksQuery.tasks) {
+      collected.push(...task.tags);
+    }
+    for (const tag of tagFilters) {
+      collected.push(tag);
+    }
+    return sanitizeTags(collected);
+  }, [tagFilters, tasksQuery.tasks]);
 
   const firstName = user.name?.split(" ")[0] ?? "there";
 
@@ -1301,6 +1359,16 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               })}
             </div>
           </div>
+          <div className="w-full max-w-sm">
+            <TaskTagSelector
+              value={tagFilters}
+              onChange={setTagFilters}
+              availableTags={availableTags}
+              placeholder="Filter by tags"
+              emptyHint="Choose one or more tags to scope the board."
+              ariaLabel="Filter board by tag"
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1346,6 +1414,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             Showing {visibleTaskCount} of {totalTasks} tasks
             {statusFilter !== "ALL"
               ? ` in ${statusLabels[statusFilter]} status`
+              : ""}
+            {tagFilters.length > 0
+              ? ` with tags: ${tagFilters.join(", ")}`
               : ""}
             .
           </p>

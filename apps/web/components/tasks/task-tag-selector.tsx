@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ComponentPropsWithoutRef } from 'react';
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from 'react';
 import { useCommandState } from 'cmdk';
 import { Filter, Tag, X } from 'lucide-react';
 
@@ -62,9 +62,26 @@ export function TaskTagSelector({
 }: TaskTagSelectorProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [debouncedInput, setDebouncedInput] = useState('');
 
   const normalizedSelected = useMemo(() => value.map((tag) => tag.toLowerCase()), [value]);
   const options = useMemo(() => sanitizeTags([...availableTags, ...value]), [availableTags, value]);
+  const filteredOptions = useMemo(() => {
+    if (!debouncedInput.trim()) {
+      return options;
+    }
+
+    const search = debouncedInput.trim().toLowerCase();
+    return options.filter((tag) => tag.toLowerCase().includes(search));
+  }, [debouncedInput, options]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedInput(inputValue);
+    }, 180);
+
+    return () => window.clearTimeout(timeout);
+  }, [inputValue]);
 
   const buttonLabel =
     value.length > 0 ? `${value.length} tag${value.length === 1 ? '' : 's'} selected` : placeholder;
@@ -146,7 +163,7 @@ export function TaskTagSelector({
                 </div>
               </CommandEmpty>
               <CommandGroup heading="Tags">
-                {options.map((tag) => (
+                {filteredOptions.map((tag) => (
                   <CommandItem key={tag} value={tag} onSelect={(value) => toggleTag(value)} aria-checked={isTagSelected(tag)}>
                     <span className="flex-1 text-sm capitalize">{tag}</span>
                     {isTagSelected(tag) ? <span className="text-xs text-primary">Selected</span> : null}
