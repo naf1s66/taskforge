@@ -1,6 +1,37 @@
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
+export const TAG_LABEL_MAX_LENGTH = 64;
+
+export function normalizeTagLabel(label: string): string {
+  return label.trim().toLocaleLowerCase();
+}
+
+export function isValidNormalizedTagLabel(label: string): boolean {
+  const normalized = normalizeTagLabel(label);
+  return normalized.length > 0 && normalized.length <= TAG_LABEL_MAX_LENGTH;
+}
+
+export function normalizeTagLabels(tags?: string[]): string[] {
+  if (!tags?.length) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const label of tags) {
+    const key = normalizeTagLabel(label);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(key);
+  }
+
+  return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
 export interface TaskDTO {
   id?: string;
   title: string;
@@ -32,6 +63,20 @@ export interface TaskBoardItemDTO {
   dueDate?: string;
   tags: string[];
   updatedAt: string;
+}
+
+export interface TagDTO {
+  id: string;
+  label: string;
+}
+
+export interface TagCreateDTO {
+  label: string;
+}
+
+export interface TagListItemDTO {
+  label: string;
+  count: number;
 }
 
 export interface TagSummaryDTO {

@@ -162,13 +162,67 @@ const taskBoardItem: OpenAPIV3.SchemaObject = {
 const tagSummary: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    label: { type: 'string' },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
     count: { type: 'integer', minimum: 0 },
   },
   required: ['label', 'count'],
   example: {
     label: 'planning',
     count: 3,
+  },
+};
+
+const tagRecord: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
+  },
+  required: ['id', 'label'],
+  example: {
+    id: '8d367c45-8d3c-4e96-a59e-4254920fb828',
+    label: 'planning',
+  },
+};
+
+const tagCreateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Tag label to create. Length limit applies after lowercase normalization.',
+    },
+  },
+  required: ['label'],
+  additionalProperties: false,
+  example: {
+    label: 'Planning',
+  },
+};
+
+const tagListResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TagSummary' },
+    },
+  },
+  required: ['items'],
+  example: {
+    items: [tagSummary.example],
   },
 };
 
@@ -287,7 +341,12 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
-      items: { type: 'string', minLength: 1 },
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
     },
   },
   required: ['title'],
@@ -309,7 +368,15 @@ const taskUpdateInput: OpenAPIV3.SchemaObject = {
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
-    tags: { type: 'array', items: { type: 'string', minLength: 1 } },
+    tags: {
+      type: 'array',
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
+    },
   },
   additionalProperties: false,
   example: {
@@ -405,6 +472,18 @@ const taskDeletedExample = {
   value: taskDeletedResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const tagCreateExample = {
+  value: tagCreateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const tagCreatedExample = {
+  value: tagRecord.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const tagListResponseExample = {
+  value: tagListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -464,6 +543,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       TaskRecord: taskRecord,
       TaskBoardItem: taskBoardItem,
       TagSummary: tagSummary,
+      TagRecord: tagRecord,
+      TagCreateInput: tagCreateInput,
+      TagListResponse: tagListResponse,
       BoardColumn: boardColumn,
       BoardSummary: boardSummary,
       BoardResponse: boardResponse,
@@ -1169,9 +1251,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Tag collection',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TagListResponse' },
+                examples: {
+                  default: tagListResponseExample,
                 },
               },
             },
@@ -1196,9 +1278,9 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TagCreateInput' },
+              examples: {
+                default: tagCreateExample,
               },
             },
           },
@@ -1208,9 +1290,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Tag created',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TagRecord' },
+                examples: {
+                  default: tagCreatedExample,
                 },
               },
             },

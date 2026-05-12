@@ -339,12 +339,21 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
             dueDate: parseDueDate(input.dueDate),
             user: { connect: { id: userId } },
             TaskTag: normalizedTags.length
-              ? {
+                ? {
                   create: normalizedTags.map(label => ({
+                    userId,
                     tag: {
                       connectOrCreate: {
-                        where: { label },
-                        create: { label },
+                        where: {
+                          userId_label: {
+                            userId,
+                            label,
+                          },
+                        },
+                        create: {
+                          userId,
+                          label,
+                        },
                       },
                     },
                   })),
@@ -393,7 +402,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
         if (input.tags !== undefined) {
           const normalizedTags = normalizeTagLabels(input.tags);
-          await replaceTaskTags(tx, taskId, normalizedTags);
+          await replaceTaskTags(tx, userId, taskId, normalizedTags);
           if (Object.keys(updateData).length === 0) {
             await tx.task.update({
               where: { id: taskId },
@@ -431,6 +440,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
 async function replaceTaskTags(
   tx: Prisma.TransactionClient,
+  userId: string,
   taskId: string,
   labels: string[],
 ): Promise<void> {
@@ -442,15 +452,24 @@ async function replaceTaskTags(
 
   for (const label of labels) {
     const tag = await tx.tag.upsert({
-      where: { label },
+      where: {
+        userId_label: {
+          userId,
+          label,
+        },
+      },
       update: {},
-      create: { label },
+      create: {
+        userId,
+        label,
+      },
     });
 
     await tx.taskTag.create({
       data: {
         taskId,
         tagId: tag.id,
+        userId,
       },
     });
   }
