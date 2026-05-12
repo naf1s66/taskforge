@@ -57,20 +57,30 @@ model Task {
   updatedAt   DateTime     @updatedAt
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   TaskTag     TaskTag[]
+
+  @@unique([id, userId])
 }
 
 model Tag {
-  id    String   @id @default(cuid())
-  label String   @unique
+  id      String    @id @default(uuid()) @db.Uuid
+  userId  String    @db.Uuid
+  label   String
   TaskTag TaskTag[]
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([id, userId])
+  @@unique([userId, label])
 }
 
 model TaskTag {
-  taskId String
-  tagId  String
-  task   Task @relation(fields: [taskId], references: [id], references: [id], onDelete: Cascade)
-  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  taskId String @db.Uuid
+  tagId  String @db.Uuid
+  userId String @db.Uuid
+  task   Task   @relation(fields: [taskId, userId], references: [id, userId], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId, userId], references: [id, userId], onDelete: Cascade)
+
   @@id([taskId, tagId])
+  @@index([userId])
 }
 
 enum TaskStatus { TODO IN_PROGRESS DONE }

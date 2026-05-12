@@ -339,8 +339,9 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
             dueDate: parseDueDate(input.dueDate),
             user: { connect: { id: userId } },
             TaskTag: normalizedTags.length
-              ? {
+                ? {
                   create: normalizedTags.map(label => ({
+                    userId,
                     tag: {
                       connectOrCreate: {
                         where: {
@@ -468,6 +469,7 @@ async function replaceTaskTags(
       data: {
         taskId,
         tagId: tag.id,
+        userId,
       },
     });
   }

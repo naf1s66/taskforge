@@ -35,19 +35,31 @@ describe('tags endpoints', () => {
       .send({ label: 'work' })
       .expect(201);
 
-    await prisma.task.create({
+    const taskA = await prisma.task.create({
       data: {
         userId: userA.id,
         title: 'Task A',
-        TaskTag: { create: { tagId: create.body.id } },
+      },
+    });
+    await prisma.taskTag.create({
+      data: {
+        taskId: taskA.id,
+        tagId: create.body.id,
+        userId: userA.id,
       },
     });
 
-    await prisma.task.create({
+    const taskB = await prisma.task.create({
       data: {
         userId: userB.id,
         title: 'Task B',
-        TaskTag: { create: { tagId: otherUserTag.body.id } },
+      },
+    });
+    await prisma.taskTag.create({
+      data: {
+        taskId: taskB.id,
+        tagId: otherUserTag.body.id,
+        userId: userB.id,
       },
     });
 
@@ -57,5 +69,52 @@ describe('tags endpoints', () => {
       .expect(200);
 
     expect(listA.body.items).toEqual([{ label: 'work', count: 1 }]);
+  });
+
+  it('rejects invalid tag labels consistently', async () => {
+    const { agent } = createTestAgent();
+    const auth = await registerTestUser(agent, { email: `tags-invalid-${randomUUID()}@example.com` });
+
+    await agent
+      .post('/api/taskforge/v1/tags')
+      .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
+      .send({ label: ' '.repeat(4) })
+      .expect(400);
+
+    await agent
+      .post('/api/taskforge/v1/tasks')
+      .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
+      .send({ title: 'Task with invalid tag', tags: ['x'.repeat(65)] })
+      .expect(400);
+  });
+
+  it('enforces task/tag user ownership at the database boundary', async () => {
+    const { agent, prisma } = createTestAgent();
+
+    const authA = await registerTestUser(agent, { email: `tags-owner-${randomUUID()}@example.com` });
+    const authB = await registerTestUser(agent, { email: `tags-task-${randomUUID()}@example.com` });
+
+    const tag = await prisma.tag.create({
+      data: {
+        userId: authA.user.id,
+        label: 'owned',
+      },
+    });
+    const task = await prisma.task.create({
+      data: {
+        userId: authB.user.id,
+        title: 'Foreign tag attempt',
+      },
+    });
+
+    await expect(
+      prisma.taskTag.create({
+        data: {
+          taskId: task.id,
+          tagId: tag.id,
+          userId: authB.user.id,
+        },
+      }),
+    ).rejects.toThrow();
   });
 });

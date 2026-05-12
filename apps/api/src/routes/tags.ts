@@ -1,15 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { normalizeTagLabel, TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
 
 import { getPrismaClient } from '../prisma';
 
 const CreateTagSchema = z.object({
-  label: z.string().trim().min(1).max(64),
+  label: z.string().trim().min(1).max(TAG_LABEL_MAX_LENGTH),
 });
-
-function normalizeTagLabel(label: string): string {
-  return label.trim().toLocaleLowerCase();
-}
 
 export const router = Router();
 
@@ -27,7 +24,15 @@ router.get('/', async (_req, res, next) => {
       select: {
         label: true,
         _count: {
-          select: { TaskTag: true },
+          select: {
+            TaskTag: {
+              where: {
+                task: {
+                  userId: user.id,
+                },
+              },
+            },
+          },
         },
       },
     });

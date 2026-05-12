@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { TaskBoardItemDTO, TaskRecordDTO } from '@taskforge/shared';
+export { normalizeTagLabels } from '@taskforge/shared';
 
 export const taskWithTagsInclude = {
   TaskTag: {
@@ -46,30 +47,6 @@ export function toTaskBoardItemDTO(task: TaskWithTags): TaskBoardItemDTO {
     tags,
     updatedAt: task.updatedAt.toISOString(),
   };
-}
-
-export function normalizeTagLabels(tags?: string[]): string[] {
-  if (!tags?.length) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const label of tags) {
-    const trimmed = label.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const key = trimmed.toLocaleLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    normalized.push(key);
-  }
-
-  return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 export function parseDueDate(input?: string): Date | undefined {

@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
+
+const TagLabelSchema = z.string().trim().min(1).max(TAG_LABEL_MAX_LENGTH);
 
 export const TaskCreateSchema = z.object({
   title: z.string().trim().min(1),
@@ -6,7 +9,7 @@ export const TaskCreateSchema = z.object({
   status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   dueDate: z.string().datetime().optional(),
-  tags: z.array(z.string().trim().min(1)).optional(),
+  tags: z.array(TagLabelSchema).optional(),
 });
 
 export const TaskUpdateSchema = TaskCreateSchema.partial();
