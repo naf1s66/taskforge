@@ -7,6 +7,11 @@ export function normalizeTagLabel(label: string): string {
   return label.trim().toLocaleLowerCase();
 }
 
+export function isValidNormalizedTagLabel(label: string): boolean {
+  const normalized = normalizeTagLabel(label);
+  return normalized.length > 0 && normalized.length <= TAG_LABEL_MAX_LENGTH;
+}
+
 export function normalizeTagLabels(tags?: string[]): string[] {
   if (!tags?.length) {
     return [];

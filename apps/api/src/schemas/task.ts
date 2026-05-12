@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
 
-const TagLabelSchema = z.string().trim().min(1).max(TAG_LABEL_MAX_LENGTH);
+import { TagLabelSchema } from './tag';
 
 export const TaskCreateSchema = z.object({
   title: z.string().trim().min(1),

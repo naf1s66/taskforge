@@ -74,6 +74,7 @@ describe('tags endpoints', () => {
   it('rejects invalid tag labels consistently', async () => {
     const { agent } = createTestAgent();
     const auth = await registerTestUser(agent, { email: `tags-invalid-${randomUUID()}@example.com` });
+    const expandsAfterLowercase = '\u0130'.repeat(64);
 
     await agent
       .post('/api/taskforge/v1/tags')
@@ -85,6 +86,18 @@ describe('tags endpoints', () => {
       .post('/api/taskforge/v1/tasks')
       .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
       .send({ title: 'Task with invalid tag', tags: ['x'.repeat(65)] })
+      .expect(400);
+
+    await agent
+      .post('/api/taskforge/v1/tags')
+      .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
+      .send({ label: expandsAfterLowercase })
+      .expect(400);
+
+    await agent
+      .post('/api/taskforge/v1/tasks')
+      .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
+      .send({ title: 'Task with expanding tag', tags: [expandsAfterLowercase] })
       .expect(400);
   });
 

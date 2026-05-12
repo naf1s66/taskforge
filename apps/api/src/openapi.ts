@@ -162,7 +162,12 @@ const taskBoardItem: OpenAPIV3.SchemaObject = {
 const tagSummary: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    label: { type: 'string', minLength: 1, maxLength: 64 },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
     count: { type: 'integer', minimum: 0 },
   },
   required: ['label', 'count'],
@@ -176,7 +181,12 @@ const tagRecord: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
     id: { type: 'string', format: 'uuid' },
-    label: { type: 'string', minLength: 1, maxLength: 64 },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
   },
   required: ['id', 'label'],
   example: {
@@ -188,7 +198,12 @@ const tagRecord: OpenAPIV3.SchemaObject = {
 const tagCreateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    label: { type: 'string', minLength: 1, maxLength: 64 },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Tag label to create. Length limit applies after lowercase normalization.',
+    },
   },
   required: ['label'],
   additionalProperties: false,
@@ -326,7 +341,12 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
-      items: { type: 'string', minLength: 1, maxLength: 64 },
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
     },
   },
   required: ['title'],
@@ -348,7 +368,15 @@ const taskUpdateInput: OpenAPIV3.SchemaObject = {
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
-    tags: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 64 } },
+    tags: {
+      type: 'array',
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
+    },
   },
   additionalProperties: false,
   example: {

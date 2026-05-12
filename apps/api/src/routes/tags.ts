@@ -1,12 +1,8 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { normalizeTagLabel, TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
+import { normalizeTagLabel } from '@taskforge/shared';
 
 import { getPrismaClient } from '../prisma';
-
-const CreateTagSchema = z.object({
-  label: z.string().trim().min(1).max(TAG_LABEL_MAX_LENGTH),
-});
+import { CreateTagSchema } from '../schemas/tag';
 
 export const router = Router();
 

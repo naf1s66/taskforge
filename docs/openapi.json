@@ -374,7 +374,8 @@
           "label": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 64
+            "maxLength": 64,
+            "description": "Canonical lowercase tag label. Length limit applies after normalization."
           },
           "count": {
             "type": "integer",
@@ -400,7 +401,8 @@
           "label": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 64
+            "maxLength": 64,
+            "description": "Canonical lowercase tag label. Length limit applies after normalization."
           }
         },
         "required": [
@@ -418,7 +420,8 @@
           "label": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 64
+            "maxLength": 64,
+            "description": "Tag label to create. Length limit applies after lowercase normalization."
           }
         },
         "required": [
@@ -748,7 +751,8 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 64,
+              "description": "Tag label. Length limit applies after lowercase normalization."
             }
           }
         },
@@ -802,7 +806,8 @@
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 64,
+              "description": "Tag label. Length limit applies after lowercase normalization."
             }
           }
         },
