@@ -960,6 +960,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over || !canDragTasks) {
+      if (!isManualSort) {
+        setOverColumnStatus(null);
+      }
       return;
     }
 
@@ -969,6 +972,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     const overStatus = findStatusForTask(overId);
 
     if (!activeStatus || !overStatus) {
+      if (!isManualSort) {
+        setOverColumnStatus(null);
+      }
       return;
     }
 
