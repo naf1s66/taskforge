@@ -205,9 +205,9 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
 
   router.post('/logout', authMiddleware, (_req, res) => {
     // Clear the HttpOnly cookie with same options used to set it
-    const cookieOptions = getCookieOptions();
+    const { maxAge, ...clearOptions } = getCookieOptions();
     // Remove maxAge for clearing
-    const { maxAge, ...clearOptions } = cookieOptions;
+    void maxAge;
     res.clearCookie(SESSION_COOKIE_NAME, clearOptions);
     return res.status(200).json({ success: true });
   });

@@ -94,7 +94,7 @@ const notFoundExample = { value: { error: 'Not found' } } satisfies OpenAPIV3.Ex
 const logoutSuccessExample = { value: { success: true } } satisfies OpenAPIV3.ExampleObject;
 
 const authMeSuccessExample = {
-  value: { user: authUser.example },
+  value: { user: authUser.example as Record<string, unknown> },
 } satisfies OpenAPIV3.ExampleObject;
 
 const authMeAnonymousExample = { value: { user: null } } satisfies OpenAPIV3.ExampleObject;
@@ -255,8 +255,8 @@ const boardResponse: OpenAPIV3.SchemaObject = {
   },
   required: ['columns', 'summary', 'updatedAt', 'generatedAt'],
   example: {
-    columns: [boardColumn.example],
-    summary: boardSummary.example,
+    columns: [boardColumn.example as Record<string, unknown>],
+    summary: boardSummary.example as Record<string, unknown>,
     updatedAt: '2024-06-03T09:30:00.000Z',
     generatedAt: '2024-06-03T09:30:00.000Z',
   },

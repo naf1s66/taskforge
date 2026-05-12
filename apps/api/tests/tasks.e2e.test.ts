@@ -497,6 +497,53 @@ describe("Tasks API", () => {
       ]);
     });
 
+    it("does not mark unrelated lane tasks as recently updated when reindexing board moves", async () => {
+      const auth = await register();
+      const todoA = await createTask({
+        userId: auth.userId,
+        title: "Todo A",
+        status: "TODO",
+      });
+      await sleep(5);
+      const todoB = await createTask({
+        userId: auth.userId,
+        title: "Todo B",
+        status: "TODO",
+      });
+      await sleep(5);
+      const inProgress = await createTask({
+        userId: auth.userId,
+        title: "Doing A",
+        status: "IN_PROGRESS",
+      });
+      await sleep(5);
+
+      const moved = await withAuth(
+        agent.patch("/api/taskforge/v1/tasks/board/move").send({
+          taskId: todoA.task.id,
+          targetStatus: "IN_PROGRESS",
+          targetIndex: 1,
+        }),
+        auth,
+      ).expect(200);
+
+      const todoBFromBoard = moved.body.columns
+        .find((column: { status: string }) => column.status === "TODO")
+        .tasks.find((task: { id: string }) => task.id === todoB.task.id);
+      const inProgressFromBoard = moved.body.columns
+        .find((column: { status: string }) => column.status === "IN_PROGRESS")
+        .tasks.find((task: { id: string }) => task.id === inProgress.task.id);
+      const movedTaskFromBoard = moved.body.columns
+        .find((column: { status: string }) => column.status === "IN_PROGRESS")
+        .tasks.find((task: { id: string }) => task.id === todoA.task.id);
+
+      expect(todoBFromBoard.updatedAt).toBe(todoB.task.updatedAt);
+      expect(inProgressFromBoard.updatedAt).toBe(inProgress.task.updatedAt);
+      expect(new Date(movedTaskFromBoard.updatedAt).getTime()).toBeGreaterThan(
+        new Date(todoA.task.updatedAt).getTime(),
+      );
+    });
+
     it("validates targetIndex and returns not found for unknown tasks", async () => {
       const auth = await register();
       const todo = await createTask({

@@ -43,7 +43,7 @@ export function createTokenService(options: TokenServiceOptions): TokenService {
   const refreshExpiresIn = options.refreshExpiresIn ?? '7d';
 
   return {
-    async issueTokens(userId) {
+    issueTokens(userId) {
       const accessToken = jwt.sign(
         { sub: userId },
         options.accessSecret,
@@ -55,19 +55,19 @@ export function createTokenService(options: TokenServiceOptions): TokenService {
         { expiresIn: refreshExpiresIn as SignOptions['expiresIn'] },
       );
 
-      return {
+      return Promise.resolve({
         accessToken,
         refreshToken,
         accessTokenExpiresAt: decodeExpiration(accessToken),
         refreshTokenExpiresAt: decodeExpiration(refreshToken),
         tokenType: 'Bearer',
-      };
+      });
     },
-    async verifyAccessToken(token) {
-      return verifyToken(token, options.accessSecret);
+    verifyAccessToken(token) {
+      return Promise.resolve(verifyToken(token, options.accessSecret));
     },
-    async verifyRefreshToken(token) {
-      return verifyToken(token, refreshSecret);
+    verifyRefreshToken(token) {
+      return Promise.resolve(verifyToken(token, refreshSecret));
     },
   };
 }
