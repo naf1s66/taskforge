@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from 'react';
-import { useCommandState } from 'cmdk';
 import { Filter, Tag, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -25,25 +24,22 @@ interface CommandInputWithCreateProps
   extends Omit<CommandInputProps, 'value' | 'onValueChange' | 'onKeyDown'> {
   value: string;
   onValueChange: (value: string) => void;
+  canCreate: boolean;
   onCreate: () => void;
   onKeyDown?: CommandInputProps['onKeyDown'];
 }
 
-function CommandInputWithCreate({ value, onValueChange, onCreate, onKeyDown, ...props }: CommandInputWithCreateProps) {
-  const filteredItemCount = useCommandState((state) => state.filtered.count);
-
+function CommandInputWithCreate({ value, onValueChange, canCreate, onCreate, onKeyDown, ...props }: CommandInputWithCreateProps) {
   return (
     <CommandInput
       {...props}
       value={value}
       onValueChange={onValueChange}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' && value.trim()) {
-          if (filteredItemCount === 0) {
-            event.preventDefault();
-            onCreate();
-            return;
-          }
+        if (event.key === 'Enter' && canCreate) {
+          event.preventDefault();
+          onCreate();
+          return;
         }
 
         onKeyDown?.(event);
@@ -74,6 +70,14 @@ export function TaskTagSelector({
     const search = debouncedInput.trim().toLowerCase();
     return options.filter((tag) => tag.toLowerCase().includes(search));
   }, [debouncedInput, options]);
+  const canCreateTag = useMemo(() => {
+    const search = inputValue.trim().toLowerCase();
+    if (!search) {
+      return false;
+    }
+
+    return !options.some((tag) => tag.toLowerCase().includes(search));
+  }, [inputValue, options]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -103,6 +107,10 @@ export function TaskTagSelector({
   }
 
   function handleCreateTag() {
+    if (!canCreateTag) {
+      return;
+    }
+
     toggleTag(inputValue);
     setOpen(false);
   }
@@ -158,6 +166,7 @@ export function TaskTagSelector({
               onValueChange={setInputValue}
               placeholder="Search or create tags"
               aria-label="Search available tags"
+              canCreate={canCreateTag}
               onCreate={handleCreateTag}
               onKeyDown={handleInputKeyDown}
             />
@@ -165,7 +174,7 @@ export function TaskTagSelector({
               <CommandEmpty>
                 <div className="space-y-2">
                   <p>No tags found.</p>
-                  {inputValue.trim() ? (
+                  {canCreateTag ? (
                     <Button variant="secondary" size="sm" className="w-full" type="button" onClick={handleCreateTag}>
                       Create “{inputValue.trim()}”
                     </Button>
