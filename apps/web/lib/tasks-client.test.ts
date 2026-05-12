@@ -211,7 +211,7 @@ describe('tasks-client', () => {
   });
 
   describe('getTaskBoard', () => {
-    it('serializes repeated tag filters', async () => {
+    it('serializes board filters', async () => {
       const fetchMock = vi.fn().mockResolvedValue(
         jsonResponse({
           columns: [],
@@ -227,14 +227,44 @@ describe('tasks-client', () => {
       );
 
       await getTaskBoard(
-        { tag: ['frontend', 'api'] },
+        {
+          status: 'IN_PROGRESS',
+          priority: 'HIGH',
+          tag: ['frontend', 'api'],
+          q: ' board search ',
+          dueFrom: '2026-05-01T00:00:00.000Z',
+          dueTo: '2026-05-31T23:59:59.999Z',
+        },
         { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
       );
 
       const [url] = fetchMock.mock.calls[0];
       const parsedUrl = new URL(url as string);
       expect(parsedUrl.pathname).toBe('/api/taskforge/v1/tasks/board');
+      expect(parsedUrl.searchParams.get('status')).toBe('IN_PROGRESS');
+      expect(parsedUrl.searchParams.get('priority')).toBe('HIGH');
       expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
+      expect(parsedUrl.searchParams.get('q')).toBe('board search');
+      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2026-05-01T00:00:00.000Z');
+      expect(parsedUrl.searchParams.get('dueTo')).toBe('2026-05-31T23:59:59.999Z');
+    });
+
+    it('rejects inverted board due ranges before sending a request', async () => {
+      const fetchMock = vi.fn();
+
+      await expect(
+        getTaskBoard(
+          {
+            dueFrom: '2026-05-31T00:00:00.000Z',
+            dueTo: '2026-05-01T00:00:00.000Z',
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({
+        kind: 'validation' satisfies TaskClientError['kind'],
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

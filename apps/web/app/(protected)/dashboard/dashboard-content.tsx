@@ -163,7 +163,8 @@ const sortOptions = [
   { value: "priority", label: "Priority" },
 ] as const;
 const BOARD_FILTERS_STORAGE_KEY = "taskforge.dashboard.filters";
-type DueWindow = "ALL" | "OVERDUE" | "TODAY" | "NEXT_7_DAYS";
+type DueWindow = "ALL" | "OVERDUE" | "TODAY" | "NEXT_7_DAYS" | "CUSTOM";
+const dueWindows: DueWindow[] = ["ALL", "OVERDUE", "TODAY", "NEXT_7_DAYS"];
 
 type SortOption = (typeof sortOptions)[number]["value"];
 
@@ -179,6 +180,31 @@ interface BoardMoveRollback {
   taskId: string;
   sourceStatus: TaskStatus;
   sourceIndex: number;
+}
+
+function getDueRangeForWindow(dueWindow: DueWindow): { dueFrom?: string; dueTo?: string } {
+  const now = new Date();
+
+  if (dueWindow === "OVERDUE") {
+    return { dueTo: now.toISOString() };
+  }
+
+  if (dueWindow === "TODAY") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    return { dueFrom: start.toISOString(), dueTo: end.toISOString() };
+  }
+
+  if (dueWindow === "NEXT_7_DAYS") {
+    const end = new Date(now);
+    end.setDate(end.getDate() + 7);
+    end.setHours(23, 59, 59, 999);
+    return { dueFrom: now.toISOString(), dueTo: end.toISOString() };
+  }
+
+  return {};
 }
 
 function getInitials(user: DashboardUser) {
@@ -598,6 +624,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
   const [dueWindow, setDueWindow] = useState<DueWindow>("ALL");
+  const [customDueRange, setCustomDueRange] = useState<{ dueFrom?: string; dueTo?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>(() => urlTagFilters);
   const [sortBy, setSortBy] = useState<SortOption>("manual");
@@ -615,6 +642,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const columnOrderRef = useRef(columnOrder);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
   const inFlightTaskIdsRef = useRef<Set<string>>(new Set());
+  const dueRange = useMemo(
+    () => customDueRange ?? getDueRangeForWindow(dueWindow),
+    [customDueRange, dueWindow],
+  );
+  const hasActiveFilters =
+    statusFilter !== "ALL" ||
+    priorityFilter !== "ALL" ||
+    dueWindow !== "ALL" ||
+    Boolean(customDueRange?.dueFrom || customDueRange?.dueTo) ||
+    searchQuery.trim().length > 0 ||
+    tagFilters.length > 0;
 
   const tasksQuery = useTasksQuery({
     pageSize: 50,
@@ -827,47 +865,89 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   );
 
   useEffect(() => {
+    const rawQuery = searchParams.toString();
+    if (!rawQuery) {
+      const raw = window.localStorage.getItem(BOARD_FILTERS_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw) as { statusFilter?: typeof statusFilter; priorityFilter?: typeof priorityFilter; dueWindow?: DueWindow; dueRange?: { dueFrom?: string; dueTo?: string }; searchQuery?: string; tagFilters?: string[] };
+        if (parsed.statusFilter === "ALL" || parsed.statusFilter === "TODO" || parsed.statusFilter === "IN_PROGRESS" || parsed.statusFilter === "DONE") {
+          setStatusFilter(parsed.statusFilter);
+        }
+        if (parsed.priorityFilter === "ALL" || parsed.priorityFilter === "LOW" || parsed.priorityFilter === "MEDIUM" || parsed.priorityFilter === "HIGH") {
+          setPriorityFilter(parsed.priorityFilter);
+        }
+        if (parsed.dueWindow && dueWindows.includes(parsed.dueWindow)) {
+          setDueWindow(parsed.dueWindow);
+          setCustomDueRange(null);
+        } else if (parsed.dueWindow === "CUSTOM" && (parsed.dueRange?.dueFrom || parsed.dueRange?.dueTo)) {
+          setDueWindow("CUSTOM");
+          setCustomDueRange({
+            dueFrom: parsed.dueRange.dueFrom,
+            dueTo: parsed.dueRange.dueTo,
+          });
+        }
+        setSearchQuery(typeof parsed.searchQuery === "string" ? parsed.searchQuery : "");
+        setTagFilters(Array.isArray(parsed.tagFilters) ? sanitizeTags(parsed.tagFilters) : []);
+      } catch {}
+      return;
+    }
+
+    const status = searchParams.get("status");
+    const priority = searchParams.get("priority");
+    const dueWindowParam = searchParams.get("dueWindow") as DueWindow | null;
+    const dueFrom = searchParams.get("dueFrom") ?? undefined;
+    const dueTo = searchParams.get("dueTo") ?? undefined;
+    const q = searchParams.get("q") ?? "";
+
+    setStatusFilter(status === "TODO" || status === "IN_PROGRESS" || status === "DONE" ? status : "ALL");
+    setPriorityFilter(priority === "LOW" || priority === "MEDIUM" || priority === "HIGH" ? priority : "ALL");
+    if (dueWindowParam && dueWindows.includes(dueWindowParam)) {
+      setDueWindow(dueWindowParam);
+      setCustomDueRange(null);
+    } else if (dueFrom || dueTo) {
+      setDueWindow("CUSTOM");
+      setCustomDueRange({ dueFrom, dueTo });
+    } else {
+      setDueWindow("ALL");
+      setCustomDueRange(null);
+    }
+    setSearchQuery(q);
     setTagFilters((previous) =>
       previous.length === urlTagFilters.length &&
       previous.every((value, index) => value === urlTagFilters[index])
         ? previous
         : urlTagFilters,
     );
-  }, [urlTagFilters]);
-  useEffect(() => {
-    const status = searchParams.get("status");
-    const priority = searchParams.get("priority");
-    const dueWindowParam = searchParams.get("dueWindow") as DueWindow | null;
-    const q = searchParams.get("q") ?? "";
-    if (status === "TODO" || status === "IN_PROGRESS" || status === "DONE") setStatusFilter(status);
-    if (priority === "LOW" || priority === "MEDIUM" || priority === "HIGH") setPriorityFilter(priority);
-    if (dueWindowParam && ["ALL","OVERDUE","TODAY","NEXT_7_DAYS"].includes(dueWindowParam)) setDueWindow(dueWindowParam);
-    setSearchQuery(q);
-
-    const raw = window.localStorage.getItem(BOARD_FILTERS_STORAGE_KEY);
-    if (!searchParams.toString() && raw) {
-      try {
-        const parsed = JSON.parse(raw) as { statusFilter?: typeof statusFilter; priorityFilter?: typeof priorityFilter; dueWindow?: DueWindow; searchQuery?: string; tagFilters?: string[] };
-        if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
-        if (parsed.priorityFilter) setPriorityFilter(parsed.priorityFilter);
-        if (parsed.dueWindow) setDueWindow(parsed.dueWindow);
-        if (parsed.searchQuery) setSearchQuery(parsed.searchQuery);
-        if (parsed.tagFilters) setTagFilters(sanitizeTags(parsed.tagFilters));
-      } catch {}
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, urlTagFilters]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     statusFilter === "ALL" ? params.delete("status") : params.set("status", statusFilter);
     priorityFilter === "ALL" ? params.delete("priority") : params.set("priority", priorityFilter);
-    dueWindow === "ALL" ? params.delete("dueWindow") : params.set("dueWindow", dueWindow);
+    params.delete("dueWindow");
+    params.delete("dueFrom");
+    params.delete("dueTo");
+    if (dueWindow !== "ALL" && dueWindow !== "CUSTOM") {
+      params.set("dueWindow", dueWindow);
+    }
+    if (dueRange.dueFrom) {
+      params.set("dueFrom", dueRange.dueFrom);
+    }
+    if (dueRange.dueTo) {
+      params.set("dueTo", dueRange.dueTo);
+    }
     searchQuery.trim() ? params.set("q", searchQuery.trim()) : params.delete("q");
+    params.delete("tag");
+    for (const tag of tagFilters) {
+      params.append("tag", tag);
+    }
     const next = params.toString();
     if (next !== searchParams.toString()) router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    window.localStorage.setItem(BOARD_FILTERS_STORAGE_KEY, JSON.stringify({ statusFilter, priorityFilter, dueWindow, searchQuery, tagFilters }));
-  }, [dueWindow, pathname, priorityFilter, router, searchParams, searchQuery, statusFilter, tagFilters]);
+    window.localStorage.setItem(BOARD_FILTERS_STORAGE_KEY, JSON.stringify({ statusFilter, priorityFilter, dueWindow, dueRange, searchQuery, tagFilters }));
+  }, [dueRange, dueWindow, pathname, priorityFilter, router, searchParams, searchQuery, statusFilter, tagFilters]);
 
   const handleTagFiltersChange = useCallback(
     (nextTags: string[]) => {
@@ -879,20 +959,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
           : nextTagFilters,
       );
 
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("tag");
-      for (const tag of nextTagFilters) {
-        params.append("tag", tag);
-      }
-      const next = params.toString();
-      const current = searchParams.toString();
-      if (next !== current) {
-        router.replace(next ? `${pathname}?${next}` : pathname, {
-          scroll: false,
-        });
-      }
     },
-    [pathname, router, searchParams],
+    [],
   );
 
   const availableTags = useMemo(() => {
@@ -909,7 +977,14 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const firstName = user.name?.split(" ")[0] ?? "there";
 
   const isEmpty =
-    !tasksQuery.isLoading && !tasksQuery.isError && totalTasks === 0;
+    !hasActiveFilters && !tasksQuery.isLoading && !tasksQuery.isError && totalTasks === 0;
+  const isFilteredEmpty =
+    hasActiveFilters &&
+    !tasksQuery.isLoading &&
+    !tasksQuery.isError &&
+    !boardQuery.isLoading &&
+    !boardQuery.isError &&
+    visibleTaskCount === 0;
   const dragActive = Boolean(activeId);
 
   const renderedTaskMap = useMemo(() => {
@@ -1455,7 +1530,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button type="button" size="sm" variant="outline">Due: {dueWindow.replaceAll("_"," ")}</Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {(["ALL","OVERDUE","TODAY","NEXT_7_DAYS"] as const).map((dw) => <DropdownMenuItem key={dw} onSelect={() => setDueWindow(dw)}>{dw.replaceAll("_"," ")}</DropdownMenuItem>)}
+                {(["ALL","OVERDUE","TODAY","NEXT_7_DAYS"] as const).map((dw) => (
+                  <DropdownMenuItem
+                    key={dw}
+                    onSelect={() => {
+                      setDueWindow(dw);
+                      setCustomDueRange(null);
+                    }}
+                  >
+                    {dw.replaceAll("_"," ")}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -1508,12 +1593,26 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               : ""}
             .
           </p>
-          {visibleTaskCount === 0 && totalTasks > 0 ? (
+          {isFilteredEmpty ? (
             <Alert className="mt-3">
               <AlertTitle>No tasks match these filters</AlertTitle>
               <AlertDescription>
                 Try widening your filters or reset to see all tasks.
-                <Button size="sm" variant="outline" className="ml-3" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setDueWindow("ALL"); setSearchQuery(""); setTagFilters([]); }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-3"
+                  onClick={() => {
+                    setStatusFilter("ALL");
+                    setPriorityFilter("ALL");
+                    setDueWindow("ALL");
+                    setCustomDueRange(null);
+                    setSearchQuery("");
+                    setTagFilters([]);
+                    window.localStorage.removeItem(BOARD_FILTERS_STORAGE_KEY);
+                    router.replace(pathname, { scroll: false });
+                  }}
+                >
                   Reset filters
                 </Button>
               </AlertDescription>
@@ -1723,17 +1822,3 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     </div>
   );
 }
-  const dueRange = useMemo(() => {
-    const now = new Date();
-    if (dueWindow === "OVERDUE") return { dueTo: now.toISOString() };
-    if (dueWindow === "TODAY") {
-      const start = new Date(now); start.setHours(0, 0, 0, 0);
-      const end = new Date(now); end.setHours(23, 59, 59, 999);
-      return { dueFrom: start.toISOString(), dueTo: end.toISOString() };
-    }
-    if (dueWindow === "NEXT_7_DAYS") {
-      const end = new Date(now); end.setDate(end.getDate() + 7); end.setHours(23, 59, 59, 999);
-      return { dueFrom: now.toISOString(), dueTo: end.toISOString() };
-    }
-    return {};
-  }, [dueWindow]);

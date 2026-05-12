@@ -581,21 +581,56 @@ function buildBoardSummary(columns: TaskBoardResponse['columns']): TaskBoardResp
 }
 
 function boardTaskMatchesFilters(
-  task: Pick<TaskListItem, 'tags'>,
+  task: Pick<TaskListItem, 'title' | 'status' | 'priority' | 'dueDate' | 'tags'> & { description?: string },
   filters: NormalizedTaskBoardFilters | undefined,
 ): boolean {
-  if (!filters?.tag?.length) {
+  if (!filters) {
     return true;
   }
 
-  const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
-  const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
-
-  if (filterTags.length === 0) {
-    return true;
+  if (filters.status && task.status !== filters.status) {
+    return false;
   }
 
-  return filterTags.every((tag) => taskTags.has(tag));
+  if (filters.priority && task.priority !== filters.priority) {
+    return false;
+  }
+
+  if (filters.tag?.length) {
+    const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+    if (filterTags.length > 0 && filterTags.some((tag) => !taskTags.has(tag))) {
+      return false;
+    }
+  }
+
+  if (filters.q) {
+    const haystack = `${task.title} ${task.description ?? ''}`.toLowerCase();
+    if (!haystack.includes(filters.q.toLowerCase())) {
+      return false;
+    }
+  }
+
+  if (filters.dueFrom) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) < Date.parse(filters.dueFrom)) {
+      return false;
+    }
+  }
+
+  if (filters.dueTo) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) > Date.parse(filters.dueTo)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function taskBoardItemFromTask(

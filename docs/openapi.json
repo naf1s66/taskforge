@@ -1621,13 +1621,81 @@
           "Tasks"
         ],
         "summary": "Retrieve the Kanban board read model",
-        "description": "Returns a board-friendly representation of tasks grouped by status lanes. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
+        "description": "Returns a board-friendly representation of tasks grouped by status lanes. Repeating `tag` requires tasks to include every selected tag. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.",
         "security": [
           {
             "bearerAuth": []
           },
           {
             "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TODO",
+                "IN_PROGRESS",
+                "DONE"
+              ]
+            },
+            "description": "Filter board tasks by workflow status."
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LOW",
+                "MEDIUM",
+                "HIGH"
+              ]
+            },
+            "description": "Filter board tasks by priority."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Case-insensitive search over the title and description."
+          },
+          {
+            "name": "dueFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Only return board tasks due on or after this ISO timestamp."
+          },
+          {
+            "name": "dueTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Only return board tasks due on or before this ISO timestamp."
           }
         ],
         "responses": {
@@ -1695,6 +1763,31 @@
                       },
                       "updatedAt": "2024-06-03T09:30:00.000Z",
                       "generatedAt": "2024-06-03T09:30:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidFilters": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "dueFrom": [
+                            "dueFrom must be earlier than or equal to dueTo"
+                          ]
+                        },
+                        "formErrors": []
+                      }
                     }
                   }
                 }

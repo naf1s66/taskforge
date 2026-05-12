@@ -210,6 +210,79 @@ describe('tasks-hooks board cache helpers', () => {
     });
   });
 
+  it('removes a task from a filtered board cache when non-tag filters no longer match', () => {
+    const updated = __testing.applyTaskUpdateToBoard(
+      board,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        priority: 'LOW',
+        dueDate: '2024-07-01T00:00:00.000Z',
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+      new Date('2024-06-15T00:00:00.000Z'),
+      {
+        status: 'TODO',
+        priority: 'HIGH',
+        dueTo: '2024-06-30T23:59:59.999Z',
+      },
+    );
+
+    expect(updated.columns[0]).toMatchObject({
+      status: 'TODO',
+      total: 0,
+      tasks: [],
+    });
+    expect(updated.summary.totalTasks).toBe(1);
+  });
+
+  it('reconciles server tasks into board caches when search filters match descriptions', () => {
+    const emptyBoard: TaskBoardResponse = {
+      ...board,
+      columns: board.columns.map((column) => ({
+        ...column,
+        tasks: [],
+        total: 0,
+        overdueCount: 0,
+        tags: [],
+      })),
+      summary: {
+        totalsByStatus: {
+          TODO: 0,
+          IN_PROGRESS: 0,
+          DONE: 0,
+        },
+        overdueByStatus: {
+          TODO: 0,
+          IN_PROGRESS: 0,
+          DONE: 0,
+        },
+        totalTasks: 0,
+        totalOverdue: 0,
+      },
+    };
+    const task: TaskListItem = {
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Draft contract',
+      description: 'Contains the board-search phrase',
+      status: 'TODO',
+      priority: 'HIGH',
+      dueDate: '2024-06-01T00:00:00.000Z',
+      tags: ['api'],
+      createdAt: '2024-05-01T00:00:00.000Z',
+      updatedAt: '2024-06-15T12:00:00.000Z',
+    };
+
+    const updated = __testing.reconcileTaskInBoard(
+      emptyBoard,
+      task,
+      { q: 'board-search' },
+      new Date('2024-06-15T00:00:00.000Z'),
+    );
+
+    expect(updated.columns[0].tasks).toHaveLength(1);
+    expect(updated.summary.totalTasks).toBe(1);
+  });
+
   it('matches board tag filters case-insensitively when reconciling server tasks', () => {
     const emptyBoard: TaskBoardResponse = {
       ...board,
