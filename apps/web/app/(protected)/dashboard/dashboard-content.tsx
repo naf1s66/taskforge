@@ -52,6 +52,7 @@ import type { TaskPriority, TaskStatus } from "@taskforge/shared";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -161,6 +162,8 @@ const sortOptions = [
   { value: "dueDate", label: "Due date" },
   { value: "priority", label: "Priority" },
 ] as const;
+const BOARD_FILTERS_STORAGE_KEY = "taskforge.dashboard.filters";
+type DueWindow = "ALL" | "OVERDUE" | "TODAY" | "NEXT_7_DAYS";
 
 type SortOption = (typeof sortOptions)[number]["value"];
 
@@ -593,6 +596,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     [searchParams],
   );
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
+  const [priorityFilter, setPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
+  const [dueWindow, setDueWindow] = useState<DueWindow>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>(() => urlTagFilters);
   const [sortBy, setSortBy] = useState<SortOption>("manual");
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() =>
@@ -612,10 +618,20 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
   const tasksQuery = useTasksQuery({
     pageSize: 50,
+    status: statusFilter === "ALL" ? undefined : statusFilter,
+    priority: priorityFilter === "ALL" ? undefined : priorityFilter,
     tag: tagFilters.length > 0 ? tagFilters : undefined,
+    q: searchQuery.trim() || undefined,
+    dueFrom: dueRange.dueFrom,
+    dueTo: dueRange.dueTo,
   });
   const boardQuery = useTaskBoardQuery({
+    status: statusFilter === "ALL" ? undefined : statusFilter,
+    priority: priorityFilter === "ALL" ? undefined : priorityFilter,
     tag: tagFilters.length > 0 ? tagFilters : undefined,
+    q: searchQuery.trim() || undefined,
+    dueFrom: dueRange.dueFrom,
+    dueTo: dueRange.dueTo,
   });
   const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
@@ -818,6 +834,40 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         : urlTagFilters,
     );
   }, [urlTagFilters]);
+  useEffect(() => {
+    const status = searchParams.get("status");
+    const priority = searchParams.get("priority");
+    const dueWindowParam = searchParams.get("dueWindow") as DueWindow | null;
+    const q = searchParams.get("q") ?? "";
+    if (status === "TODO" || status === "IN_PROGRESS" || status === "DONE") setStatusFilter(status);
+    if (priority === "LOW" || priority === "MEDIUM" || priority === "HIGH") setPriorityFilter(priority);
+    if (dueWindowParam && ["ALL","OVERDUE","TODAY","NEXT_7_DAYS"].includes(dueWindowParam)) setDueWindow(dueWindowParam);
+    setSearchQuery(q);
+
+    const raw = window.localStorage.getItem(BOARD_FILTERS_STORAGE_KEY);
+    if (!searchParams.toString() && raw) {
+      try {
+        const parsed = JSON.parse(raw) as { statusFilter?: typeof statusFilter; priorityFilter?: typeof priorityFilter; dueWindow?: DueWindow; searchQuery?: string; tagFilters?: string[] };
+        if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
+        if (parsed.priorityFilter) setPriorityFilter(parsed.priorityFilter);
+        if (parsed.dueWindow) setDueWindow(parsed.dueWindow);
+        if (parsed.searchQuery) setSearchQuery(parsed.searchQuery);
+        if (parsed.tagFilters) setTagFilters(sanitizeTags(parsed.tagFilters));
+      } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    statusFilter === "ALL" ? params.delete("status") : params.set("status", statusFilter);
+    priorityFilter === "ALL" ? params.delete("priority") : params.set("priority", priorityFilter);
+    dueWindow === "ALL" ? params.delete("dueWindow") : params.set("dueWindow", dueWindow);
+    searchQuery.trim() ? params.set("q", searchQuery.trim()) : params.delete("q");
+    const next = params.toString();
+    if (next !== searchParams.toString()) router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    window.localStorage.setItem(BOARD_FILTERS_STORAGE_KEY, JSON.stringify({ statusFilter, priorityFilter, dueWindow, searchQuery, tagFilters }));
+  }, [dueWindow, pathname, priorityFilter, router, searchParams, searchQuery, statusFilter, tagFilters]);
 
   const handleTagFiltersChange = useCallback(
     (nextTags: string[]) => {
@@ -1385,6 +1435,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                 );
               })}
             </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant={priorityFilter==="ALL"?"default":"secondary"} onClick={() => setPriorityFilter("ALL")}>Any priority</Button>
+              {(["HIGH","MEDIUM","LOW"] as const).map((p) => <Button key={p} size="sm" variant={priorityFilter===p?"default":"secondary"} onClick={() => setPriorityFilter(p)}>{priorityLabels[p]}</Button>)}
+            </div>
           </div>
           <div className="w-full max-w-sm">
             <TaskTagSelector
@@ -1397,6 +1451,13 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search title or description" className="h-9 w-64" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button type="button" size="sm" variant="outline">Due: {dueWindow.replaceAll("_"," ")}</Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(["ALL","OVERDUE","TODAY","NEXT_7_DAYS"] as const).map((dw) => <DropdownMenuItem key={dw} onSelect={() => setDueWindow(dw)}>{dw.replaceAll("_"," ")}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1447,6 +1508,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               : ""}
             .
           </p>
+          {visibleTaskCount === 0 && totalTasks > 0 ? (
+            <Alert className="mt-3">
+              <AlertTitle>No tasks match these filters</AlertTitle>
+              <AlertDescription>
+                Try widening your filters or reset to see all tasks.
+                <Button size="sm" variant="outline" className="ml-3" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setDueWindow("ALL"); setSearchQuery(""); setTagFilters([]); }}>
+                  Reset filters
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {!isManualSort ? (
             <p className="mt-2 text-xs text-muted-foreground">
               Sorted by{" "}
@@ -1651,3 +1723,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     </div>
   );
 }
+  const dueRange = useMemo(() => {
+    const now = new Date();
+    if (dueWindow === "OVERDUE") return { dueTo: now.toISOString() };
+    if (dueWindow === "TODAY") {
+      const start = new Date(now); start.setHours(0, 0, 0, 0);
+      const end = new Date(now); end.setHours(23, 59, 59, 999);
+      return { dueFrom: start.toISOString(), dueTo: end.toISOString() };
+    }
+    if (dueWindow === "NEXT_7_DAYS") {
+      const end = new Date(now); end.setDate(end.getDate() + 7); end.setHours(23, 59, 59, 999);
+      return { dueFrom: now.toISOString(), dueTo: end.toISOString() };
+    }
+    return {};
+  }, [dueWindow]);

@@ -186,7 +186,12 @@ interface NormalizedTaskListFilters {
 }
 
 interface NormalizedTaskBoardFilters {
+  status?: TaskBoardQuery['status'];
+  priority?: TaskBoardQuery['priority'];
   tag?: string[];
+  q?: string;
+  dueFrom?: string;
+  dueTo?: string;
 }
 
 const TASK_QUERY_SCOPE = 'tasks';
@@ -768,6 +773,13 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
   }
 
   const normalized: NormalizedTaskBoardFilters = {};
+  if (filters.status) {
+    normalized.status = filters.status;
+  }
+
+  if (filters.priority) {
+    normalized.priority = filters.priority;
+  }
 
   if (filters.tag) {
     const tags = Array.isArray(filters.tag) ? filters.tag : [filters.tag];
@@ -775,6 +787,15 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
     if (normalizedTags.length > 0) {
       normalized.tag = normalizedTags;
     }
+  }
+  if (filters.q?.trim()) {
+    normalized.q = filters.q.trim();
+  }
+  if (filters.dueFrom) {
+    normalized.dueFrom = filters.dueFrom;
+  }
+  if (filters.dueTo) {
+    normalized.dueTo = filters.dueTo;
   }
 
   return Object.keys(normalized).length ? normalized : undefined;
