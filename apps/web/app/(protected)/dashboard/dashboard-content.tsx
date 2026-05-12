@@ -1,6 +1,13 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { motion } from "framer-motion";
 import {
   ArrowUpDown,
@@ -581,8 +588,12 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const urlTagFilters = useMemo(
+    () => sanitizeTags(searchParams.getAll("tag")),
+    [searchParams],
+  );
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
-  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [tagFilters, setTagFilters] = useState<string[]>(() => urlTagFilters);
   const [sortBy, setSortBy] = useState<SortOption>("manual");
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() =>
     cloneColumnOrder(emptyColumnOrder),
@@ -800,27 +811,39 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   );
 
   useEffect(() => {
-    const urlTags = sanitizeTags(searchParams.getAll("tag"));
     setTagFilters((previous) =>
-      previous.length === urlTags.length &&
-      previous.every((value, index) => value === urlTags[index])
+      previous.length === urlTagFilters.length &&
+      previous.every((value, index) => value === urlTagFilters[index])
         ? previous
-        : urlTags,
+        : urlTagFilters,
     );
-  }, [searchParams]);
+  }, [urlTagFilters]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("tag");
-    for (const tag of tagFilters) {
-      params.append("tag", tag);
-    }
-    const next = params.toString();
-    const current = searchParams.toString();
-    if (next !== current) {
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    }
-  }, [pathname, router, searchParams, tagFilters]);
+  const handleTagFiltersChange = useCallback(
+    (nextTags: string[]) => {
+      const nextTagFilters = sanitizeTags(nextTags);
+      setTagFilters((previous) =>
+        previous.length === nextTagFilters.length &&
+        previous.every((value, index) => value === nextTagFilters[index])
+          ? previous
+          : nextTagFilters,
+      );
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tag");
+      for (const tag of nextTagFilters) {
+        params.append("tag", tag);
+      }
+      const next = params.toString();
+      const current = searchParams.toString();
+      if (next !== current) {
+        router.replace(next ? `${pathname}?${next}` : pathname, {
+          scroll: false,
+        });
+      }
+    },
+    [pathname, router, searchParams],
+  );
 
   const availableTags = useMemo(() => {
     const collected: string[] = [];
@@ -1366,7 +1389,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
           <div className="w-full max-w-sm">
             <TaskTagSelector
               value={tagFilters}
-              onChange={setTagFilters}
+              onChange={handleTagFiltersChange}
               availableTags={availableTags}
               placeholder="Filter by tags"
               emptyHint="Choose one or more tags to scope the board."
