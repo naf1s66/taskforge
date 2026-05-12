@@ -82,15 +82,8 @@ type TagQueryResult = UseQueryResult<TagListResponse, TaskClientError>;
 interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
-  boardSnapshot?: TaskBoardResponse;
-  boardRollback?: BoardMoveRollback;
+  boardSnapshots?: Array<[QueryKey, TaskBoardResponse | undefined]>;
   taskSnapshot?: TaskListItem | null;
-}
-
-interface BoardMoveRollback {
-  taskId: string;
-  sourceStatus: TaskStatus;
-  sourceIndex: number;
 }
 
 type TaskMutationContext<TContext extends object = object> =
@@ -307,6 +300,24 @@ function extractFiltersFromKey(queryKey: QueryKey): NormalizedTaskListFilters | 
     }
 
     return maybeFilters as NormalizedTaskListFilters;
+  }
+
+  return undefined;
+}
+
+function extractBoardFiltersFromKey(queryKey: QueryKey): NormalizedTaskBoardFilters | undefined {
+  if (!Array.isArray(queryKey) || queryKey.length < 4) {
+    return undefined;
+  }
+
+  const maybeFilters = queryKey[3];
+  if (maybeFilters && typeof maybeFilters === 'object') {
+    const entries = Object.entries(maybeFilters as Record<string, unknown>).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    return maybeFilters as NormalizedTaskBoardFilters;
   }
 
   return undefined;
@@ -564,11 +575,39 @@ function buildBoardSummary(columns: TaskBoardResponse['columns']): TaskBoardResp
   };
 }
 
+function boardTaskMatchesFilters(
+  task: Pick<TaskListItem, 'tags'>,
+  filters: NormalizedTaskBoardFilters | undefined,
+): boolean {
+  if (!filters?.tag?.length) {
+    return true;
+  }
+
+  return filters.tag.every((tag) => task.tags.includes(tag));
+}
+
+function taskBoardItemFromTask(
+  task: TaskListItem,
+  position: number,
+): TaskBoardResponse['columns'][number]['tasks'][number] {
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    position,
+    dueDate: task.dueDate,
+    tags: [...task.tags],
+    updatedAt: task.updatedAt,
+  };
+}
+
 function applyTaskUpdateToBoard(
   board: TaskBoardResponse,
   taskId: string,
   patch: Partial<TaskListItem>,
   now: Date = new Date(),
+  filters?: NormalizedTaskBoardFilters,
 ): TaskBoardResponse {
   const columns = board.columns.map((column) => ({
     ...column,
@@ -597,15 +636,17 @@ function applyTaskUpdateToBoard(
 
   sourceColumn.tasks.splice(sourceIndex, 1);
 
-  if (nextStatus === sourceColumn.status) {
-    sourceColumn.tasks.splice(sourceIndex, 0, updatedTask);
-  } else {
-    const targetColumn = columns.find((column) => column.status === nextStatus);
-    if (!targetColumn) {
-      return board;
-    }
+  if (boardTaskMatchesFilters(updatedTask, filters)) {
+    if (nextStatus === sourceColumn.status) {
+      sourceColumn.tasks.splice(sourceIndex, 0, updatedTask);
+    } else {
+      const targetColumn = columns.find((column) => column.status === nextStatus);
+      if (!targetColumn) {
+        return board;
+      }
 
-    targetColumn.tasks.push(updatedTask);
+      targetColumn.tasks.push(updatedTask);
+    }
   }
 
   const nextColumns = rebuildBoardColumns(columns, now);
@@ -614,6 +655,64 @@ function applyTaskUpdateToBoard(
     columns: nextColumns,
     summary: buildBoardSummary(nextColumns),
     updatedAt: patch.updatedAt ?? now.toISOString(),
+  };
+}
+
+function reconcileTaskInBoard(
+  board: TaskBoardResponse,
+  task: TaskListItem,
+  filters?: NormalizedTaskBoardFilters,
+  now: Date = new Date(),
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((boardTask) => ({ ...boardTask })),
+  }));
+  const sourceColumn = columns.find((column) => column.tasks.some((boardTask) => boardTask.id === task.id));
+  const sourceIndex = sourceColumn
+    ? sourceColumn.tasks.findIndex((boardTask) => boardTask.id === task.id)
+    : -1;
+  const matchesFilters = boardTaskMatchesFilters(task, filters);
+
+  if (sourceColumn && sourceIndex !== -1) {
+    sourceColumn.tasks.splice(sourceIndex, 1);
+  }
+
+  if (!matchesFilters) {
+    if (!sourceColumn) {
+      return board;
+    }
+
+    const nextColumns = rebuildBoardColumns(columns, now);
+    return {
+      ...board,
+      columns: nextColumns,
+      summary: buildBoardSummary(nextColumns),
+      updatedAt: task.updatedAt,
+    };
+  }
+
+  const targetColumn = columns.find((column) => column.status === task.status);
+  if (!targetColumn) {
+    return board;
+  }
+
+  const insertIndex =
+    sourceColumn?.status === task.status && sourceIndex >= 0
+      ? sourceIndex
+      : targetColumn.tasks.length;
+  targetColumn.tasks.splice(
+    insertIndex,
+    0,
+    taskBoardItemFromTask(task, insertIndex),
+  );
+
+  const nextColumns = rebuildBoardColumns(columns, now);
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: task.updatedAt,
   };
 }
 
@@ -674,21 +773,6 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
   return Object.keys(normalized).length ? normalized : undefined;
 }
 
-function getBoardMoveRollback(board: TaskBoardResponse, taskId: string): BoardMoveRollback | undefined {
-  for (const column of board.columns) {
-    const sourceIndex = column.tasks.findIndex((task) => task.id === taskId);
-    if (sourceIndex !== -1) {
-      return {
-        taskId,
-        sourceStatus: column.status,
-        sourceIndex,
-      };
-    }
-  }
-
-  return undefined;
-}
-
 function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
   const columns = board.columns.map((column) => ({
     ...column,
@@ -716,47 +800,6 @@ function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVar
 
   const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
   targetColumn.tasks.splice(insertIndex, 0, movedTask);
-  const now = new Date();
-  const nextColumns = rebuildBoardColumns(columns, now);
-
-  return {
-    ...board,
-    columns: nextColumns,
-    summary: buildBoardSummary(nextColumns),
-    updatedAt: now.toISOString(),
-  };
-}
-
-function rollbackOptimisticMoveOnBoard(
-  board: TaskBoardResponse,
-  rollback: BoardMoveRollback,
-): TaskBoardResponse {
-  const columns = board.columns.map((column) => ({
-    ...column,
-    tasks: column.tasks.map((task) => ({ ...task })),
-  }));
-  let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
-
-  for (const column of columns) {
-    const index = column.tasks.findIndex((task) => task.id === rollback.taskId);
-    if (index !== -1) {
-      const [task] = column.tasks.splice(index, 1);
-      movedTask = { ...task, status: rollback.sourceStatus };
-      break;
-    }
-  }
-
-  if (!movedTask) {
-    return board;
-  }
-
-  const sourceColumn = columns.find((column) => column.status === rollback.sourceStatus);
-  if (!sourceColumn) {
-    return board;
-  }
-
-  const insertIndex = Math.max(0, Math.min(rollback.sourceIndex, sourceColumn.tasks.length));
-  sourceColumn.tasks.splice(insertIndex, 0, movedTask);
   const now = new Date();
   const nextColumns = rebuildBoardColumns(columns, now);
 
@@ -1136,6 +1179,43 @@ function collectMatchingQueries(
   return touched;
 }
 
+function collectBoardQueries(
+  queryClient: QueryClient,
+  userScope: string,
+  predicate: (
+    board: TaskBoardResponse,
+    filters: NormalizedTaskBoardFilters | undefined,
+  ) => TaskBoardResponse,
+): Array<[QueryKey, TaskBoardResponse | undefined]> {
+  const candidates = queryClient.getQueriesData<TaskBoardResponse>({ queryKey: taskQueryKeys.boardRoot(userScope) });
+  const touched: Array<[QueryKey, TaskBoardResponse | undefined]> = [];
+
+  for (const [key, data] of candidates) {
+    if (!data) {
+      continue;
+    }
+
+    const filters = extractBoardFiltersFromKey(key);
+    const next = predicate(data, filters);
+
+    if (next !== data) {
+      touched.push([key, data]);
+      queryClient.setQueryData(key, next);
+    }
+  }
+
+  return touched;
+}
+
+function restoreBoardSnapshots(
+  queryClient: QueryClient,
+  snapshots: Array<[QueryKey, TaskBoardResponse | undefined]> | undefined,
+): void {
+  for (const [key, snapshot] of snapshots ?? []) {
+    queryClient.setQueryData(key, snapshot);
+  }
+}
+
 function selectTaskFromCache(
   queryClient: QueryClient,
   userScope: string,
@@ -1357,6 +1437,7 @@ export function useUpdateTask(
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
       const optimisticUpdatedAt = new Date().toISOString();
+      const taskSnapshot = selectTaskFromCache(queryClient, userScope, id);
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) => {
         const existing = payload.items.find((item) => item.id === id);
@@ -1371,20 +1452,20 @@ export function useUpdateTask(
         });
       });
 
-      const boardKey = taskQueryKeys.board(userScope);
-      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
-
-      if (boardSnapshot) {
-        queryClient.setQueryData<TaskBoardResponse>(
-          boardKey,
-          applyTaskUpdateToBoard(boardSnapshot, id, {
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board, filters) =>
+        applyTaskUpdateToBoard(
+          board,
+          id,
+          {
             ...input,
             updatedAt: optimisticUpdatedAt,
-          }),
-        );
-      }
+          },
+          new Date(optimisticUpdatedAt),
+          filters,
+        ),
+      );
 
-      return { touchedQueries, optimisticTaskId: id, boardSnapshot } satisfies TaskMutationContext;
+      return { touchedQueries, optimisticTaskId: id, boardSnapshots, taskSnapshot } satisfies TaskMutationContext;
     },
     onError: (error, variables, context, mutationContext) => {
       if (context) {
@@ -1392,9 +1473,7 @@ export function useUpdateTask(
           queryClient.setQueryData(key, snapshot);
         }
 
-        if (context.boardSnapshot) {
-          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
-        }
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
       }
 
       onError?.(error, variables, context, mutationContext);
@@ -1410,8 +1489,8 @@ export function useUpdateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
 
-      queryClient.setQueryData<TaskBoardResponse | undefined>(taskQueryKeys.board(userScope), (board) =>
-        board ? applyTaskUpdateToBoard(board, variables.id, taskItem) : board,
+      collectBoardQueries(queryClient, userScope, (board, filters) =>
+        reconcileTaskInBoard(board, taskItem, filters),
       );
 
       onSuccess?.(result, variables, context, mutationContext);
@@ -1483,18 +1562,14 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
         return reconcileTaskInList(payload, movedTask, filters, taskId);
       });
 
-      const boardKey = taskQueryKeys.board(userScope);
-      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
-      const boardRollback = boardSnapshot ? getBoardMoveRollback(boardSnapshot, taskId) : undefined;
-      if (boardSnapshot) {
-        queryClient.setQueryData<TaskBoardResponse>(boardKey, applyOptimisticMoveToBoard(boardSnapshot, variables));
-      }
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board) =>
+        applyOptimisticMoveToBoard(board, variables),
+      );
 
       const internalContext = {
         touchedQueries,
         optimisticTaskId: taskId,
-        boardSnapshot,
-        boardRollback,
+        boardSnapshots,
         taskSnapshot,
       } satisfies InternalTaskMutationContext;
       const externalContext = await onMutate?.(variables, mutationContext);
@@ -1506,14 +1581,7 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
           queryClient.setQueryData(key, snapshot);
         }
 
-        const boardRollback = context.boardRollback;
-        if (boardRollback) {
-          queryClient.setQueryData<TaskBoardResponse | undefined>(taskQueryKeys.board(userScope), (board) =>
-            board ? rollbackOptimisticMoveOnBoard(board, boardRollback) : board,
-          );
-        } else if (context.boardSnapshot) {
-          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
-        }
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
       }
 
       onError?.(error, variables, context, mutationContext);
@@ -1618,14 +1686,11 @@ export function useDeleteTask(
         removeTaskFromList(payload, id),
       );
 
-      const boardKey = taskQueryKeys.board(userScope);
-      const boardSnapshot = queryClient.getQueryData<TaskBoardResponse>(boardKey);
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board) =>
+        removeTaskFromBoard(board, id),
+      );
 
-      if (boardSnapshot) {
-        queryClient.setQueryData<TaskBoardResponse>(boardKey, removeTaskFromBoard(boardSnapshot, id));
-      }
-
-      return { touchedQueries, optimisticTaskId: id, boardSnapshot } satisfies TaskMutationContext;
+      return { touchedQueries, optimisticTaskId: id, boardSnapshots } satisfies TaskMutationContext;
     },
     onError: (error, variables, context, mutationContext) => {
       if (context) {
@@ -1633,9 +1698,7 @@ export function useDeleteTask(
           queryClient.setQueryData(key, snapshot);
         }
 
-        if (context.boardSnapshot) {
-          queryClient.setQueryData(taskQueryKeys.board(userScope), context.boardSnapshot);
-        }
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
       }
 
       onError?.(error, variables, context, mutationContext);
@@ -1682,8 +1745,11 @@ export const __testing = {
   selectTaskFromCache,
   mergeMutationContext,
   applyTaskUpdateToBoard,
+  reconcileTaskInBoard,
   applyOptimisticMoveToBoard,
   removeTaskFromList,
   removeTaskFromBoard,
+  collectBoardQueries,
+  restoreBoardSnapshots,
   taskQueryKeys,
 };

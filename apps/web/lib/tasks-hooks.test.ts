@@ -152,6 +152,64 @@ describe('tasks-hooks board cache helpers', () => {
     expect(updated.generatedAt).toBe('2024-05-02T00:00:00.000Z');
   });
 
+  it('removes a task from a filtered board cache when an edit no longer matches', () => {
+    const updated = __testing.applyTaskUpdateToBoard(
+      board,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        tags: ['docs'],
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+      new Date('2024-06-15T00:00:00.000Z'),
+      { tag: ['api'] },
+    );
+
+    expect(updated.columns[0]).toMatchObject({
+      status: 'TODO',
+      total: 0,
+      overdueCount: 0,
+      tags: [],
+      tasks: [],
+    });
+    expect(updated.summary).toEqual({
+      totalsByStatus: {
+        TODO: 0,
+        IN_PROGRESS: 0,
+        DONE: 1,
+      },
+      overdueByStatus: {
+        TODO: 0,
+        IN_PROGRESS: 0,
+        DONE: 0,
+      },
+      totalTasks: 1,
+      totalOverdue: 0,
+    });
+  });
+
+  it('updates and restores every cached board variant under the board root', () => {
+    const queryClient = new QueryClient();
+    const userScope = 'user-123';
+    const defaultBoardKey = __testing.taskQueryKeys.board(userScope);
+    const filteredBoardKey = __testing.taskQueryKeys.board(userScope, { tag: ['api'] });
+
+    queryClient.setQueryData(defaultBoardKey, board);
+    queryClient.setQueryData(filteredBoardKey, board);
+
+    const snapshots = __testing.collectBoardQueries(queryClient, userScope, (cachedBoard) =>
+      __testing.removeTaskFromBoard(cachedBoard, '11111111-1111-4111-8111-111111111111'),
+    );
+
+    expect(snapshots).toHaveLength(2);
+    expect(queryClient.getQueryData<TaskBoardResponse>(defaultBoardKey)?.summary.totalTasks).toBe(1);
+    expect(queryClient.getQueryData<TaskBoardResponse>(filteredBoardKey)?.summary.totalTasks).toBe(1);
+
+    __testing.restoreBoardSnapshots(queryClient, snapshots);
+
+    expect(queryClient.getQueryData(defaultBoardKey)).toEqual(board);
+    expect(queryClient.getQueryData(filteredBoardKey)).toEqual(board);
+  });
+
   it('inserts a moved task into matching cached lists when it was not already present', () => {
     const list: TaskListData = {
       items: [
