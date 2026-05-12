@@ -414,6 +414,47 @@ describe("Tasks API", () => {
       expect(response.body).toEqual({ error: "Unauthorized" });
     });
 
+    it("filters board data by repeated tag query params", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Frontend API work",
+        status: "TODO",
+        tags: ["frontend", "api"],
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Frontend only work",
+        status: "IN_PROGRESS",
+        tags: ["frontend"],
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "API only work",
+        status: "DONE",
+        tags: ["api"],
+      });
+
+      const response = await withAuth(
+        agent.get("/api/taskforge/v1/tasks/board?tag=frontend&tag=api"),
+        auth,
+      ).expect(200);
+
+      expect(response.body.summary).toEqual(
+        expect.objectContaining({
+          totalTasks: 1,
+          totalsByStatus: { TODO: 1, IN_PROGRESS: 0, DONE: 0 },
+        }),
+      );
+      expect(
+        response.body.columns.flatMap(
+          (column: { tasks: Array<{ id: string }> }) =>
+            column.tasks.map((task) => task.id),
+        ),
+      ).toEqual([matching.task.id]);
+    });
+
     it("requires authentication to move tasks on the board", async () => {
       const created = await createTask({
         title: "Unauthenticated board move",

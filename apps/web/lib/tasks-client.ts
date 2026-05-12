@@ -3,6 +3,8 @@ import {
   type BoardReadModelDTO,
   type TaskBoardItemDTO,
   type TaskDTO,
+  type TagDTO,
+  type TagListItemDTO,
   type TaskRecordDTO,
   type TaskPriority,
   type TaskStatus,
@@ -84,6 +86,16 @@ const TagSummarySchema = z.object({
   count: z.number().int().min(0),
 });
 
+const TagRecordSchema = z.object({
+  id: z.string().uuid(),
+  label: NonEmptyTrimmedString,
+}) as z.ZodType<TagDTO>;
+
+const TagListItemSchema = z.object({
+  label: NonEmptyTrimmedString,
+  count: z.number().int().min(0),
+}) as z.ZodType<TagListItemDTO>;
+
 const BoardColumnSchema = z.object({
   status: TaskStatusSchema,
   title: NonEmptyTrimmedString,
@@ -127,6 +139,10 @@ const TaskListResponseSchema = z.object({
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1).max(100),
   total: z.number().int().min(0),
+});
+
+const TagListResponseSchema = z.object({
+  items: z.array(TagListItemSchema),
 });
 
 const TaskDeleteResponseSchema = z.object({
@@ -211,10 +227,25 @@ const TaskListQuerySchema = z
     }
   });
 
+const BoardQuerySchema = z
+  .object({
+    tag: z
+      .union([NonEmptyTrimmedString, z.array(NonEmptyTrimmedString)])
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        return Array.isArray(value) ? value : [value];
+      }),
+  });
+
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskDeleteResponse = z.infer<typeof TaskDeleteResponseSchema>;
 export type TaskBoardResponse = z.infer<typeof BoardResponseSchema>;
 export type BoardMoveInput = z.infer<typeof BoardMoveSchema>;
+export type TagListResponse = z.infer<typeof TagListResponseSchema>;
+export type TagRecord = z.infer<typeof TagRecordSchema>;
 
 export type CreateTaskInput = Omit<TaskDTO, 'id'>;
 export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id'>>;
@@ -229,7 +260,12 @@ export type TaskListQuery = {
   dueTo?: string;
 };
 
+export type TaskBoardQuery = {
+  tag?: string | string[];
+};
+
 type NormalizedTaskListQuery = z.infer<typeof TaskListQuerySchema>;
+type NormalizedTaskBoardQuery = z.infer<typeof BoardQuerySchema>;
 
 export type TaskClientErrorKind = 'validation' | 'http' | 'network' | 'serialization';
 
@@ -675,12 +711,39 @@ export async function getTask(
   );
 }
 
-export async function getTaskBoard(options?: TaskClientRequestOptions): Promise<BoardReadModelDTO> {
+export async function getTaskBoard(
+  params?: TaskBoardQuery,
+  options?: TaskClientRequestOptions,
+): Promise<BoardReadModelDTO> {
+  let normalizedQuery: NormalizedTaskBoardQuery | undefined;
+  if (params) {
+    const parsed = BoardQuerySchema.safeParse(params);
+    if (!parsed.success) {
+      throw new TaskClientError('Board filters were invalid.', {
+        kind: 'validation',
+        issues: parsed.error.issues,
+      });
+    }
+    normalizedQuery = parsed.data;
+  }
+
   return requestJson(
     'v1/tasks/board',
     {
       method: 'GET',
+      query: toQueryRecord(normalizedQuery),
       schema: BoardResponseSchema,
+    },
+    options,
+  );
+}
+
+export async function listTags(options?: TaskClientRequestOptions): Promise<TagListResponse> {
+  return requestJson(
+    'v1/tags',
+    {
+      method: 'GET',
+      schema: TagListResponseSchema,
     },
     options,
   );

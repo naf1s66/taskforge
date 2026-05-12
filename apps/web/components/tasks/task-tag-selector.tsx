@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ComponentPropsWithoutRef } from 'react';
-import { useCommandState } from 'cmdk';
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from 'react';
 import { Filter, Tag, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -25,25 +24,22 @@ interface CommandInputWithCreateProps
   extends Omit<CommandInputProps, 'value' | 'onValueChange' | 'onKeyDown'> {
   value: string;
   onValueChange: (value: string) => void;
+  canCreate: boolean;
   onCreate: () => void;
   onKeyDown?: CommandInputProps['onKeyDown'];
 }
 
-function CommandInputWithCreate({ value, onValueChange, onCreate, onKeyDown, ...props }: CommandInputWithCreateProps) {
-  const filteredItemCount = useCommandState((state) => state.filtered.count);
-
+function CommandInputWithCreate({ value, onValueChange, canCreate, onCreate, onKeyDown, ...props }: CommandInputWithCreateProps) {
   return (
     <CommandInput
       {...props}
       value={value}
       onValueChange={onValueChange}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' && value.trim()) {
-          if (filteredItemCount === 0) {
-            event.preventDefault();
-            onCreate();
-            return;
-          }
+        if (event.key === 'Enter' && canCreate) {
+          event.preventDefault();
+          onCreate();
+          return;
         }
 
         onKeyDown?.(event);
@@ -62,9 +58,34 @@ export function TaskTagSelector({
 }: TaskTagSelectorProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [debouncedInput, setDebouncedInput] = useState('');
 
   const normalizedSelected = useMemo(() => value.map((tag) => tag.toLowerCase()), [value]);
   const options = useMemo(() => sanitizeTags([...availableTags, ...value]), [availableTags, value]);
+  const filteredOptions = useMemo(() => {
+    if (!debouncedInput.trim()) {
+      return options;
+    }
+
+    const search = debouncedInput.trim().toLowerCase();
+    return options.filter((tag) => tag.toLowerCase().includes(search));
+  }, [debouncedInput, options]);
+  const canCreateTag = useMemo(() => {
+    const search = inputValue.trim().toLowerCase();
+    if (!search) {
+      return false;
+    }
+
+    return !options.some((tag) => tag.toLowerCase().includes(search));
+  }, [inputValue, options]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedInput(inputValue);
+    }, 180);
+
+    return () => window.clearTimeout(timeout);
+  }, [inputValue]);
 
   const buttonLabel =
     value.length > 0 ? `${value.length} tag${value.length === 1 ? '' : 's'} selected` : placeholder;
@@ -86,6 +107,10 @@ export function TaskTagSelector({
   }
 
   function handleCreateTag() {
+    if (!canCreateTag) {
+      return;
+    }
+
     toggleTag(inputValue);
     setOpen(false);
   }
@@ -93,6 +118,15 @@ export function TaskTagSelector({
   function handleRemoveTag(tag: string) {
     const key = tag.toLowerCase();
     onChange(value.filter((existing) => existing.toLowerCase() !== key));
+  }
+
+  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Backspace' || inputValue.length > 0 || value.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    onChange(value.slice(0, -1));
   }
 
   function isTagSelected(tag: string) {
@@ -132,13 +166,15 @@ export function TaskTagSelector({
               onValueChange={setInputValue}
               placeholder="Search or create tags"
               aria-label="Search available tags"
+              canCreate={canCreateTag}
               onCreate={handleCreateTag}
+              onKeyDown={handleInputKeyDown}
             />
             <CommandList>
               <CommandEmpty>
                 <div className="space-y-2">
                   <p>No tags found.</p>
-                  {inputValue.trim() ? (
+                  {canCreateTag ? (
                     <Button variant="secondary" size="sm" className="w-full" type="button" onClick={handleCreateTag}>
                       Create “{inputValue.trim()}”
                     </Button>
@@ -146,7 +182,7 @@ export function TaskTagSelector({
                 </div>
               </CommandEmpty>
               <CommandGroup heading="Tags">
-                {options.map((tag) => (
+                {filteredOptions.map((tag) => (
                   <CommandItem key={tag} value={tag} onSelect={(value) => toggleTag(value)} aria-checked={isTagSelected(tag)}>
                     <span className="flex-1 text-sm capitalize">{tag}</span>
                     {isTagSelected(tag) ? <span className="text-xs text-primary">Selected</span> : null}
