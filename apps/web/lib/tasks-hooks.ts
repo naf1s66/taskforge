@@ -583,7 +583,14 @@ function boardTaskMatchesFilters(
     return true;
   }
 
-  return filters.tag.every((tag) => task.tags.includes(tag));
+  const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+  const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+  if (filterTags.length === 0) {
+    return true;
+  }
+
+  return filterTags.every((tag) => taskTags.has(tag));
 }
 
 function taskBoardItemFromTask(

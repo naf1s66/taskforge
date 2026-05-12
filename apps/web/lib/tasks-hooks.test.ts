@@ -187,6 +187,88 @@ describe('tasks-hooks board cache helpers', () => {
     });
   });
 
+  it('matches board tag filters case-insensitively during optimistic edits', () => {
+    const updated = __testing.applyTaskUpdateToBoard(
+      board,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        title: 'Finalize contract',
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+      new Date('2024-06-15T00:00:00.000Z'),
+      { tag: ['API'] },
+    );
+
+    expect(updated.columns[0]).toMatchObject({
+      status: 'TODO',
+      total: 1,
+    });
+    expect(updated.columns[0].tasks[0]).toMatchObject({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Finalize contract',
+      tags: ['api'],
+    });
+  });
+
+  it('matches board tag filters case-insensitively when reconciling server tasks', () => {
+    const emptyBoard: TaskBoardResponse = {
+      ...board,
+      columns: board.columns.map((column) => ({
+        ...column,
+        tasks: [],
+        total: 0,
+        overdueCount: 0,
+        tags: [],
+      })),
+      summary: {
+        totalsByStatus: {
+          TODO: 0,
+          IN_PROGRESS: 0,
+          DONE: 0,
+        },
+        overdueByStatus: {
+          TODO: 0,
+          IN_PROGRESS: 0,
+          DONE: 0,
+        },
+        totalTasks: 0,
+        totalOverdue: 0,
+      },
+    };
+    const task: TaskListItem = {
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Draft contract',
+      description: 'Matches a mixed-case URL tag filter',
+      status: 'TODO',
+      priority: 'HIGH',
+      dueDate: '2024-06-01T00:00:00.000Z',
+      tags: ['api'],
+      createdAt: '2024-05-01T00:00:00.000Z',
+      updatedAt: '2024-06-15T12:00:00.000Z',
+    };
+
+    const updated = __testing.reconcileTaskInBoard(
+      emptyBoard,
+      task,
+      { tag: ['API'] },
+      new Date('2024-06-15T00:00:00.000Z'),
+    );
+
+    expect(updated.columns[0].tasks).toEqual([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        title: 'Draft contract',
+        status: 'TODO',
+        priority: 'HIGH',
+        position: 0,
+        dueDate: '2024-06-01T00:00:00.000Z',
+        tags: ['api'],
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+    ]);
+    expect(updated.summary.totalTasks).toBe(1);
+  });
+
   it('updates and restores every cached board variant under the board root', () => {
     const queryClient = new QueryClient();
     const userScope = 'user-123';
