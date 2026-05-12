@@ -61,12 +61,12 @@ export function normalizeTagLabels(tags?: string[]): string[] {
     if (!trimmed) {
       continue;
     }
-    const key = trimmed;
+    const key = trimmed.toLocaleLowerCase();
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
-    normalized.push(trimmed);
+    normalized.push(key);
   }
 
   return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));

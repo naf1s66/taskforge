@@ -34,6 +34,20 @@ export interface TaskBoardItemDTO {
   updatedAt: string;
 }
 
+export interface TagDTO {
+  id: string;
+  label: string;
+}
+
+export interface TagCreateDTO {
+  label: string;
+}
+
+export interface TagListItemDTO {
+  label: string;
+  count: number;
+}
+
 export interface TagSummaryDTO {
   label: string;
   count: number;
