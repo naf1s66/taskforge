@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useToast } from '@/components/ui/use-toast';
 import { sanitizeTags } from '@/lib/task-tags';
-import { useTasksQuery } from '@/lib/tasks-hooks';
+import { useTagsQuery } from '@/lib/tasks-hooks';
 
 import { TaskCreateDialog } from './task-create-dialog';
 import { TaskEditDialog } from './task-edit-dialog';
@@ -14,8 +14,8 @@ type ActiveDialog = { type: 'create' } | { type: 'edit'; taskId: string } | null
 export function TaskDialogHost() {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const { toast } = useToast();
-  const tasksQuery = useTasksQuery({ pageSize: 100 });
-  const availableTags = sanitizeTags(tasksQuery.tasks.flatMap((task) => task.tags));
+  const tagsQuery = useTagsQuery();
+  const availableTags = sanitizeTags(tagsQuery.tags.map((tag) => tag.label));
 
   const handleDocumentClick = useCallback(
     (event: MouseEvent) => {

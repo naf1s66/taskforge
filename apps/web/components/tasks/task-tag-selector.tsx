@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from 'react';
+import { useEffect, useMemo, useState, type ComponentPropsWithoutRef, type KeyboardEvent } from 'react';
 import { useCommandState } from 'cmdk';
 import { Filter, Tag, X } from 'lucide-react';
 
@@ -112,6 +112,15 @@ export function TaskTagSelector({
     onChange(value.filter((existing) => existing.toLowerCase() !== key));
   }
 
+  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Backspace' || inputValue.length > 0 || value.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    onChange(value.slice(0, -1));
+  }
+
   function isTagSelected(tag: string) {
     return normalizedSelected.includes(tag.toLowerCase());
   }
@@ -150,6 +159,7 @@ export function TaskTagSelector({
               placeholder="Search or create tags"
               aria-label="Search available tags"
               onCreate={handleCreateTag}
+              onKeyDown={handleInputKeyDown}
             />
             <CommandList>
               <CommandEmpty>

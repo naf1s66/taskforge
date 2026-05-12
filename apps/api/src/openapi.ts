@@ -936,8 +936,24 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ['Tasks'],
         summary: 'Retrieve the Kanban board read model',
         description:
-          'Returns a board-friendly representation of tasks grouped by status lanes. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+          'Returns a board-friendly representation of tasks grouped by status lanes. Repeating `tag` requires tasks to include every selected tag. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
         security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'tag',
+            in: 'query',
+            required: false,
+            description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
+            schema: {
+              oneOf: [
+                { type: 'string' },
+                { type: 'array', items: { type: 'string' } },
+              ],
+            },
+            style: 'form',
+            explode: true,
+          },
+        ],
         responses: {
           '200': {
             description: 'Task board',

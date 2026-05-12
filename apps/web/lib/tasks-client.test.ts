@@ -6,6 +6,8 @@ import {
   createTask,
   deleteTask,
   getTask,
+  getTaskBoard,
+  listTags,
   listTasks,
   setBrowserTaskClientAuthState,
   TaskClientError,
@@ -204,6 +206,49 @@ describe('tasks-client', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe(`${API_BASE_URL}/v1/tasks/${sampleTask.id}`);
+      expect((init as RequestInit)?.method).toBe('GET');
+    });
+  });
+
+  describe('getTaskBoard', () => {
+    it('serializes repeated tag filters', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          columns: [],
+          summary: {
+            totalsByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            overdueByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            totalTasks: 0,
+            totalOverdue: 0,
+          },
+          updatedAt: '2024-06-01T00:00:00.000Z',
+          generatedAt: '2024-06-01T00:00:00.000Z',
+        }),
+      );
+
+      await getTaskBoard(
+        { tag: ['frontend', 'api'] },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [url] = fetchMock.mock.calls[0];
+      const parsedUrl = new URL(url as string);
+      expect(parsedUrl.pathname).toBe('/api/taskforge/v1/tasks/board');
+      expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
+    });
+  });
+
+  describe('listTags', () => {
+    it('requests tag summaries from the tags endpoint', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({ items: [{ label: 'api', count: 2 }] }),
+      );
+
+      const result = await listTags({ baseUrl: API_BASE_URL, fetchImpl: fetchMock });
+
+      expect(result).toEqual({ items: [{ label: 'api', count: 2 }] });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tags`);
       expect((init as RequestInit)?.method).toBe('GET');
     });
   });

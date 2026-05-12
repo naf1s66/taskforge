@@ -46,6 +46,10 @@ export interface TaskListOptions {
   dueTo?: Date;
 }
 
+export interface TaskBoardOptions {
+  tags?: string[];
+}
+
 export interface TaskListResult {
   items: TaskRecordDTO[];
   total: number;
@@ -54,7 +58,7 @@ export interface TaskListResult {
 export interface TaskRepository {
   listTasks(userId: string, options?: TaskListOptions): Promise<TaskListResult>;
   getTask(userId: string, taskId: string): Promise<TaskRecordDTO | null>;
-  getTaskBoard(userId: string): Promise<BoardReadModelDTO>;
+  getTaskBoard(userId: string, options?: TaskBoardOptions): Promise<BoardReadModelDTO>;
   moveTaskOnBoard(
     userId: string,
     input: BoardMoveRequestDTO,
@@ -128,9 +132,31 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
         AND "userId" = CAST(${userId} AS uuid)
     `;
 
-  const buildTaskBoard = async (userId: string): Promise<BoardReadModelDTO> => {
+  const buildTaskBoard = async (userId: string, options?: TaskBoardOptions): Promise<BoardReadModelDTO> => {
+    const andFilters: Prisma.TaskWhereInput[] = [];
+
+    if (options?.tags?.length) {
+      for (const label of options.tags) {
+        andFilters.push({
+          TaskTag: {
+            some: {
+              tag: {
+                label: {
+                  equals: label,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          },
+        });
+      }
+    }
+
     const tasks = await prisma.task.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(andFilters.length ? { AND: andFilters } : {}),
+      },
       include: taskWithTagsInclude,
     });
 
@@ -226,8 +252,8 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
       return task ? toTaskRecordDTO(task) : null;
     },
 
-    async getTaskBoard(userId) {
-      return buildTaskBoard(userId);
+    async getTaskBoard(userId, options) {
+      return buildTaskBoard(userId, options);
     },
 
     async moveTaskOnBoard(userId, input) {

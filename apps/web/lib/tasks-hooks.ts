@@ -19,6 +19,7 @@ import {
   deleteTask,
   getTask,
   listTasks,
+  listTags,
   getTaskBoard,
   moveTaskOnBoard,
   updateTask,
@@ -31,7 +32,9 @@ import type {
   TaskDeleteResponse,
   TaskListQuery,
   TaskListResponse,
+  TaskBoardQuery,
   TaskBoardResponse,
+  TagListResponse,
   TaskRecordDTO,
   UpdateTaskInput,
 } from './tasks-client';
@@ -49,6 +52,7 @@ type TaskQueryFnData = TaskListData;
 type TaskQueryKey = ReturnType<typeof taskQueryKeys.list>;
 type TaskBoardQueryKey = ReturnType<typeof taskQueryKeys.board>;
 type TaskDetailQueryKey = ReturnType<typeof taskQueryKeys.detail>;
+type TagQueryKey = ReturnType<typeof taskQueryKeys.tags>;
 
 type TaskQueryOptions = Omit<
   UseQueryOptions<TaskQueryFnData, TaskClientError, TaskQueryFnData, TaskQueryKey>,
@@ -65,9 +69,15 @@ type TaskDetailQueryOptions = Omit<
   'queryKey' | 'queryFn'
 >;
 
+type TagQueryOptions = Omit<
+  UseQueryOptions<TagListResponse, TaskClientError, TagListResponse, TagQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
 type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
 type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
 type TaskDetailQueryResult = UseQueryResult<TaskListItem, TaskClientError>;
+type TagQueryResult = UseQueryResult<TagListResponse, TaskClientError>;
 
 interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
@@ -125,6 +135,21 @@ export interface UseTaskBoardQueryResult {
   rawError: unknown;
 }
 
+export interface UseTagsQueryResult {
+  data: TagListResponse | undefined;
+  tags: TagListResponse['items'];
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TagQueryResult['status'];
+  fetchStatus: TagQueryResult['fetchStatus'];
+  refetch: TagQueryResult['refetch'];
+  queryKey: TagQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
 export interface UseTaskRecordQueryResult {
   data: TaskListItem | undefined;
   isLoading: boolean;
@@ -167,6 +192,10 @@ interface NormalizedTaskListFilters {
   dueTo?: string;
 }
 
+interface NormalizedTaskBoardFilters {
+  tag?: string[];
+}
+
 const TASK_QUERY_SCOPE = 'tasks';
 
 const FALLBACK_USER_KEY = 'anonymous';
@@ -176,8 +205,11 @@ const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
-  board: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
+  boardRoot: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
+  board: (userKey: string, filters?: NormalizedTaskBoardFilters | undefined) =>
+    [...taskQueryKeys.boardRoot(userKey), filters ?? {}] as const,
   detail: (userKey: string, taskId: string) => [...taskQueryKeys.all(userKey), 'detail', taskId] as const,
+  tags: (userKey: string) => [...taskQueryKeys.all(userKey), 'tags'] as const,
 };
 
 const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
@@ -624,6 +656,24 @@ function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoar
   };
 }
 
+function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoardFilters | undefined {
+  if (!filters) {
+    return undefined;
+  }
+
+  const normalized: NormalizedTaskBoardFilters = {};
+
+  if (filters.tag) {
+    const tags = Array.isArray(filters.tag) ? filters.tag : [filters.tag];
+    const normalizedTags = Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).sort();
+    if (normalizedTags.length > 0) {
+      normalized.tag = normalizedTags;
+    }
+  }
+
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
 function getBoardMoveRollback(board: TaskBoardResponse, taskId: string): BoardMoveRollback | undefined {
   for (const column of board.columns) {
     const sourceIndex = column.tasks.findIndex((task) => task.id === taskId);
@@ -851,13 +901,26 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
   };
 }
 
-export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoardQueryResult {
+export function useTaskBoardQuery(filters?: TaskBoardQuery, options?: TaskBoardQueryOptions): UseTaskBoardQueryResult {
   const { user, status } = useAuth();
   const queryClient = useQueryClient();
   const previousUserIdRef = useRef<string | null>(null);
+  const filtersSignature = useMemo(() => stableSerialize(filters), [filters]);
+  const normalizedHash = useMemo(() => {
+    const parsedFilters = deserializeFilters(filtersSignature);
+    const normalized = normalizeTaskBoardFilters(parsedFilters);
+    return stableSerialize(normalized);
+  }, [filtersSignature]);
 
   const userScope = scopedQueryKey(user?.id);
-  const queryKey = useMemo(() => taskQueryKeys.board(userScope), [userScope]);
+  const normalizedFilters = useMemo(
+    () => deserializeNormalizedFilters(normalizedHash) as NormalizedTaskBoardFilters | undefined,
+    [normalizedHash],
+  );
+  const queryKey = useMemo(
+    () => taskQueryKeys.board(userScope, normalizedFilters),
+    [userScope, normalizedFilters],
+  );
 
   useEffect(() => {
     if (status !== 'authenticated') {
@@ -883,7 +946,7 @@ export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoard
 
   const query = useQuery({
     queryKey,
-    queryFn: () => getTaskBoard(),
+    queryFn: () => getTaskBoard(normalizedFilters),
     staleTime: 15_000,
     gcTime: 5 * 60_000,
     enabled: effectiveEnabled,
@@ -894,6 +957,63 @@ export function useTaskBoardQuery(options?: TaskBoardQueryOptions): UseTaskBoard
 
   return {
     data: query.data,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
+export function useTagsQuery(options?: TagQueryOptions): UseTagsQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(() => taskQueryKeys.tags(userScope), [userScope]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => listTags(),
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    tags: query.data?.items ?? [],
     isLoading: shouldDelayForAuth || query.isLoading,
     isFetching: shouldDelayForAuth || query.isFetching,
     isError: query.isError,
@@ -1042,12 +1162,14 @@ function selectTaskFromCache(
     return detail;
   }
 
-  const board = queryClient.getQueryData<TaskBoardResponse>(taskQueryKeys.board(userScope));
-  const boardTask = board?.columns
-    .flatMap((column) => column.tasks)
-    .find((task) => task.id === taskId);
-  if (boardTask) {
-    return taskListItemFromBoardTask(boardTask);
+  const boards = queryClient.getQueriesData<TaskBoardResponse>({ queryKey: taskQueryKeys.boardRoot(userScope) });
+  for (const [, board] of boards) {
+    const boardTask = board?.columns
+      .flatMap((column) => column.tasks)
+      .find((task) => task.id === taskId);
+    if (boardTask) {
+      return taskListItemFromBoardTask(boardTask);
+    }
   }
 
   return null;
@@ -1445,7 +1567,7 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
       }
 
       void queryClient.refetchQueries({
-        queryKey: taskQueryKeys.board(userScope),
+        queryKey: taskQueryKeys.boardRoot(userScope),
         type: 'active',
       });
       void queryClient.refetchQueries({

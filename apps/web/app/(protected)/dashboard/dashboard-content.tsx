@@ -66,6 +66,7 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   useMoveTaskOnBoard,
   useTaskBoardQuery,
+  useTagsQuery,
   useTasksQuery,
   type TaskListItem,
 } from "@/lib/tasks-hooks";
@@ -602,7 +603,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     pageSize: 50,
     tag: tagFilters.length > 0 ? tagFilters : undefined,
   });
-  const boardQuery = useTaskBoardQuery();
+  const boardQuery = useTaskBoardQuery({
+    tag: tagFilters.length > 0 ? tagFilters : undefined,
+  });
+  const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
 
@@ -820,14 +824,14 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
   const availableTags = useMemo(() => {
     const collected: string[] = [];
-    for (const task of tasksQuery.tasks) {
-      collected.push(...task.tags);
+    for (const tag of tagsQuery.tags) {
+      collected.push(tag.label);
     }
     for (const tag of tagFilters) {
       collected.push(tag);
     }
     return sanitizeTags(collected);
-  }, [tagFilters, tasksQuery.tasks]);
+  }, [tagFilters, tagsQuery.tags]);
 
   const firstName = user.name?.split(" ")[0] ?? "there";
 

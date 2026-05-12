@@ -40,7 +40,3 @@ Explain the purpose of this PR and the outcome in 2–4 sentences.
 
 ## Notes / Follow-ups
 <!-- TODOs for next milestone, known limitations, decisions -->
-
----
-
-If anything in the typecheck output looks noisy after this, paste the exact error lines and I’ll give you the fix line-by-line.

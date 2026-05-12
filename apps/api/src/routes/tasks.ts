@@ -37,6 +37,12 @@ const TaskListQuerySchema = z
     }
   });
 
+const TaskBoardQuerySchema = z
+  .object({
+    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
+  })
+  .passthrough();
+
 const TaskIdParamSchema = z.object({
   id: z
     .string({ required_error: 'Task id is required', invalid_type_error: 'Invalid identifier' })
@@ -107,12 +113,26 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
 
   router.get('/board', async (req, res, next) => {
     try {
+      const parseQuery = TaskBoardQuerySchema.safeParse(req.query);
+      if (!parseQuery.success) {
+        return res
+          .status(400)
+          .json({ error: 'Invalid payload', details: parseQuery.error.flatten() });
+      }
+
       const user = res.locals.user;
       if (!user) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const board = await repository.getTaskBoard(user.id);
+      const { tag } = parseQuery.data;
+      const normalizedTags = normalizeTagLabels(
+        Array.isArray(tag) ? tag : tag ? [tag] : undefined,
+      );
+
+      const board = await repository.getTaskBoard(user.id, {
+        tags: normalizedTags.length ? normalizedTags : undefined,
+      });
       res.set('ETag', `"${board.updatedAt}"`);
       res.json(board);
     } catch (error) {
