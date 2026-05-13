@@ -606,8 +606,18 @@ function boardTaskMatchesFilters(
   }
 
   if (filters.q) {
-    const haystack = `${task.title} ${task.description ?? ''}`.toLowerCase();
-    if (!haystack.includes(filters.q.toLowerCase())) {
+    const needle = filters.q.toLowerCase();
+    const titleMatches = task.title.toLowerCase().includes(needle);
+    const description = task.description;
+    if (titleMatches) {
+      return true;
+    }
+
+    if (description === undefined) {
+      return true;
+    }
+
+    if (!description.toLowerCase().includes(needle)) {
       return false;
     }
   }
@@ -1521,6 +1531,7 @@ export function useUpdateTask(
           id,
           {
             ...input,
+            description: input.description ?? taskSnapshot?.description,
             updatedAt: optimisticUpdatedAt,
           },
           new Date(optimisticUpdatedAt),

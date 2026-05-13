@@ -163,8 +163,15 @@ const sortOptions = [
   { value: "priority", label: "Priority" },
 ] as const;
 const BOARD_FILTERS_STORAGE_KEY = "taskforge.dashboard.filters";
-type DueWindow = "ALL" | "OVERDUE" | "TODAY" | "NEXT_7_DAYS" | "CUSTOM";
-const dueWindows: DueWindow[] = ["ALL", "OVERDUE", "TODAY", "NEXT_7_DAYS"];
+type DueWindow = "ALL" | "PAST" | "TODAY" | "NEXT_7_DAYS" | "CUSTOM";
+const dueWindows: DueWindow[] = ["ALL", "PAST", "TODAY", "NEXT_7_DAYS"];
+const dueWindowLabels: Record<DueWindow, string> = {
+  ALL: "Any due date",
+  PAST: "Due before now",
+  TODAY: "Due today",
+  NEXT_7_DAYS: "Due next 7 days",
+  CUSTOM: "Custom due range",
+};
 
 type SortOption = (typeof sortOptions)[number]["value"];
 
@@ -182,10 +189,172 @@ interface BoardMoveRollback {
   sourceIndex: number;
 }
 
+interface BoardFilterState {
+  statusFilter: "ALL" | TaskStatus;
+  priorityFilter: "ALL" | TaskPriority;
+  dueWindow: DueWindow;
+  customDueRange: { dueFrom?: string; dueTo?: string } | null;
+  searchQuery: string;
+  tagFilters: string[];
+}
+
+function createDefaultBoardFilterState(tagFilters: string[] = []): BoardFilterState {
+  return {
+    statusFilter: "ALL",
+    priorityFilter: "ALL",
+    dueWindow: "ALL",
+    customDueRange: null,
+    searchQuery: "",
+    tagFilters,
+  };
+}
+
+function isTaskStatusFilter(value: string | null): value is TaskStatus {
+  return value === "TODO" || value === "IN_PROGRESS" || value === "DONE";
+}
+
+function isTaskPriorityFilter(value: string | null): value is TaskPriority {
+  return value === "LOW" || value === "MEDIUM" || value === "HIGH";
+}
+
+function normalizeDueWindow(value: string | null | undefined): DueWindow | null {
+  if (value === "OVERDUE") {
+    return "PAST";
+  }
+
+  return dueWindows.includes(value as DueWindow) ? (value as DueWindow) : null;
+}
+
+function parseBoardFiltersFromSearchParams(searchParams: URLSearchParams): BoardFilterState {
+  const state = createDefaultBoardFilterState(sanitizeTags(searchParams.getAll("tag")));
+  const status = searchParams.get("status");
+  const priority = searchParams.get("priority");
+  const dueWindow = normalizeDueWindow(searchParams.get("dueWindow"));
+  const dueFrom = searchParams.get("dueFrom") ?? undefined;
+  const dueTo = searchParams.get("dueTo") ?? undefined;
+
+  if (isTaskStatusFilter(status)) {
+    state.statusFilter = status;
+  }
+
+  if (isTaskPriorityFilter(priority)) {
+    state.priorityFilter = priority;
+  }
+
+  if (dueWindow) {
+    state.dueWindow = dueWindow;
+    state.customDueRange = null;
+  } else if (dueFrom || dueTo) {
+    state.dueWindow = "CUSTOM";
+    state.customDueRange = { dueFrom, dueTo };
+  }
+
+  state.searchQuery = searchParams.get("q") ?? "";
+  return state;
+}
+
+function readBoardFiltersFromStorage(): BoardFilterState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(BOARD_FILTERS_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<{
+      statusFilter: BoardFilterState["statusFilter"];
+      priorityFilter: BoardFilterState["priorityFilter"];
+      dueWindow: DueWindow | "OVERDUE";
+      dueRange: { dueFrom?: string; dueTo?: string };
+      searchQuery: string;
+      tagFilters: string[];
+    }> | null;
+    if (!parsed) {
+      return null;
+    }
+
+    const state = createDefaultBoardFilterState();
+    const statusFilter = parsed.statusFilter;
+    if (statusFilter === "ALL") {
+      state.statusFilter = statusFilter;
+    } else {
+      const maybeStatus = typeof statusFilter === "string" ? statusFilter : null;
+      if (isTaskStatusFilter(maybeStatus)) {
+        state.statusFilter = maybeStatus;
+      }
+    }
+
+    const priorityFilter = parsed.priorityFilter;
+    if (priorityFilter === "ALL") {
+      state.priorityFilter = priorityFilter;
+    } else {
+      const maybePriority = typeof priorityFilter === "string" ? priorityFilter : null;
+      if (isTaskPriorityFilter(maybePriority)) {
+        state.priorityFilter = maybePriority;
+      }
+    }
+
+    const dueWindow = normalizeDueWindow(parsed.dueWindow);
+    if (dueWindow) {
+      state.dueWindow = dueWindow;
+      state.customDueRange = null;
+    } else if (parsed.dueWindow === "CUSTOM" && (parsed.dueRange?.dueFrom || parsed.dueRange?.dueTo)) {
+      state.dueWindow = "CUSTOM";
+      state.customDueRange = {
+        dueFrom: parsed.dueRange.dueFrom,
+        dueTo: parsed.dueRange.dueTo,
+      };
+    }
+
+    state.searchQuery = typeof parsed.searchQuery === "string" ? parsed.searchQuery : "";
+    state.tagFilters = Array.isArray(parsed.tagFilters) ? sanitizeTags(parsed.tagFilters) : [];
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function writeBoardFiltersToStorage(state: BoardFilterState, dueRange: { dueFrom?: string; dueTo?: string }) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      BOARD_FILTERS_STORAGE_KEY,
+      JSON.stringify({
+        statusFilter: state.statusFilter,
+        priorityFilter: state.priorityFilter,
+        dueWindow: state.dueWindow,
+        dueRange,
+        searchQuery: state.searchQuery,
+        tagFilters: state.tagFilters,
+      }),
+    );
+  } catch {
+    // Ignore storage failures in restricted browser contexts.
+  }
+}
+
+function clearBoardFiltersFromStorage() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(BOARD_FILTERS_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures in restricted browser contexts.
+  }
+}
+
 function getDueRangeForWindow(dueWindow: DueWindow): { dueFrom?: string; dueTo?: string } {
   const now = new Date();
 
-  if (dueWindow === "OVERDUE") {
+  if (dueWindow === "PAST") {
     return { dueTo: now.toISOString() };
   }
 
@@ -617,16 +786,18 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const urlTagFilters = useMemo(
-    () => sanitizeTags(searchParams.getAll("tag")),
-    [searchParams],
+  const initialSearchParams = new URLSearchParams(searchParams.toString());
+  const initialFilterState = parseBoardFiltersFromSearchParams(initialSearchParams);
+  const hasInitialQuery = initialSearchParams.toString().length > 0;
+  const [hasHydratedFilters, setHasHydratedFilters] = useState(() => hasInitialQuery);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>(() => initialFilterState.statusFilter);
+  const [priorityFilter, setPriorityFilter] = useState<"ALL" | TaskPriority>(() => initialFilterState.priorityFilter);
+  const [dueWindow, setDueWindow] = useState<DueWindow>(() => initialFilterState.dueWindow);
+  const [customDueRange, setCustomDueRange] = useState<{ dueFrom?: string; dueTo?: string } | null>(
+    () => initialFilterState.customDueRange,
   );
-  const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
-  const [priorityFilter, setPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
-  const [dueWindow, setDueWindow] = useState<DueWindow>("ALL");
-  const [customDueRange, setCustomDueRange] = useState<{ dueFrom?: string; dueTo?: string } | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [tagFilters, setTagFilters] = useState<string[]>(() => urlTagFilters);
+  const [searchQuery, setSearchQuery] = useState(() => initialFilterState.searchQuery);
+  const [tagFilters, setTagFilters] = useState<string[]>(() => initialFilterState.tagFilters);
   const [sortBy, setSortBy] = useState<SortOption>("manual");
   const [columnOrder, setColumnOrder] = useState<ColumnOrderState>(() =>
     cloneColumnOrder(emptyColumnOrder),
@@ -654,23 +825,29 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     searchQuery.trim().length > 0 ||
     tagFilters.length > 0;
 
-  const tasksQuery = useTasksQuery({
-    pageSize: 50,
-    status: statusFilter === "ALL" ? undefined : statusFilter,
-    priority: priorityFilter === "ALL" ? undefined : priorityFilter,
-    tag: tagFilters.length > 0 ? tagFilters : undefined,
-    q: searchQuery.trim() || undefined,
-    dueFrom: dueRange.dueFrom,
-    dueTo: dueRange.dueTo,
-  });
-  const boardQuery = useTaskBoardQuery({
-    status: statusFilter === "ALL" ? undefined : statusFilter,
-    priority: priorityFilter === "ALL" ? undefined : priorityFilter,
-    tag: tagFilters.length > 0 ? tagFilters : undefined,
-    q: searchQuery.trim() || undefined,
-    dueFrom: dueRange.dueFrom,
-    dueTo: dueRange.dueTo,
-  });
+  const tasksQuery = useTasksQuery(
+    {
+      pageSize: 50,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      priority: priorityFilter === "ALL" ? undefined : priorityFilter,
+      tag: tagFilters.length > 0 ? tagFilters : undefined,
+      q: searchQuery.trim() || undefined,
+      dueFrom: dueRange.dueFrom,
+      dueTo: dueRange.dueTo,
+    },
+    { enabled: hasHydratedFilters },
+  );
+  const boardQuery = useTaskBoardQuery(
+    {
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      priority: priorityFilter === "ALL" ? undefined : priorityFilter,
+      tag: tagFilters.length > 0 ? tagFilters : undefined,
+      q: searchQuery.trim() || undefined,
+      dueFrom: dueRange.dueFrom,
+      dueTo: dueRange.dueTo,
+    },
+    { enabled: hasHydratedFilters },
+  );
   const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
@@ -864,66 +1041,39 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     [boardQuery.data, tasksByStatus.TODO.length],
   );
 
+  const applyBoardFilterState = useCallback((state: BoardFilterState) => {
+    setStatusFilter(state.statusFilter);
+    setPriorityFilter(state.priorityFilter);
+    setDueWindow(state.dueWindow);
+    setCustomDueRange(state.customDueRange);
+    setSearchQuery(state.searchQuery);
+    setTagFilters((previous) =>
+      previous.length === state.tagFilters.length &&
+      previous.every((value, index) => value === state.tagFilters[index])
+        ? previous
+        : state.tagFilters,
+    );
+  }, []);
+
   useEffect(() => {
     const rawQuery = searchParams.toString();
     if (!rawQuery) {
-      const raw = window.localStorage.getItem(BOARD_FILTERS_STORAGE_KEY);
-      if (!raw) {
-        return;
+      if (!hasHydratedFilters) {
+        applyBoardFilterState(readBoardFiltersFromStorage() ?? createDefaultBoardFilterState());
+        setHasHydratedFilters(true);
       }
-      try {
-        const parsed = JSON.parse(raw) as { statusFilter?: typeof statusFilter; priorityFilter?: typeof priorityFilter; dueWindow?: DueWindow; dueRange?: { dueFrom?: string; dueTo?: string }; searchQuery?: string; tagFilters?: string[] };
-        if (parsed.statusFilter === "ALL" || parsed.statusFilter === "TODO" || parsed.statusFilter === "IN_PROGRESS" || parsed.statusFilter === "DONE") {
-          setStatusFilter(parsed.statusFilter);
-        }
-        if (parsed.priorityFilter === "ALL" || parsed.priorityFilter === "LOW" || parsed.priorityFilter === "MEDIUM" || parsed.priorityFilter === "HIGH") {
-          setPriorityFilter(parsed.priorityFilter);
-        }
-        if (parsed.dueWindow && dueWindows.includes(parsed.dueWindow)) {
-          setDueWindow(parsed.dueWindow);
-          setCustomDueRange(null);
-        } else if (parsed.dueWindow === "CUSTOM" && (parsed.dueRange?.dueFrom || parsed.dueRange?.dueTo)) {
-          setDueWindow("CUSTOM");
-          setCustomDueRange({
-            dueFrom: parsed.dueRange.dueFrom,
-            dueTo: parsed.dueRange.dueTo,
-          });
-        }
-        setSearchQuery(typeof parsed.searchQuery === "string" ? parsed.searchQuery : "");
-        setTagFilters(Array.isArray(parsed.tagFilters) ? sanitizeTags(parsed.tagFilters) : []);
-      } catch {}
       return;
     }
 
-    const status = searchParams.get("status");
-    const priority = searchParams.get("priority");
-    const dueWindowParam = searchParams.get("dueWindow") as DueWindow | null;
-    const dueFrom = searchParams.get("dueFrom") ?? undefined;
-    const dueTo = searchParams.get("dueTo") ?? undefined;
-    const q = searchParams.get("q") ?? "";
-
-    setStatusFilter(status === "TODO" || status === "IN_PROGRESS" || status === "DONE" ? status : "ALL");
-    setPriorityFilter(priority === "LOW" || priority === "MEDIUM" || priority === "HIGH" ? priority : "ALL");
-    if (dueWindowParam && dueWindows.includes(dueWindowParam)) {
-      setDueWindow(dueWindowParam);
-      setCustomDueRange(null);
-    } else if (dueFrom || dueTo) {
-      setDueWindow("CUSTOM");
-      setCustomDueRange({ dueFrom, dueTo });
-    } else {
-      setDueWindow("ALL");
-      setCustomDueRange(null);
-    }
-    setSearchQuery(q);
-    setTagFilters((previous) =>
-      previous.length === urlTagFilters.length &&
-      previous.every((value, index) => value === urlTagFilters[index])
-        ? previous
-        : urlTagFilters,
-    );
-  }, [searchParams, urlTagFilters]);
+    applyBoardFilterState(parseBoardFiltersFromSearchParams(new URLSearchParams(rawQuery)));
+    setHasHydratedFilters(true);
+  }, [applyBoardFilterState, hasHydratedFilters, searchParams]);
 
   useEffect(() => {
+    if (!hasHydratedFilters) {
+      return;
+    }
+
     const params = new URLSearchParams(searchParams.toString());
     statusFilter === "ALL" ? params.delete("status") : params.set("status", statusFilter);
     priorityFilter === "ALL" ? params.delete("priority") : params.set("priority", priorityFilter);
@@ -946,8 +1096,23 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
     const next = params.toString();
     if (next !== searchParams.toString()) router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    window.localStorage.setItem(BOARD_FILTERS_STORAGE_KEY, JSON.stringify({ statusFilter, priorityFilter, dueWindow, dueRange, searchQuery, tagFilters }));
-  }, [dueRange, dueWindow, pathname, priorityFilter, router, searchParams, searchQuery, statusFilter, tagFilters]);
+    writeBoardFiltersToStorage(
+      { statusFilter, priorityFilter, dueWindow, customDueRange, searchQuery, tagFilters },
+      dueRange,
+    );
+  }, [
+    customDueRange,
+    dueRange,
+    dueWindow,
+    hasHydratedFilters,
+    pathname,
+    priorityFilter,
+    router,
+    searchParams,
+    searchQuery,
+    statusFilter,
+    tagFilters,
+  ]);
 
   const handleTagFiltersChange = useCallback(
     (nextTags: string[]) => {
@@ -1511,8 +1676,25 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               })}
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant={priorityFilter==="ALL"?"default":"secondary"} onClick={() => setPriorityFilter("ALL")}>Any priority</Button>
-              {(["HIGH","MEDIUM","LOW"] as const).map((p) => <Button key={p} size="sm" variant={priorityFilter===p?"default":"secondary"} onClick={() => setPriorityFilter(p)}>{priorityLabels[p]}</Button>)}
+              <Button
+                type="button"
+                size="sm"
+                variant={priorityFilter === "ALL" ? "default" : "secondary"}
+                onClick={() => setPriorityFilter("ALL")}
+              >
+                Any priority
+              </Button>
+              {(["HIGH", "MEDIUM", "LOW"] as const).map((priority) => (
+                <Button
+                  key={priority}
+                  type="button"
+                  size="sm"
+                  variant={priorityFilter === priority ? "default" : "secondary"}
+                  onClick={() => setPriorityFilter(priority)}
+                >
+                  {priorityLabels[priority]}
+                </Button>
+              ))}
             </div>
           </div>
           <div className="w-full max-w-sm">
@@ -1526,11 +1708,24 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search title or description" className="h-9 w-64" />
+            <label className="sr-only" htmlFor="board-task-search">
+              Search board tasks
+            </label>
+            <Input
+              id="board-task-search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search title or description"
+              className="h-9 w-64"
+            />
             <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button type="button" size="sm" variant="outline">Due: {dueWindow.replaceAll("_"," ")}</Button></DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" size="sm" variant="outline">
+                  Due: {dueWindowLabels[dueWindow]}
+                </Button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {(["ALL","OVERDUE","TODAY","NEXT_7_DAYS"] as const).map((dw) => (
+                {dueWindows.map((dw) => (
                   <DropdownMenuItem
                     key={dw}
                     onSelect={() => {
@@ -1538,7 +1733,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                       setCustomDueRange(null);
                     }}
                   >
-                    {dw.replaceAll("_"," ")}
+                    {dueWindowLabels[dw]}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -1609,7 +1804,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                     setCustomDueRange(null);
                     setSearchQuery("");
                     setTagFilters([]);
-                    window.localStorage.removeItem(BOARD_FILTERS_STORAGE_KEY);
+                    clearBoardFiltersFromStorage();
                     router.replace(pathname, { scroll: false });
                   }}
                 >

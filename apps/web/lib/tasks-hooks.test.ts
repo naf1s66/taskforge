@@ -235,6 +235,28 @@ describe('tasks-hooks board cache helpers', () => {
     expect(updated.summary.totalTasks).toBe(1);
   });
 
+  it('keeps partial board tasks in search-filtered caches when description is not loaded', () => {
+    const updated = __testing.applyTaskUpdateToBoard(
+      board,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        priority: 'HIGH',
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+      new Date('2024-06-15T00:00:00.000Z'),
+      { q: 'description-only phrase' },
+    );
+
+    expect(updated.columns[0]).toMatchObject({
+      status: 'TODO',
+      total: 1,
+    });
+    expect(updated.columns[0].tasks[0]).toMatchObject({
+      id: '11111111-1111-4111-8111-111111111111',
+      priority: 'HIGH',
+    });
+  });
+
   it('reconciles server tasks into board caches when search filters match descriptions', () => {
     const emptyBoard: TaskBoardResponse = {
       ...board,
