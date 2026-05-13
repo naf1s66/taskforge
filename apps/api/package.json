@@ -7,7 +7,7 @@
     "prebuild": "pnpm run prisma:generate",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/server.js",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" && pnpm run lint:http",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"prisma/**/*.ts\" \"jest.config.ts\" && pnpm run lint:http",
     "pretypecheck": "pnpm run prisma:generate",
     "typecheck": "tsc --noEmit",
     "test": "pnpm run prisma:generate && cross-env NODE_ENV=test jest --runInBand",
