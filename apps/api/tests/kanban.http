@@ -1,0 +1,42 @@
+@apiBaseUrl = http://localhost:4000/api/taskforge/v1
+@accessToken = replace-with-access-token
+
+### Kanban pack overview
+# Reuse values from auth.http: run register/login, then paste tokens above (or inject from your client environment).
+# Requests use bearer auth by default. To test cookie auth, replace the Authorization header with:
+# Cookie: tf_session={{accessToken}}
+
+### Board - fetch current board state
+# Returns grouped tasks by status plus board metadata for drag/drop UIs.
+GET {{apiBaseUrl}}/tasks/board
+Authorization: Bearer {{accessToken}}
+
+###
+### Board - move task between columns
+# Replace {{taskId}} with a real task id from /tasks or /tasks/board responses.
+PATCH {{apiBaseUrl}}/tasks/board/move
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "taskId": "{{taskId}}",
+  "targetStatus": "IN_PROGRESS",
+  "targetIndex": 0
+}
+
+###
+### Tags - list tags
+# Useful for validating autocomplete/filter payloads in web clients.
+GET {{apiBaseUrl}}/tags
+Authorization: Bearer {{accessToken}}
+
+###
+### Tags - create tag
+# Tags are canonicalized by the API; " QA Demo Tag " is stored as "qa demo tag".
+POST {{apiBaseUrl}}/tags
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "label": " QA Demo Tag "
+}
