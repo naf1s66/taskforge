@@ -790,6 +790,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const initialFilterState = parseBoardFiltersFromSearchParams(initialSearchParams);
   const hasInitialQuery = initialSearchParams.toString().length > 0;
   const [hasHydratedFilters, setHasHydratedFilters] = useState(() => hasInitialQuery);
+  const hasLoadedInitialStoredFiltersRef = useRef(hasInitialQuery);
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>(() => initialFilterState.statusFilter);
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | TaskPriority>(() => initialFilterState.priorityFilter);
   const [dueWindow, setDueWindow] = useState<DueWindow>(() => initialFilterState.dueWindow);
@@ -1058,16 +1059,20 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   useEffect(() => {
     const rawQuery = searchParams.toString();
     if (!rawQuery) {
-      if (!hasHydratedFilters) {
-        applyBoardFilterState(readBoardFiltersFromStorage() ?? createDefaultBoardFilterState());
-        setHasHydratedFilters(true);
-      }
+      const nextState = hasLoadedInitialStoredFiltersRef.current
+        ? createDefaultBoardFilterState()
+        : readBoardFiltersFromStorage() ?? createDefaultBoardFilterState();
+
+      hasLoadedInitialStoredFiltersRef.current = true;
+      applyBoardFilterState(nextState);
+      setHasHydratedFilters(true);
       return;
     }
 
+    hasLoadedInitialStoredFiltersRef.current = true;
     applyBoardFilterState(parseBoardFiltersFromSearchParams(new URLSearchParams(rawQuery)));
     setHasHydratedFilters(true);
-  }, [applyBoardFilterState, hasHydratedFilters, searchParams]);
+  }, [applyBoardFilterState, searchParams]);
 
   useEffect(() => {
     if (!hasHydratedFilters) {
