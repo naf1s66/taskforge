@@ -609,15 +609,9 @@ function boardTaskMatchesFilters(
     const needle = filters.q.toLowerCase();
     const titleMatches = task.title.toLowerCase().includes(needle);
     const description = task.description;
-    if (titleMatches) {
-      return true;
-    }
+    const descriptionMatches = description === undefined || description.toLowerCase().includes(needle);
 
-    if (description === undefined) {
-      return true;
-    }
-
-    if (!description.toLowerCase().includes(needle)) {
+    if (!titleMatches && !descriptionMatches) {
       return false;
     }
   }

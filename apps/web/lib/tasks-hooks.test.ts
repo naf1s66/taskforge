@@ -257,6 +257,29 @@ describe('tasks-hooks board cache helpers', () => {
     });
   });
 
+  it('continues checking due filters after a board task title matches search', () => {
+    const updated = __testing.applyTaskUpdateToBoard(
+      board,
+      '11111111-1111-4111-8111-111111111111',
+      {
+        title: 'Draft contract',
+        dueDate: '2024-07-01T00:00:00.000Z',
+        updatedAt: '2024-06-15T12:00:00.000Z',
+      },
+      new Date('2024-06-15T00:00:00.000Z'),
+      {
+        q: 'draft',
+        dueTo: '2024-06-30T23:59:59.999Z',
+      },
+    );
+
+    expect(updated.columns[0]).toMatchObject({
+      status: 'TODO',
+      total: 0,
+      tasks: [],
+    });
+  });
+
   it('reconciles server tasks into board caches when search filters match descriptions', () => {
     const emptyBoard: TaskBoardResponse = {
       ...board,
