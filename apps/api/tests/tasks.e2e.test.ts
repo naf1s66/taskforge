@@ -239,6 +239,35 @@ describe("Tasks API", () => {
       ).toBe(true);
     });
 
+    it("accepts RFC3339 offset timestamps in list due range filters", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Offset list filter",
+        status: "TODO",
+        dueDate: "2026-05-01T09:00:00.000Z",
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Outside offset list filter",
+        status: "TODO",
+        dueDate: "2026-05-03T09:00:00.000Z",
+      });
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks?dueFrom=2026-05-01T10%3A00%3A00%2B02%3A00&dueTo=2026-05-01T12%3A00%3A00%2B02%3A00",
+        ),
+        auth,
+      ).expect(200);
+
+      expect(response.body.total).toBe(1);
+      expect(response.body.items.map((task: { id: string }) => task.id)).toEqual([
+        matching.task.id,
+      ]);
+    });
+
     it("rejects invalid due date ranges", async () => {
       const auth = await register();
 
@@ -508,6 +537,38 @@ describe("Tasks API", () => {
           totalsByStatus: { TODO: 0, IN_PROGRESS: 1, DONE: 0 },
         }),
       );
+      expect(
+        response.body.columns.flatMap(
+          (column: { tasks: Array<{ id: string }> }) =>
+            column.tasks.map((task) => task.id),
+        ),
+      ).toEqual([matching.task.id]);
+    });
+
+    it("accepts RFC3339 offset timestamps in board due range filters", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Offset board filter",
+        status: "IN_PROGRESS",
+        dueDate: "2026-05-01T09:00:00.000Z",
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Outside offset board filter",
+        status: "IN_PROGRESS",
+        dueDate: "2026-05-03T09:00:00.000Z",
+      });
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks/board?dueFrom=2026-05-01T10%3A00%3A00%2B02%3A00&dueTo=2026-05-01T12%3A00%3A00%2B02%3A00",
+        ),
+        auth,
+      ).expect(200);
+
+      expect(response.body.summary.totalTasks).toBe(1);
       expect(
         response.body.columns.flatMap(
           (column: { tasks: Array<{ id: string }> }) =>

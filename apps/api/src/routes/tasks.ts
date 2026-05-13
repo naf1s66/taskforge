@@ -11,6 +11,8 @@ import {
 } from '../repositories/task-repository';
 import { normalizeTagLabels } from '../repositories/task-mapper';
 
+const Rfc3339DateTimeSchema = z.string().datetime({ offset: true });
+
 const TaskListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
@@ -19,8 +21,8 @@ const TaskListQuerySchema = z
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
     tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
     q: z.string().trim().min(1).optional(),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
   })
   .passthrough()
   .superRefine((data, ctx) => {
@@ -43,8 +45,8 @@ const TaskBoardQuerySchema = z
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
     tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
     q: z.string().trim().min(1).optional(),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
   })
   .passthrough()
   .superRefine((data, ctx) => {

@@ -27,6 +27,7 @@ export type {
 
 const TaskStatusSchema = z.union([z.literal('TODO'), z.literal('IN_PROGRESS'), z.literal('DONE')]);
 const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.literal('HIGH')]);
+const QueryDateTimeSchema = z.string().datetime({ offset: true });
 
 const NonEmptyTrimmedString = z.string().trim().min(1);
 
@@ -210,8 +211,8 @@ const TaskListQuerySchema = z
         return Array.isArray(value) ? value : [value];
       }),
     q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.dueFrom && value.dueTo) {
@@ -241,8 +242,8 @@ const BoardQuerySchema = z
         return Array.isArray(value) ? value : [value];
       }),
     q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.dueFrom && value.dueTo) {

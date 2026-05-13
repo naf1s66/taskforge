@@ -65,7 +65,7 @@ describe('tasks-client', () => {
           priority: 'MEDIUM',
           tag: ['frontend', 'api'],
           q: '   sprint ',
-          dueFrom: '2024-06-01T00:00:00.000Z',
+          dueFrom: '2024-06-01T02:00:00+02:00',
         },
         { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
       );
@@ -81,7 +81,7 @@ describe('tasks-client', () => {
       expect(parsedUrl.searchParams.get('priority')).toBe('MEDIUM');
       expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
       expect(parsedUrl.searchParams.get('q')).toBe('sprint');
-      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2024-06-01T00:00:00.000Z');
+      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2024-06-01T02:00:00+02:00');
       expect((init as RequestInit)?.credentials).toBe('include');
       const headers = (init as RequestInit).headers as Headers;
       expect(headers.get('accept')).toBe('application/json');
@@ -232,8 +232,8 @@ describe('tasks-client', () => {
           priority: 'HIGH',
           tag: ['frontend', 'api'],
           q: ' board search ',
-          dueFrom: '2026-05-01T00:00:00.000Z',
-          dueTo: '2026-05-31T23:59:59.999Z',
+          dueFrom: '2026-05-01T02:00:00+02:00',
+          dueTo: '2026-06-01T01:59:59+02:00',
         },
         { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
       );
@@ -245,8 +245,8 @@ describe('tasks-client', () => {
       expect(parsedUrl.searchParams.get('priority')).toBe('HIGH');
       expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
       expect(parsedUrl.searchParams.get('q')).toBe('board search');
-      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2026-05-01T00:00:00.000Z');
-      expect(parsedUrl.searchParams.get('dueTo')).toBe('2026-05-31T23:59:59.999Z');
+      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2026-05-01T02:00:00+02:00');
+      expect(parsedUrl.searchParams.get('dueTo')).toBe('2026-06-01T01:59:59+02:00');
     });
 
     it('rejects inverted board due ranges before sending a request', async () => {
