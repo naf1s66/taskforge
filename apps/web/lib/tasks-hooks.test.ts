@@ -410,6 +410,32 @@ describe('tasks-hooks board cache helpers', () => {
     expect(queryClient.getQueryData(filteredBoardKey)).toEqual(board);
   });
 
+  it('rolls back optimistic board moves after mutation failures', () => {
+    const queryClient = new QueryClient();
+    const userScope = 'user-123';
+    const defaultBoardKey = __testing.taskQueryKeys.board(userScope);
+    const filteredBoardKey = __testing.taskQueryKeys.board(userScope, { tag: ['api'] });
+
+    queryClient.setQueryData(defaultBoardKey, board);
+    queryClient.setQueryData(filteredBoardKey, board);
+
+    const snapshots = __testing.collectBoardQueries(queryClient, userScope, (cachedBoard) =>
+      __testing.applyOptimisticMoveToBoard(cachedBoard, {
+        taskId: '11111111-1111-4111-8111-111111111111',
+        targetStatus: 'DONE',
+        targetIndex: 1,
+      }),
+    );
+
+    expect(queryClient.getQueryData<TaskBoardResponse>(defaultBoardKey)?.columns[0].total).toBe(0);
+    expect(queryClient.getQueryData<TaskBoardResponse>(filteredBoardKey)?.columns[0].total).toBe(0);
+
+    __testing.restoreBoardSnapshots(queryClient, snapshots);
+
+    expect(queryClient.getQueryData(defaultBoardKey)).toEqual(board);
+    expect(queryClient.getQueryData(filteredBoardKey)).toEqual(board);
+  });
+
   it('inserts a moved task into matching cached lists when it was not already present', () => {
     const list: TaskListData = {
       items: [
