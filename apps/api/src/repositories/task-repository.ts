@@ -47,7 +47,12 @@ export interface TaskListOptions {
 }
 
 export interface TaskBoardOptions {
+  status?: SharedTaskStatus;
+  priority?: SharedTaskPriority;
   tags?: string[];
+  search?: string;
+  dueFrom?: Date;
+  dueTo?: Date;
 }
 
 export interface TaskListResult {
@@ -134,6 +139,23 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
 
   const buildTaskBoard = async (userId: string, options?: TaskBoardOptions): Promise<BoardReadModelDTO> => {
     const andFilters: Prisma.TaskWhereInput[] = [];
+    if (options?.search) {
+      andFilters.push({
+        OR: [
+          { title: { contains: options.search, mode: 'insensitive' } },
+          { description: { contains: options.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (options?.dueFrom || options?.dueTo) {
+      andFilters.push({
+        dueDate: {
+          ...(options?.dueFrom ? { gte: options.dueFrom } : {}),
+          ...(options?.dueTo ? { lte: options.dueTo } : {}),
+        },
+      });
+    }
 
     if (options?.tags?.length) {
       for (const label of options.tags) {
@@ -155,6 +177,8 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
     const tasks = await prisma.task.findMany({
       where: {
         userId,
+        ...(options?.status ? { status: options.status as PrismaTaskStatus } : {}),
+        ...(options?.priority ? { priority: options.priority as PrismaTaskPriority } : {}),
         ...(andFilters.length ? { AND: andFilters } : {}),
       },
       include: taskWithTagsInclude,

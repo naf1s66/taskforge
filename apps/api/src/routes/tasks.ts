@@ -11,6 +11,8 @@ import {
 } from '../repositories/task-repository';
 import { normalizeTagLabels } from '../repositories/task-mapper';
 
+const Rfc3339DateTimeSchema = z.string().datetime({ offset: true });
+
 const TaskListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
@@ -19,8 +21,8 @@ const TaskListQuerySchema = z
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
     tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
     q: z.string().trim().min(1).optional(),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
   })
   .passthrough()
   .superRefine((data, ctx) => {
@@ -39,9 +41,27 @@ const TaskListQuerySchema = z
 
 const TaskBoardQuerySchema = z
   .object({
+    status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
     tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
+    q: z.string().trim().min(1).optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.dueFrom && data.dueTo) {
+      const from = new Date(data.dueFrom);
+      const to = new Date(data.dueTo);
+      if (from.getTime() > to.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo',
+        });
+      }
+    }
+  });
 
 const TaskIdParamSchema = z.object({
   id: z
@@ -125,13 +145,18 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const { tag } = parseQuery.data;
+      const { status, priority, tag, q, dueFrom, dueTo } = parseQuery.data;
       const normalizedTags = normalizeTagLabels(
         Array.isArray(tag) ? tag : tag ? [tag] : undefined,
       );
 
       const board = await repository.getTaskBoard(user.id, {
+        status,
+        priority,
         tags: normalizedTags.length ? normalizedTags : undefined,
+        search: q,
+        dueFrom: dueFrom ? new Date(dueFrom) : undefined,
+        dueTo: dueTo ? new Date(dueTo) : undefined,
       });
       res.set('ETag', `"${board.updatedAt}"`);
       res.json(board);

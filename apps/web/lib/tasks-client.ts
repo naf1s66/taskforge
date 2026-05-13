@@ -27,6 +27,7 @@ export type {
 
 const TaskStatusSchema = z.union([z.literal('TODO'), z.literal('IN_PROGRESS'), z.literal('DONE')]);
 const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.literal('HIGH')]);
+const QueryDateTimeSchema = z.string().datetime({ offset: true });
 
 const NonEmptyTrimmedString = z.string().trim().min(1);
 
@@ -210,8 +211,8 @@ const TaskListQuerySchema = z
         return Array.isArray(value) ? value : [value];
       }),
     q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.dueFrom && value.dueTo) {
@@ -229,6 +230,8 @@ const TaskListQuerySchema = z
 
 const BoardQuerySchema = z
   .object({
+    status: TaskStatusSchema.optional(),
+    priority: TaskPrioritySchema.optional(),
     tag: z
       .union([NonEmptyTrimmedString, z.array(NonEmptyTrimmedString)])
       .optional()
@@ -238,6 +241,22 @@ const BoardQuerySchema = z
         }
         return Array.isArray(value) ? value : [value];
       }),
+    q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dueFrom && value.dueTo) {
+      const from = Date.parse(value.dueFrom);
+      const to = Date.parse(value.dueTo);
+      if (!Number.isNaN(from) && !Number.isNaN(to) && from > to) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo.',
+        });
+      }
+    }
   });
 
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
@@ -261,7 +280,12 @@ export type TaskListQuery = {
 };
 
 export type TaskBoardQuery = {
+  status?: TaskStatus;
+  priority?: TaskPriority;
   tag?: string | string[];
+  q?: string;
+  dueFrom?: string;
+  dueTo?: string;
 };
 
 type NormalizedTaskListQuery = z.infer<typeof TaskListQuerySchema>;

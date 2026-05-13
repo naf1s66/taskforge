@@ -940,18 +940,42 @@ export const openApiDocument: OpenAPIV3.Document = {
         security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         parameters: [
           {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+            description: 'Filter board tasks by workflow status.',
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            description: 'Filter board tasks by priority.',
+          },
+          {
             name: 'tag',
             in: 'query',
-            required: false,
-            description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
-            schema: {
-              oneOf: [
-                { type: 'string' },
-                { type: 'array', items: { type: 'string' } },
-              ],
-            },
             style: 'form',
             explode: true,
+            schema: { type: 'array', items: { type: 'string' } },
+            description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
+          },
+          {
+            name: 'q',
+            in: 'query',
+            schema: { type: 'string', minLength: 1 },
+            description: 'Case-insensitive search over the title and description.',
+          },
+          {
+            name: 'dueFrom',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return board tasks due on or after this ISO timestamp.',
+          },
+          {
+            name: 'dueTo',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return board tasks due on or before this ISO timestamp.',
           },
         ],
         responses: {
@@ -968,6 +992,17 @@ export const openApiDocument: OpenAPIV3.Document = {
                 schema: { $ref: '#/components/schemas/BoardResponse' },
                 examples: {
                   default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidFilters: taskListInvalidFiltersExample,
                 },
               },
             },

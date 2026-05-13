@@ -186,7 +186,12 @@ interface NormalizedTaskListFilters {
 }
 
 interface NormalizedTaskBoardFilters {
+  status?: TaskBoardQuery['status'];
+  priority?: TaskBoardQuery['priority'];
   tag?: string[];
+  q?: string;
+  dueFrom?: string;
+  dueTo?: string;
 }
 
 const TASK_QUERY_SCOPE = 'tasks';
@@ -576,21 +581,60 @@ function buildBoardSummary(columns: TaskBoardResponse['columns']): TaskBoardResp
 }
 
 function boardTaskMatchesFilters(
-  task: Pick<TaskListItem, 'tags'>,
+  task: Pick<TaskListItem, 'title' | 'status' | 'priority' | 'dueDate' | 'tags'> & { description?: string },
   filters: NormalizedTaskBoardFilters | undefined,
 ): boolean {
-  if (!filters?.tag?.length) {
+  if (!filters) {
     return true;
   }
 
-  const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
-  const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
-
-  if (filterTags.length === 0) {
-    return true;
+  if (filters.status && task.status !== filters.status) {
+    return false;
   }
 
-  return filterTags.every((tag) => taskTags.has(tag));
+  if (filters.priority && task.priority !== filters.priority) {
+    return false;
+  }
+
+  if (filters.tag?.length) {
+    const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+    if (filterTags.length > 0 && filterTags.some((tag) => !taskTags.has(tag))) {
+      return false;
+    }
+  }
+
+  if (filters.q) {
+    const needle = filters.q.toLowerCase();
+    const titleMatches = task.title.toLowerCase().includes(needle);
+    const description = task.description;
+    const descriptionMatches = description === undefined || description.toLowerCase().includes(needle);
+
+    if (!titleMatches && !descriptionMatches) {
+      return false;
+    }
+  }
+
+  if (filters.dueFrom) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) < Date.parse(filters.dueFrom)) {
+      return false;
+    }
+  }
+
+  if (filters.dueTo) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) > Date.parse(filters.dueTo)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function taskBoardItemFromTask(
@@ -768,6 +812,13 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
   }
 
   const normalized: NormalizedTaskBoardFilters = {};
+  if (filters.status) {
+    normalized.status = filters.status;
+  }
+
+  if (filters.priority) {
+    normalized.priority = filters.priority;
+  }
 
   if (filters.tag) {
     const tags = Array.isArray(filters.tag) ? filters.tag : [filters.tag];
@@ -775,6 +826,15 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
     if (normalizedTags.length > 0) {
       normalized.tag = normalizedTags;
     }
+  }
+  if (filters.q?.trim()) {
+    normalized.q = filters.q.trim();
+  }
+  if (filters.dueFrom) {
+    normalized.dueFrom = filters.dueFrom;
+  }
+  if (filters.dueTo) {
+    normalized.dueTo = filters.dueTo;
   }
 
   return Object.keys(normalized).length ? normalized : undefined;
@@ -1465,6 +1525,7 @@ export function useUpdateTask(
           id,
           {
             ...input,
+            description: input.description ?? taskSnapshot?.description,
             updatedAt: optimisticUpdatedAt,
           },
           new Date(optimisticUpdatedAt),

@@ -239,6 +239,35 @@ describe("Tasks API", () => {
       ).toBe(true);
     });
 
+    it("accepts RFC3339 offset timestamps in list due range filters", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Offset list filter",
+        status: "TODO",
+        dueDate: "2026-05-01T09:00:00.000Z",
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Outside offset list filter",
+        status: "TODO",
+        dueDate: "2026-05-03T09:00:00.000Z",
+      });
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks?dueFrom=2026-05-01T10%3A00%3A00%2B02%3A00&dueTo=2026-05-01T12%3A00%3A00%2B02%3A00",
+        ),
+        auth,
+      ).expect(200);
+
+      expect(response.body.total).toBe(1);
+      expect(response.body.items.map((task: { id: string }) => task.id)).toEqual([
+        matching.task.id,
+      ]);
+    });
+
     it("rejects invalid due date ranges", async () => {
       const auth = await register();
 
@@ -453,6 +482,119 @@ describe("Tasks API", () => {
             column.tasks.map((task) => task.id),
         ),
       ).toEqual([matching.task.id]);
+    });
+
+    it("filters board data by status, priority, search, and due range", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Design board filters",
+        description: "Implement searchable kanban controls",
+        status: "IN_PROGRESS",
+        priority: "HIGH",
+        dueDate: "2026-05-15T12:00:00.000Z",
+        tags: ["design"],
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Design backlog copy",
+        description: "Matches search but not priority",
+        status: "IN_PROGRESS",
+        priority: "LOW",
+        dueDate: "2026-05-15T12:00:00.000Z",
+        tags: ["design"],
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Ship board filters",
+        description: "Matches priority but not status",
+        status: "DONE",
+        priority: "HIGH",
+        dueDate: "2026-05-15T12:00:00.000Z",
+        tags: ["design"],
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Design board archive",
+        description: "Matches everything except due date",
+        status: "IN_PROGRESS",
+        priority: "HIGH",
+        dueDate: "2026-06-20T12:00:00.000Z",
+        tags: ["design"],
+      });
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks/board?status=IN_PROGRESS&priority=HIGH&q=searchable&dueFrom=2026-05-01T00%3A00%3A00.000Z&dueTo=2026-05-31T23%3A59%3A59.999Z",
+        ),
+        auth,
+      ).expect(200);
+
+      expect(response.body.summary).toEqual(
+        expect.objectContaining({
+          totalTasks: 1,
+          totalsByStatus: { TODO: 0, IN_PROGRESS: 1, DONE: 0 },
+        }),
+      );
+      expect(
+        response.body.columns.flatMap(
+          (column: { tasks: Array<{ id: string }> }) =>
+            column.tasks.map((task) => task.id),
+        ),
+      ).toEqual([matching.task.id]);
+    });
+
+    it("accepts RFC3339 offset timestamps in board due range filters", async () => {
+      const auth = await register();
+
+      const matching = await createTask({
+        userId: auth.userId,
+        title: "Offset board filter",
+        status: "IN_PROGRESS",
+        dueDate: "2026-05-01T09:00:00.000Z",
+      });
+      await createTask({
+        userId: auth.userId,
+        title: "Outside offset board filter",
+        status: "IN_PROGRESS",
+        dueDate: "2026-05-03T09:00:00.000Z",
+      });
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks/board?dueFrom=2026-05-01T10%3A00%3A00%2B02%3A00&dueTo=2026-05-01T12%3A00%3A00%2B02%3A00",
+        ),
+        auth,
+      ).expect(200);
+
+      expect(response.body.summary.totalTasks).toBe(1);
+      expect(
+        response.body.columns.flatMap(
+          (column: { tasks: Array<{ id: string }> }) =>
+            column.tasks.map((task) => task.id),
+        ),
+      ).toEqual([matching.task.id]);
+    });
+
+    it("rejects board filters with an inverted due range", async () => {
+      const auth = await register();
+
+      const response = await withAuth(
+        agent.get(
+          "/api/taskforge/v1/tasks/board?dueFrom=2026-05-31T00%3A00%3A00.000Z&dueTo=2026-05-01T00%3A00%3A00.000Z",
+        ),
+        auth,
+      ).expect(400);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          error: "Invalid payload",
+        }),
+      );
+      expect(response.body.details.fieldErrors.dueFrom).toContain(
+        "dueFrom must be earlier than or equal to dueTo",
+      );
     });
 
     it("requires authentication to move tasks on the board", async () => {
