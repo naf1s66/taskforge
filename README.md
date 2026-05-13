@@ -137,9 +137,9 @@ Screenshots of the login flow and protected dashboard live in the design referen
 Reusable HTTP request packs live in `apps/api/tests/`:
 - `auth.http` (auth smoke flows)
 - `tasks.http` (task CRUD and filters)
-- `kanban.http` (board fetch/move + tag list/create/update/delete)
+- `kanban.http` (board fetch/move + tag list/create)
 
-Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`, `{{sessionCookie}}`) so the same files run against local, dev, and staging environments.
+Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`) so the same files run against local, dev, and staging environments.
 
 Quick validation command:
 ```bash

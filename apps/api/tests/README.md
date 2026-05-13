@@ -47,11 +47,11 @@ pnpm -C apps/api test
 
 - `auth.http`: register/login/logout/me auth smoke flow.
 - `tasks.http`: task CRUD + filters + board fetch/move requests.
-- `kanban.http`: focused board + tag CRUD demo flows for QA and staging walkthroughs.
+- `kanban.http`: focused board + tag list/create demo flows for QA and staging walkthroughs.
 
 ### Environment variables
 
-All packs support variable-based hosts/tokens (for example `@apiBaseUrl`, `{{accessToken}}`, and `{{sessionCookie}}`) so you can replay requests without editing hard-coded URLs.
+All packs support variable-based hosts/tokens (for example `@apiBaseUrl` and `{{accessToken}}`) so you can replay requests without editing hard-coded URLs.
 
 ### Import tips
 

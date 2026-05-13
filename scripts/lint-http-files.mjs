@@ -1,7 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const HTTP_DIR = path.resolve(process.cwd(), 'tests');
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const HTTP_DIR = path.resolve(scriptDir, '..', 'apps', 'api', 'tests');
 const METHOD_PATTERN = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+$/;
 
 function validate(content, file) {
