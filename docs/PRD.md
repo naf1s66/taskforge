@@ -106,6 +106,59 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - Email: Nodemailer adapter; MailHog dev; free SMTP prod.
 - Monorepo rationale: shared types, unified tooling, single CI.
 
+
+## Milestone 4 — Kanban + Tags (Shipped Behavior)
+
+### Goals
+- Deliver a board-first workflow where status changes happen in one drag interaction and persist through `/api/taskforge/v1/board/move`.
+- Keep tagging lightweight: users can create tags once, reuse them from dialogs/filters, and trust normalization (`trim + lowercase uniqueness`) to avoid duplicates.
+- Preserve fast feedback with optimistic updates while preventing invisible data corruption when mutations fail.
+
+### Success Metrics
+- **Interaction speed:** median drag-to-visual-update under 100 ms on local/dev environments (optimistic move visible immediately after drop).
+- **Reliability:** board and list views reconverge within one refetch cycle after every successful move mutation.
+- **Recovery quality:** failed optimistic moves rollback cleanly and show actionable feedback (toast + restored card position).
+- **Tag quality:** no duplicate labels per user (`@@unique([userId, label])` enforced in schema + API conflict handling).
+
+### UX Notes (mirrors implementation)
+- **Manual Board Order mode:** same-column reorder and cross-column placement are both enabled; drop indicators show exact insertion points.
+- **Sorted modes (Due date / Priority / Updated):** same-column reorder is intentionally disabled; cross-column drops only change status from the user perspective.
+- **Hidden index behavior in sorted modes:** client sends deterministic `targetIndex` (end of destination lane) while rendered position is recalculated by active sort after mutation/refetch.
+- **Drop affordance:** sorted modes highlight the entire destination column, not a line-level insertion marker.
+- **Helper copy:** users are told to switch to Board order for explicit manual ordering.
+
+### Drag + Optimistic Update Lifecycle
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Web Board UI
+    participant C as React Query Cache
+    participant A as API (/board/move)
+    participant D as DB
+
+    U->>B: Drag card to destination lane
+    B->>C: onMutate() optimistic lane/index update
+    C-->>B: Immediate re-render (<100ms target)
+    B->>A: POST move {taskId,targetStatus,targetIndex}
+    A->>D: Persist status + boardOrder
+    alt success
+      D-->>A: Commit
+      A-->>B: 200 updated task
+      B->>C: Invalidate/refetch board + tasks
+      C-->>B: Canonical sorted/manual placement
+    else failure
+      D-->>A: Error/conflict
+      A-->>B: 4xx/5xx
+      B->>C: Rollback previous snapshot
+      B-->>U: Error toast + original position restored
+    end
+```
+
+### QA References (Milestone 4)
+- Manual checklist: `docs/testing/milestone4-manual-checklist.md`
+- Automated/API checks: `docs/testing/milestone4-automated.md`
+- HTTP pack: `apps/api/tests/kanban.http`
+
 ## Milestones (7 days)
 - **Day 1:** Monorepo setup, Tailwind + shadcn/ui, Express + Prisma scaffold, Dockerfiles, compose, CI skeleton.
 - **Day 2:** Frontend OAuth (GitHub/Google) with NextAuth, guarded routes, session UI, and the `/auth/session-bridge` flow to mint API cookies.
