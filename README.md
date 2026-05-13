@@ -153,9 +153,10 @@ pnpm -C apps/api run lint:http
 - **Board order** enables true manual reordering (same-column + cross-column).
 - **Sorted views** (due date, priority, recently updated) allow status moves across columns but do not allow same-column reorder.
 - In sorted views, the move payload still includes `targetIndex`, but placement is recalculated by the active sort after mutation/refetch.
+- Board moves are persisted through `PATCH /api/taskforge/v1/tasks/board/move` with `{ taskId, targetStatus, targetIndex }`.
 
 ### Docker and drag/drop notes
-- Use a Chromium-based browser (Chrome/Edge) when validating HTML5 DnD inside Dockerized dev environments.
+- Use a Chromium-based browser (Chrome/Edge) when validating pointer/keyboard drag interactions inside Dockerized dev environments.
 - Start containers with `make up`, then open `http://localhost:3000` from the host OS browser (avoid in-container headless validation for tactile drag UX).
 - If drag feels unresponsive, ensure both `web` and `api` containers are healthy via `docker ps` and confirm `NEXT_PUBLIC_API_BASE_URL` points to `http://localhost:4000/api/taskforge`.
 

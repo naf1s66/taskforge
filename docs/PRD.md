@@ -36,22 +36,26 @@
 ## Data Model (Prisma Sketch)
 ```prisma
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  provider  String?
-  createdAt DateTime @default(now())
-  tasks     Task[]
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  passwordHash  String?
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tasks         Task[]
+  tags          Tag[]
 }
 
 model Task {
-  id          String       @id @default(cuid())
-  userId      String
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid
   title       String
   description String?
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
+  boardOrder  Int          @default(0)
   dueDate     DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -94,6 +98,8 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/:id`
 - `DELETE /api/v1/tasks/:id`
+- `GET /api/v1/tasks/board?status=&priority=&tag=&q=&dueFrom=&dueTo=`
+- `PATCH /api/v1/tasks/board/move`
 - `GET /api/v1/tags`
 - `POST /api/v1/tags`
 - Docs: `GET /api/taskforge/docs`
@@ -110,7 +116,7 @@ enum TaskPriority { LOW MEDIUM HIGH }
 ## Milestone 4 — Kanban + Tags (Shipped Behavior)
 
 ### Goals
-- Deliver a board-first workflow where status changes happen in one drag interaction and persist through `/api/taskforge/v1/board/move`.
+- Deliver a board-first workflow where status changes happen in one drag interaction and persist through `PATCH /api/taskforge/v1/tasks/board/move`.
 - Keep tagging lightweight: users can create tags once, reuse them from dialogs/filters, and trust normalization (`trim + lowercase uniqueness`) to avoid duplicates.
 - Preserve fast feedback with optimistic updates while preventing invisible data corruption when mutations fail.
 
@@ -133,17 +139,17 @@ sequenceDiagram
     participant U as User
     participant B as Web Board UI
     participant C as React Query Cache
-    participant A as API (/board/move)
+    participant A as API (/tasks/board/move)
     participant D as DB
 
     U->>B: Drag card to destination lane
     B->>C: onMutate() optimistic lane/index update
     C-->>B: Immediate re-render (<100ms target)
-    B->>A: POST move {taskId,targetStatus,targetIndex}
+    B->>A: PATCH move {taskId,targetStatus,targetIndex}
     A->>D: Persist status + boardOrder
     alt success
       D-->>A: Commit
-      A-->>B: 200 updated task
+      A-->>B: 200 board read model
       B->>C: Invalidate/refetch board + tasks
       C-->>B: Canonical sorted/manual placement
     else failure

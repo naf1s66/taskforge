@@ -6,7 +6,7 @@
 Milestone 4 introduced the board endpoint surface, drag-and-drop UX, and reusable tags. We needed one documented policy that aligns product behavior, API payloads, and QA expectations, especially for sorted views where visible order is derived and not fully user-controlled.
 
 ## Decision
-1. **Single move payload remains stable**: keep `{ taskId, targetStatus, targetIndex }` for both manual and sorted board modes.
+1. **Single move endpoint and payload remain stable**: keep `PATCH /api/taskforge/v1/tasks/board/move` with `{ taskId, targetStatus, targetIndex }` for both manual and sorted board modes.
 2. **Two interaction modes**:
    - **Board order (manual):** same-column reorder + cross-column placement are enabled and persisted.
    - **Derived sort modes:** same-column reorder is disabled; cross-column drag updates status only from the user’s perspective.
