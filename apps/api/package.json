@@ -13,7 +13,7 @@
     "test": "pnpm run prisma:generate && cross-env NODE_ENV=test jest --runInBand",
     "gen:openapi": "tsx src/openapi.export.ts",
     "prisma:generate": "prisma generate",
-    "lint:http": "node ../../scripts/lint-http-files.mjs"
+    "lint:http": "node --test ../../scripts/lint-http-files.test.mjs && node ../../scripts/lint-http-files.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
