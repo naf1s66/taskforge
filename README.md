@@ -131,6 +131,21 @@ Running the seed multiple times is safe; it upserts the user and respects `SEED_
 
 Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above.
 
+
+## API HTTP packs for QA demos
+
+Reusable HTTP request packs live in `apps/api/tests/`:
+- `auth.http` (auth smoke flows)
+- `tasks.http` (task CRUD and filters)
+- `kanban.http` (board fetch/move + tag list/create/update/delete)
+
+Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`, `{{sessionCookie}}`) so the same files run against local, dev, and staging environments.
+
+Quick validation command:
+```bash
+pnpm -C apps/api run lint:http
+```
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies migrations via `prisma migrate deploy` before executing the Jest suite in `apps/api`.
 - Frontend tests run through `pnpm test` in `apps/web`; the CI job executes that script when present.

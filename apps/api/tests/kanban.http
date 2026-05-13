@@ -1,0 +1,69 @@
+@apiBaseUrl = http://localhost:4000/api/taskforge/v1
+@accessToken = replace-with-access-token
+@sessionCookie = replace-with-tf_session-cookie
+
+### Kanban pack overview
+# Reuse values from auth.http: run register/login, then paste tokens above (or inject from your client environment).
+# Every request supports both auth styles used in dev/staging:
+# 1) Authorization: Bearer {{accessToken}}
+# 2) Cookie: tf_session={{sessionCookie}}
+
+### Board - fetch current board state
+# Returns grouped tasks by status plus board metadata for drag/drop UIs.
+GET {{apiBaseUrl}}/tasks/board
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}
+
+###
+### Board - move task between columns
+# Replace {{taskId}} with a real task id from /tasks or /tasks/board responses.
+PATCH {{apiBaseUrl}}/tasks/board/move
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}
+
+{
+  "taskId": "{{taskId}}",
+  "targetStatus": "IN_PROGRESS",
+  "targetIndex": 0
+}
+
+###
+### Tags - list tags
+# Useful for validating autocomplete/filter payloads in web clients.
+GET {{apiBaseUrl}}/tags
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}
+
+###
+### Tags - create tag
+# Update `name`/`color` as needed for demos.
+POST {{apiBaseUrl}}/tags
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}
+
+{
+  "name": "qa-demo-tag",
+  "color": "#6366f1"
+}
+
+###
+### Tags - update tag
+# Replace {{tagId}} with an existing tag id.
+PATCH {{apiBaseUrl}}/tags/{{tagId}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}
+
+{
+  "name": "qa-demo-tag-updated",
+  "color": "#22c55e"
+}
+
+###
+### Tags - delete tag
+# Replace {{tagId}} with the same id used above.
+DELETE {{apiBaseUrl}}/tags/{{tagId}}
+Authorization: Bearer {{accessToken}}
+Cookie: tf_session={{sessionCookie}}

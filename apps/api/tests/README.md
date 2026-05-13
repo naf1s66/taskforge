@@ -41,3 +41,20 @@ pnpm -C apps/api test
   in the truncate list.
 - **Custom databases** – set `DATABASE_URL` to an existing Postgres instance to
   bypass Testcontainers. The harness will still migrate and clean it between tests.
+
+
+## HTTP request packs (VS Code REST Client / Bruno / Insomnia / Postman)
+
+- `auth.http`: register/login/logout/me auth smoke flow.
+- `tasks.http`: task CRUD + filters + board fetch/move requests.
+- `kanban.http`: focused board + tag CRUD demo flows for QA and staging walkthroughs.
+
+### Environment variables
+
+All packs support variable-based hosts/tokens (for example `@apiBaseUrl`, `{{accessToken}}`, and `{{sessionCookie}}`) so you can replay requests without editing hard-coded URLs.
+
+### Import tips
+
+- **VS Code REST Client**: open the `.http` file and click `Send Request` for each section.
+- **Bruno**: create/import a collection, then copy each request block as separate requests; keep variables in Bruno environments (`apiBaseUrl`, `accessToken`, `sessionCookie`).
+- **Insomnia/Postman**: import from raw text (or paste request-by-request) and map placeholders to environment variables with matching names.
