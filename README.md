@@ -146,6 +146,32 @@ Quick validation command:
 pnpm -C apps/api run lint:http
 ```
 
+
+## Kanban Board + Tag Workflow (Milestone 4)
+
+### Board behavior summary
+- **Board order** enables true manual reordering (same-column + cross-column).
+- **Sorted views** (due date, priority, recently updated) allow status moves across columns but do not allow same-column reorder.
+- In sorted views, the move payload still includes `targetIndex`, but placement is recalculated by the active sort after mutation/refetch.
+- Board moves are persisted through `PATCH /api/taskforge/v1/tasks/board/move` with `{ taskId, targetStatus, targetIndex }`.
+
+### Docker and drag/drop notes
+- Use a Chromium-based browser (Chrome/Edge) when validating pointer/keyboard drag interactions inside Dockerized dev environments.
+- Start containers with `make up`, then open `http://localhost:3000` from the host OS browser (avoid in-container headless validation for tactile drag UX).
+- If drag feels unresponsive, ensure both `web` and `api` containers are healthy via `docker ps` and confirm `NEXT_PUBLIC_API_BASE_URL` points to `http://localhost:4000/api/taskforge`.
+
+### Run the Kanban `.http` pack
+Use the API request pack to validate board + tags quickly:
+```bash
+pnpm -C apps/api run lint:http
+# then run apps/api/tests/kanban.http in your HTTP client
+```
+
+### QA checklists (Milestone 4)
+- Manual: `docs/testing/milestone4-manual-checklist.md`
+- Automated: `docs/testing/milestone4-automated.md`
+- Task sequence + implementation notes: `docs/tasks/milestone4/sequence.md`
+
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies migrations via `prisma migrate deploy` before executing the Jest suite in `apps/api`.
 - Frontend tests run through `pnpm test` in `apps/web`; the CI job executes that script when present.
