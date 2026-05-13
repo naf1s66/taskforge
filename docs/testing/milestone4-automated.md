@@ -6,6 +6,7 @@
 
 ## Recommended local commands
 ```bash
+pnpm lint
 pnpm -C apps/api test
 pnpm -C apps/api run lint:http
 ```
