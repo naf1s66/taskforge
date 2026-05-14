@@ -79,4 +79,4 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// TODO: add DELETE /:id and PATCH /:id when tag management UI is implemented.
+// Future scope: add rename/delete endpoints when dedicated tag administration is designed.

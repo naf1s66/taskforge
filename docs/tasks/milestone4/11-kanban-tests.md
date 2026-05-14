@@ -1,7 +1,7 @@
 # Task: Add automated tests for board + tags
 
 ## Summary
-- Extend the API and frontend test suites to cover tag CRUD, filtered board queries, and drag/drop mutations.
+- Extend the API and frontend test suites to cover tag create/list flows, filtered board queries, and drag/drop mutations.
 - Ensure CI can run the new tests deterministically (mocking drag/drop as needed).
 
 **Status:** Done.
