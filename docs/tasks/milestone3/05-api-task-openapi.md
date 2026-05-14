@@ -4,16 +4,20 @@
 - Document the full request/response schemas for `/tasks` operations, including filtering parameters and error envelopes.
 - Ensure the exported spec matches the Prisma-backed implementation and ships with helpful examples.
 
-**Status:** New.  
+**Status:** Completed.
 **Concurrency:** Blocked by `02/03/04` task endpoints; can run in parallel with the test work once schemas are stable.
 
 ## Acceptance Criteria
-- [ ] `openapi.ts` (and the export script) describe list/create/update/delete responses with shared DTOs.
-- [ ] Protected routes reference the bearer auth scheme and note required headers/cookies.
-- [ ] Example payloads reflect realistic priorities, statuses, tags, and ISO timestamps.
-- [ ] Swagger UI at `/api/taskforge/docs` renders without validation warnings.
-- [ ] PRD/API docs sections reference the new `/tasks` capabilities and link back to the generated OpenAPI file.
+- [x] `openapi.ts` (and the export script) describe list/create/update/delete responses with shared DTOs.
+- [x] Protected routes reference the bearer auth scheme and note required headers/cookies.
+- [x] Example payloads reflect realistic priorities, statuses, tags, and ISO timestamps.
+- [x] Swagger UI at `/api/taskforge/docs` renders without validation warnings.
+- [x] PRD/API docs sections reference the new `/tasks` capabilities and link back to the generated OpenAPI file.
 
 ## Notes
 - Coordinate with the frontend team so component props align with the documented shapes.
 - Remember to regenerate `docs/openapi.json` and commit it if the repo expects the artifact.
+
+## Implementation Notes
+- `apps/api/src/openapi.ts` defines the task schemas and protected task operations.
+- `docs/openapi.json` is committed as the generated artifact referenced by the PRD.

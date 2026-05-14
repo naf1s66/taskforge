@@ -11,7 +11,7 @@ Use these scripts/commands to continuously validate the auth stack. Run them loc
 | API tests | `pnpm -C apps/api test` | Executes Jest + Supertest suite (`apps/api/tests/auth.e2e.test.ts`). Uses in-memory user store by default. |
 | Web tests | `pnpm -C apps/web test` | Runs Vitest + Testing Library coverage for the auth forms (login happy/error flows). |
 | Docker smoke | `make auth-smoke` | Reuses `apps/web/scripts/docker-auth-smoke.mjs` to validate register/login/bridge inside containers. |
-| CI dry run | `pnpm exec turbo run build --filter=...` or `make ci` | Optional local rehearsal of the GitHub Actions steps. |
+| CI dry run | `make ci` | Optional local rehearsal of the GitHub Actions steps. |
 
 ## Recommended workflow
 1. `pnpm install`
@@ -23,7 +23,7 @@ Use these scripts/commands to continuously validate the auth stack. Run them loc
 7. `make auth-smoke` (only if Docker desktop is running)
 
 ## CI parity
-- `.github/workflows/ci.yml` provisions Postgres, installs deps, runs Prisma generate + migrate, executes lint/typecheck, then runs `pnpm -C apps/api test` and `pnpm test --if-present` inside `apps/web`.
+- `.github/workflows/ci.yml` provisions Postgres, installs deps, runs Prisma generate + migrate, executes lint/typecheck, then runs `pnpm -C apps/api test` and `pnpm -C apps/web test`.
 - Add new scripts to `package.json` (or `Makefile`) and update the workflow if the source of truth changes.
 - Secrets: configure `CI_JWT_SECRET`, `CI_JWT_REFRESH_SECRET`, `CI_SESSION_BRIDGE_SECRET`, and `CI_NEXTAUTH_SECRET` in repository settings when running against anything besides the default dev values.
 

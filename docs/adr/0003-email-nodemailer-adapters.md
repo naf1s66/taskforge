@@ -1,12 +1,12 @@
-# ADR 0003 — Email (Nodemailer adapters)
+# ADR 0003 - Email (Nodemailer adapters)
 
-**Status:** Accepted
+**Status:** Accepted, implementation deferred
 
 ## Context
-We need basic emails (welcome, daily digest) on free setup for dev/prod.
+We need basic emails (welcome, daily digest) on free setup for dev/prod. The adapter is planned future scope; it has not shipped in milestones 1-4.
 
 ## Decision
-Use **Nodemailer**. Dev uses **MailHog** (docker). Production uses any free SMTP provider; credentials via env.
+Use **Nodemailer** when email work starts. Dev uses **MailHog** (docker). Production uses any free SMTP provider; credentials via env.
 
 ## Consequences
 - Zero cost dev setup; easy local testing.

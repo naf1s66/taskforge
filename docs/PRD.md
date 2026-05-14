@@ -1,14 +1,14 @@
-# PRD — TaskForge (Monorepo)
+# PRD - TaskForge (Monorepo)
 
 ## Overview
-- **Goal:** Production-like personal task manager in ≤ 1 week, highlighting OAuth, REST, RBAC‑ready design, OpenAPI, tests, Docker, CI, DB migrations, and refined UI (dark/classy with animations).
+- **Goal:** Production-like personal task manager in <= 1 week, highlighting OAuth, REST, RBAC-ready design, OpenAPI, tests, Docker, CI, DB migrations, and refined UI (dark/classy with animations).
 - **Monorepo:** `apps/web`, `apps/api`, `packages/shared`, `infra`, `docs`.
 
 ## Users
 - Primary: single user (personal). Future: org workspaces.
 
 ## Success
-- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, basic email digest, Swagger at `/api/taskforge/docs`, 10–20 tests, `.http` suite, Docker + CI, README + ADRs.
+- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, Swagger at `/api/taskforge/docs`, API and frontend automated tests, `.http` suite, Docker + CI, README + ADRs. Email digest remains planned future scope.
 
 ## Scope
 - Auth: NextAuth (GitHub/Google) backed by Prisma, credential login against the API, and a session bridge that exchanges
@@ -16,10 +16,10 @@
 - Tasks: title, description (MD), status, priority, **tags**, **dueDate**.
 - Kanban: DnD with optimistic UI.
 - Filters/search: tag/status/due range/text.
-- Email: daily digest + welcome email (toggle).
+- Email: planned daily digest + welcome email adapter; not part of the shipped milestones yet.
 - UI: Next.js, Tailwind, shadcn/ui, Framer Motion, desktop-first dark theme.
 - Docs: Swagger/OpenAPI + ADRs. `.http` pack.
-- Tests: Jest/Supertest + basic FE validation.
+- Tests: Jest/Supertest for API coverage and Vitest/React Testing Library for frontend coverage.
 
 ## Non-Goals (Phase 1)
 - Multi-tenant orgs, role assignment, real-time, advanced analytics.
@@ -30,7 +30,7 @@
 - BE: Express (TS), Zod validation, Prisma (Postgres), Swagger. Auth router issues JWT access/refresh pairs, maintains
   `tf_session` HttpOnly cookies, and exposes a `session-bridge` endpoint for trusted frontends.
 - DB: Neon/Supabase Postgres; Prisma migrations + seed.
-- Email: Nodemailer; dev via MailHog.
+- Email: planned Nodemailer adapter; MailHog is available in local compose for future SMTP testing.
 - Infra: Dockerfiles + docker-compose; CI with GitHub Actions.
 
 ## Data Model (Prisma Sketch)
@@ -109,11 +109,11 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - Auth: NextAuth + backend JWT verification with dedicated session bridge and shared Prisma adapter.
 - Backend: Express TS + Zod + Swagger.
 - DB: Postgres (Neon/Supabase) + Prisma.
-- Email: Nodemailer adapter; MailHog dev; free SMTP prod.
+- Email: ADR 0003 records the planned Nodemailer adapter and MailHog dev path; implementation is deferred.
 - Monorepo rationale: shared types, unified tooling, single CI.
 
 
-## Milestone 4 — Kanban + Tags (Shipped Behavior)
+## Milestone 4 - Kanban + Tags (Shipped Behavior)
 
 ### Goals
 - Deliver a board-first workflow where status changes happen in one drag interaction and persist through `PATCH /api/taskforge/v1/tasks/board/move`.
@@ -170,7 +170,7 @@ sequenceDiagram
 - **Day 2:** Frontend OAuth (GitHub/Google) with NextAuth, guarded routes, session UI, and the `/auth/session-bridge` flow to mint API cookies.
 - **Day 3:** `/tasks` CRUD + Zod + tests; FE list + dialogs; OpenAPI draft.
 - **Day 4:** Kanban DnD, `/tags`, optimistic UI, `.http` pack.
-- **Day 5:** Search, due filters, priority; email digest (node-cron + Nodemailer).
+- **Day 5:** Search, due filters, priority. Email digest was deferred to future scope.
 - **Day 6:** Helmet/CORS/rate-limit; finalize Swagger; ADRs + README; CI docker build.
 - **Day 7:** Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); smoke test; v1 release.
 
@@ -204,15 +204,15 @@ sequenceDiagram
 
 ## Auth Decisions & Deviations
 - **Session bridge implemented earlier than planned:** The original milestone assumed the JWT bridge would land after initial OAuth wiring. In practice, the bridge was required to make protected routes render reliably in Docker and to share auth between OAuth and credential logins, so `/auth/session-bridge` shipped alongside the OAuth integration.
-- **Database-backed NextAuth sessions:** Instead of the default JWT session mode we keep the Prisma adapter’s session table so OAuth and credentials reuse the same user IDs that the API expects, avoiding mismatched subject claims.
+- **Database-backed NextAuth sessions:** Instead of the default JWT session mode we keep the Prisma adapter's session table so OAuth and credentials reuse the same user IDs that the API expects, avoiding mismatched subject claims.
 - **Shared sign-out path:** A dedicated Next.js `/api/auth/logout` route coordinates clearing both the NextAuth session and the API cookie to prevent stale `tf_session` values after OAuth sign-out.
 
 ## Tasks Experience (Dashboard + Dialogs)
 - **End-to-end flow:** Authenticated users land on the task dashboard, which loads task data via `/api/taskforge/v1/tasks` using the shared `tf_session` cookie or Bearer token from the session bridge. The UI renders status columns, badges for priority/tags, and empty-state callouts when filters return zero results. The decisions behind the session bridge and data storage live in [ADR 0001](docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md) and [ADR 0002](docs/adr/0002-database-postgres-+-prisma.md).
 - **Filters + tags:** Filters (status, priority, tag, search, due date range) map 1:1 to API query parameters. Tag entry is normalized to the shared tag list so list, create, and update requests stay aligned across the API and UI. The dashboard exposes quick filters for common combinations (for example, In Progress + High priority) so users can drill into the work queue quickly.
-- **Create/edit dialogs:** Create and edit dialogs surface the same fields (title, description, status, priority, due date, tags), run Zod validation, and submit through React Query mutations. Successful actions optimistically update the task list and kanban preview; validation errors show inline with a destructive toast for visibility. If a task is deleted while editing, the dialog closes with a conflict notice.
-- **Screenshots/GIFs:** Dashboard, filter, and dialog assets will be linked once design approves them. Coordinate with design for final, approved assets before publishing externally.
-- **Known limitations:** UI pagination controls are not exposed yet (the list defaults to the first page), and tag management remains embedded in the task dialogs until the dedicated tags view ships.
+- **Create/edit dialogs:** Create and edit dialogs surface the same fields (title, description, status, priority, due date, tags), run Zod validation, and submit through React Query mutations. Successful actions optimistically update the task list and kanban preview; validation errors show inline with a destructive toast for visibility. Edits can clear optional description and due date fields, and if a task is deleted while editing, the dialog closes with a conflict notice.
+- **Screenshots/GIFs:** Approved dashboard, filter, and dialog assets are not committed yet. Attach screenshots to PRs when useful and add final approved assets before publishing externally.
+- **Known limitations:** UI pagination controls are not exposed yet (the list defaults to the first page), and dedicated tag administration is not included; tag creation, selection, and filtering remain embedded in task dialogs and board/list filters.
 
 ## Task dialog UX
 - **Creation:** The dashboard and hooks demo use buttons with `data-task-dialog="create"` to launch the modal form. It runs the shared Zod schema with `react-hook-form`, sanitizes tags/due dates, and optimistically inserts the task into the page-one cache so the kanban preview updates instantly.

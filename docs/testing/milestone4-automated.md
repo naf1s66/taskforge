@@ -1,4 +1,4 @@
-# Milestone 4 Automated Checks — Kanban and Tags
+# Milestone 4 Automated Checks - Kanban and Tags
 
 ## API / contract checks
 - `apps/api/tests/kanban.http` covers board fetch, move mutation, and tag endpoints.
@@ -13,9 +13,10 @@
 
 ## Recommended local commands
 ```bash
-pnpm lint
-pnpm -C apps/api test
-pnpm -C apps/web test
+make lint
+make typecheck
+make test
+make build
 pnpm -C apps/api run lint:http
 ```
 

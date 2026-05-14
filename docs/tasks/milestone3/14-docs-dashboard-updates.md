@@ -5,14 +5,14 @@
 - Include screenshots/GIFs of the dashboard, filters, and dialogs for future onboarding.
 
 **Status:** Completed.  
-**Concurrency:** Runs after the UI tasks (10–13) so screenshots and descriptions reflect reality; can proceed while final tests wrap up.
+**Concurrency:** Runs after the UI tasks (10-13) so screenshots and descriptions reflect reality; can proceed while final tests wrap up.
 
 ## Acceptance Criteria
-- [x] PRD “Tasks” section describes the end-to-end experience (filters, dialogs, tags) and links to the relevant ADRs.
+- [x] PRD "Tasks" section describes the end-to-end experience (filters, dialogs, tags) and links to the relevant ADRs.
 - [x] README gains setup instructions for the task API (migrations, seeding, `.http` samples) plus UI usage notes.
 - [x] `.http` pack includes fresh requests for list/create/update/delete with sample payloads.
 - [x] Milestone docs/sequence file updated to reflect completion status of the new tasks.
-- [x] Loom clip or screenshots will be linked once design approves assets.
+- [x] Docs identify that approved screenshot assets are not committed yet and should be attached to PRs or added before external publishing.
 
 ## Notes
 - Coordinate with design for approved assets before embedding them in docs; add final links once approved.

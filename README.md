@@ -35,10 +35,11 @@ taskforge/
    ```bash
    pnpm -C apps/api prisma migrate deploy
    ```
-4. Run static checks
+4. Run static checks and tests
    ```bash
-   pnpm lint
-   pnpm typecheck
+   make lint
+   make typecheck
+   make test
    ```
 5. Start Docker services (Postgres + MailHog + app containers)
    ```bash
@@ -131,7 +132,7 @@ Running the seed multiple times is safe; it upserts the user and respects `SEED_
 2. Docker bridge test: run `make up` then `make auth-smoke`. The script registers, logs in, and exercises the `/session-bridge` endpoint using the shared `SESSION_BRIDGE_SECRET` to ensure the Next.js container can exchange sessions with the API.
 3. NextAuth UI: start the web app (`pnpm -C apps/web dev`) and visit `http://localhost:3000/login`. With provider credentials in place, GitHub/Google buttons appear; otherwise a helper callout explains how to enable them. After signing in, the app redirects to the dashboard and confirms session state in the header.
 
-Screenshots of the login flow and protected dashboard live in the design references inside the PRD and ADR linked above.
+Approved screenshots are not committed yet. Attach UI screenshots to PRs when they help review, and use the milestone manual checklists as the source of truth for hands-on verification.
 
 
 ## API HTTP packs for QA demos
@@ -176,7 +177,7 @@ pnpm -C apps/api run lint:http
 
 ## Continuous Integration
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) provisions a PostgreSQL service, runs `prisma generate`, and applies migrations via `prisma migrate deploy` before executing the Jest suite in `apps/api`.
-- Frontend tests run through `pnpm test` in `apps/web`; the CI job executes that script when present.
+- Frontend tests run through `pnpm test` in `apps/web`; `make test` runs both the API and web suites locally.
 - Configure repository secrets (`CI_JWT_SECRET`, `CI_JWT_REFRESH_SECRET`, `CI_SESSION_BRIDGE_SECRET`, `CI_NEXTAUTH_SECRET`) to override the CI-safe defaults used in the workflow when running against staging infrastructure.
 
 ### Accessing session state in code
@@ -185,6 +186,10 @@ pnpm -C apps/api run lint:http
 
 ## Scripts
 - `make dev` - run api + web (assumes local dev, not cross-platform background management).
+- `make lint` / `make typecheck` - run API and web static checks.
+- `make test` - run API Jest/Supertest tests and web Vitest/Testing Library tests.
+- `make build` - build API and web packages.
+- `make ci` - local CI rehearsal: install, lint, typecheck, test, and build.
 - `make migrate` / `make seed` - database operations.
 - `make swagger` - export OpenAPI.
 
@@ -192,6 +197,6 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email (dev): MailHog; (prod) any free SMTP (for example Brevo, Resend, Postmark trial)
+- Email: planned future scope. MailHog remains in the local compose stack for SMTP work when the Nodemailer adapter is implemented.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
