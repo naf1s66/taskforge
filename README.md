@@ -79,6 +79,8 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
 | `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen and redirect URIs to match `NEXTAUTH_URL`. |
+| `TF_DEV_BYPASS_AUTH` | both | `false` | Development/test-only escape hatch for local auth issues. Set to `true` in both apps only when using the documented dev bypass flow. |
+| `TF_DEV_BYPASS_CLIENT_SECRET` | both | _(blank)_ | Shared HMAC secret for the dev bypass client token. Configure only with `TF_DEV_BYPASS_AUTH=true`; never set it in production. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
