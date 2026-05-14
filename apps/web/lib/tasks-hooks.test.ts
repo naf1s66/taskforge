@@ -520,6 +520,22 @@ describe('tasks-hooks board cache helpers', () => {
     expect(updated.total).toBe(2);
   });
 
+  it('matches list tag filters case-insensitively during optimistic reconciliation', () => {
+    const task: TaskListItem = {
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Draft contract',
+      description: 'Moves into a mixed-case tag cache',
+      status: 'TODO',
+      priority: 'HIGH',
+      dueDate: undefined,
+      tags: ['api'],
+      createdAt: '2024-05-01T00:00:00.000Z',
+      updatedAt: '2024-06-16T00:00:00.000Z',
+    };
+
+    expect(__testing.taskMatchesFilters(task, { tag: ['API'] })).toBe(true);
+  });
+
   it('preserves caller mutation context when merging board-move internal context', () => {
     const merged = __testing.mergeMutationContext(
       {

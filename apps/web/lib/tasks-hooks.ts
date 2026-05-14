@@ -897,8 +897,13 @@ function taskMatchesFilters(task: TaskListItem, filters?: NormalizedTaskListFilt
     return false;
   }
 
-  if (filters.tag && filters.tag.some((tag) => !task.tags.includes(tag))) {
-    return false;
+  if (filters.tag?.length) {
+    const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+    if (filterTags.length > 0 && filterTags.some((tag) => !taskTags.has(tag))) {
+      return false;
+    }
   }
 
   if (filters.q) {
