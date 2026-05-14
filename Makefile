@@ -30,6 +30,7 @@ dev:
 .PHONY: test
 test:
 	$(PKG_MGR) -C $(API_DIR) test
+	$(PKG_MGR) -C $(WEB_DIR) test
 
 .PHONY: migrate
 migrate:
