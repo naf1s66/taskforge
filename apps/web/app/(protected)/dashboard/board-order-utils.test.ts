@@ -55,4 +55,26 @@ describe('Kanban Drag and Drop helpers', () => {
     expect(getColumnEndTargetIndex(moved, 'a', 'IN_PROGRESS')).toBe(1);
     expect(moveTaskToColumnEnd(order, 'a', 'TODO')).toBe(order);
   });
+
+  test('should keep same-lane order stable in sorted views', () => {
+    const order = {
+      TODO: ['a', 'b', 'c'],
+      IN_PROGRESS: [],
+      DONE: [],
+    };
+
+    expect(moveTaskToColumnEnd(order, 'b', 'TODO')).toBe(order);
+    expect(getColumnEndTargetIndex(order, 'b', 'TODO')).toBe(2);
+  });
+
+  test('should calculate deterministic target index for cross-lane sorted moves', () => {
+    const order = {
+      TODO: ['a', 'b'],
+      IN_PROGRESS: ['c', 'd'],
+      DONE: [],
+    };
+
+    expect(getColumnEndTargetIndex(order, 'a', 'IN_PROGRESS')).toBe(2);
+    expect(getColumnEndTargetIndex(order, 'd', 'TODO')).toBe(2);
+  });
 });

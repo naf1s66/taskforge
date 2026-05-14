@@ -840,7 +840,11 @@ function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoar
   return Object.keys(normalized).length ? normalized : undefined;
 }
 
-function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVariables): TaskBoardResponse {
+function applyOptimisticMoveToBoard(
+  board: TaskBoardResponse,
+  input: MoveTaskVariables,
+  filters?: NormalizedTaskBoardFilters,
+): TaskBoardResponse {
   const columns = board.columns.map((column) => ({
     ...column,
     tasks: column.tasks.map((task) => ({ ...task })),
@@ -860,13 +864,15 @@ function applyOptimisticMoveToBoard(board: TaskBoardResponse, input: MoveTaskVar
     return board;
   }
 
-  const targetColumn = columns.find((column) => column.status === input.targetStatus);
-  if (!targetColumn) {
-    return board;
-  }
+  if (boardTaskMatchesFilters(movedTask, filters)) {
+    const targetColumn = columns.find((column) => column.status === input.targetStatus);
+    if (!targetColumn) {
+      return board;
+    }
 
-  const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
-  targetColumn.tasks.splice(insertIndex, 0, movedTask);
+    const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
+    targetColumn.tasks.splice(insertIndex, 0, movedTask);
+  }
   const now = new Date();
   const nextColumns = rebuildBoardColumns(columns, now);
 
@@ -1630,8 +1636,8 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
         return reconcileTaskInList(payload, movedTask, filters, taskId);
       });
 
-      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board) =>
-        applyOptimisticMoveToBoard(board, variables),
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board, filters) =>
+        applyOptimisticMoveToBoard(board, variables, filters),
       );
 
       const internalContext = {

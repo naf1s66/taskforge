@@ -379,7 +379,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
       const priority = (input.priority ?? 'MEDIUM') as PrismaTaskPriority;
 
       const task = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        return tx.task.create({
+        const created = await tx.task.create({
           data: {
             title: input.title,
             description: input.description ?? null,
@@ -388,30 +388,21 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
             boardOrder: await allocateBoardOrder(tx, userId, status),
             dueDate: parseDueDate(input.dueDate),
             user: { connect: { id: userId } },
-            TaskTag: normalizedTags.length
-                ? {
-                  create: normalizedTags.map(label => ({
-                    userId,
-                    tag: {
-                      connectOrCreate: {
-                        where: {
-                          userId_label: {
-                            userId,
-                            label,
-                          },
-                        },
-                        create: {
-                          userId,
-                          label,
-                        },
-                      },
-                    },
-                  })),
-                }
-              : undefined,
           },
           include: taskWithTagsInclude,
         });
+
+        if (!normalizedTags.length) {
+          return created;
+        }
+
+        await replaceTaskTags(tx, userId, created.id, normalizedTags);
+        const withTags = await tx.task.findUnique({
+          where: { id: created.id },
+          include: taskWithTagsInclude,
+        });
+
+        return withTags ?? created;
       });
 
       return toTaskRecordDTO(task);

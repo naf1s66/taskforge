@@ -49,8 +49,10 @@ jobs:
       - run: make lint
       - run: make typecheck
       - name: Run API tests
+        timeout-minutes: 5
         run: pnpm -C apps/api test
       - name: Run frontend tests
         working-directory: apps/web
+        timeout-minutes: 5
         run: pnpm test --if-present
       - run: make build

@@ -51,9 +51,7 @@ beforeAll(async () => {
   };
 
   if (shouldStartContainer()) {
-    container = await new PostgreSqlContainer('postgres:16-alpine')
-      .withTmpFs('/var/lib/postgresql/data')
-      .start();
+    container = await new PostgreSqlContainer('postgres:16-alpine').start();
 
     process.env.DATABASE_URL = container.getConnectionUri();
   }
