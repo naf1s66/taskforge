@@ -653,6 +653,31 @@ function taskBoardItemFromTask(
   };
 }
 
+function taskListPatchFromUpdateInput(input: UpdateTaskInput): Partial<TaskListItem> {
+  const patch: Partial<TaskListItem> = {};
+
+  if (Object.prototype.hasOwnProperty.call(input, 'title')) {
+    patch.title = input.title;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'description')) {
+    patch.description = input.description ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'status')) {
+    patch.status = input.status;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'priority')) {
+    patch.priority = input.priority;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'dueDate')) {
+    patch.dueDate = input.dueDate ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'tags')) {
+    patch.tags = input.tags;
+  }
+
+  return patch;
+}
+
 function applyTaskUpdateToBoard(
   board: TaskBoardResponse,
   taskId: string,
@@ -1516,6 +1541,7 @@ export function useUpdateTask(
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
       const optimisticUpdatedAt = new Date().toISOString();
       const taskSnapshot = selectTaskFromCache(queryClient, userScope, id);
+      const optimisticPatch = taskListPatchFromUpdateInput(input);
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) => {
         const existing = payload.items.find((item) => item.id === id);
@@ -1524,7 +1550,7 @@ export function useUpdateTask(
         }
 
         return updateTaskInList(payload, id, {
-          ...input,
+          ...optimisticPatch,
           updatedAt: optimisticUpdatedAt,
           _optimistic: true,
         });
@@ -1535,8 +1561,10 @@ export function useUpdateTask(
           board,
           id,
           {
-            ...input,
-            description: input.description ?? taskSnapshot?.description,
+            ...optimisticPatch,
+            description: Object.prototype.hasOwnProperty.call(input, 'description')
+              ? optimisticPatch.description
+              : taskSnapshot?.description,
             updatedAt: optimisticUpdatedAt,
           },
           new Date(optimisticUpdatedAt),
