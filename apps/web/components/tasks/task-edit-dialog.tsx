@@ -184,10 +184,10 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       id: taskId,
       input: {
         title: values.title.trim(),
-        description: values.description?.trim() ? values.description.trim() : undefined,
+        description: values.description?.trim() ? values.description.trim() : null,
         status: values.status,
         priority: values.priority,
-        dueDate: values.dueDate,
+        dueDate: values.dueDate ?? null,
         tags: sanitizeTags(values.tags),
       },
     });

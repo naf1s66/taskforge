@@ -175,10 +175,10 @@ const TaskCreateSchema = z
 const TaskUpdateSchema = z
   .object({
     title: NonEmptyTrimmedString.optional(),
-    description: NullableString,
+    description: z.union([NonEmptyTrimmedString, z.null()]).optional(),
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
-    dueDate: NullableDateString,
+    dueDate: z.union([z.string().datetime(), z.null()]).optional(),
     tags: z.array(NonEmptyTrimmedString).optional(),
   })
   .superRefine((value, ctx) => {
@@ -267,7 +267,10 @@ export type TagListResponse = z.infer<typeof TagListResponseSchema>;
 export type TagRecord = z.infer<typeof TagRecordSchema>;
 
 export type CreateTaskInput = Omit<TaskDTO, 'id'>;
-export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id'>>;
+export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id' | 'description' | 'dueDate'>> & {
+  description?: string | null;
+  dueDate?: string | null;
+};
 export type TaskListQuery = {
   page?: number;
   pageSize?: number;

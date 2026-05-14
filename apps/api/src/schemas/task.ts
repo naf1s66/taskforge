@@ -11,7 +11,14 @@ export const TaskCreateSchema = z.object({
   tags: z.array(TagLabelSchema).optional(),
 });
 
-export const TaskUpdateSchema = TaskCreateSchema.partial();
+export const TaskUpdateSchema = z.object({
+  title: z.string().trim().min(1).optional(),
+  description: z.union([z.string().trim().min(1), z.null()]).optional(),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  dueDate: z.union([z.string().datetime(), z.null()]).optional(),
+  tags: z.array(TagLabelSchema).optional(),
+});
 
 export const TaskBoardMoveSchema = z.object({
   taskId: z

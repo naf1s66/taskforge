@@ -179,6 +179,29 @@ describe('tasks-client', () => {
       expect(headers.get('authorization')).toBe('Bearer token-123');
     });
 
+    it('serializes null optional fields so edits can clear them', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...sampleTask,
+          description: undefined,
+          dueDate: undefined,
+          updatedAt: '2024-06-02T12:00:00.000Z',
+        }),
+      );
+
+      await updateTask(
+        sampleTask.id,
+        { description: null, dueDate: null },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        description: null,
+        dueDate: null,
+      });
+    });
+
     it('throws a serialization error when the server response is malformed', async () => {
       const fetchMock = vi.fn().mockResolvedValue(
         jsonResponse({

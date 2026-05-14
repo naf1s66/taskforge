@@ -33,7 +33,10 @@ export interface TaskCreateInput {
   tags?: string[];
 }
 
-export type TaskUpdateInput = Partial<TaskCreateInput>;
+export type TaskUpdateInput = Partial<Omit<TaskCreateInput, 'description' | 'dueDate'>> & {
+  description?: string | null;
+  dueDate?: string | null;
+};
 
 export interface TaskListOptions {
   page?: number;
@@ -433,8 +436,7 @@ export function createTaskRepository(prisma: PrismaClient): TaskRepository {
           updateData.priority = input.priority as PrismaTaskPriority;
         }
         if (input.dueDate !== undefined) {
-          const dueDate = parseDueDate(input.dueDate);
-          updateData.dueDate = dueDate ?? null;
+          updateData.dueDate = input.dueDate === null ? null : parseDueDate(input.dueDate) ?? null;
         }
 
         if (Object.keys(updateData).length > 0) {

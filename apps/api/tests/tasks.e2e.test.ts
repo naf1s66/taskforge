@@ -844,6 +844,41 @@ describe("Tasks API", () => {
       expect(refreshed.items[0].tags).not.toContain("initial");
     });
 
+    it("clears optional description and due date fields when null is sent", async () => {
+      const auth = await register();
+      const created = await createTask({
+        userId: auth.userId,
+        title: "Clear optional fields",
+        description: "Remove this copy",
+        dueDate: "2024-04-01T12:00:00.000Z",
+      });
+
+      const response = await withAuth(
+        agent.patch(`/api/taskforge/v1/tasks/${created.task.id}`).send({
+          description: null,
+          dueDate: null,
+        }),
+        auth,
+      ).expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          id: created.task.id,
+          title: "Clear optional fields",
+        }),
+      );
+      expect(response.body).not.toHaveProperty("description");
+      expect(response.body).not.toHaveProperty("dueDate");
+
+      const refreshed = await taskRepository.getTask(auth.userId, created.task.id);
+      expect(refreshed).toMatchObject({
+        id: created.task.id,
+        title: "Clear optional fields",
+      });
+      expect(refreshed?.description).toBeUndefined();
+      expect(refreshed?.dueDate).toBeUndefined();
+    });
+
     it("returns 400 when updating with an invalid task id", async () => {
       const auth = await register();
 
