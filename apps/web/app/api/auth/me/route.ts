@@ -112,7 +112,7 @@ export async function GET() {
           token: devBypassToken,
         },
       } satisfies ApiMeResponse);
-      if (rejectedSessionCookie) {
+      if (rejectedSessionCookie || sessionUserMismatch) {
         response.cookies.set({
           ...getSessionCookieOptions(),
           value: '',
