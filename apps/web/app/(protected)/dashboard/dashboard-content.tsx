@@ -849,6 +849,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     },
     { enabled: hasHydratedFilters },
   );
+  const workspaceBoardQuery = useTaskBoardQuery(undefined, {
+    enabled: hasHydratedFilters,
+  });
   const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
@@ -1021,26 +1024,30 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     [visibleColumns],
   );
 
+  const workspaceSummary = workspaceBoardQuery.data?.summary;
+  const unfilteredFallbackSummary = hasActiveFilters
+    ? undefined
+    : boardQuery.data?.summary;
   const totalTasks =
-    boardQuery.data?.summary.totalTasks ??
-    tasksQuery.data?.total ??
-    tasksQuery.tasks.length;
-  const completedTasks = useMemo(
-    () =>
-      boardQuery.data?.summary.totalsByStatus.DONE ?? tasksByStatus.DONE.length,
-    [boardQuery.data, tasksByStatus.DONE.length],
-  );
-  const activeTasks = useMemo(
-    () =>
-      boardQuery.data?.summary.totalsByStatus.IN_PROGRESS ??
-      tasksByStatus.IN_PROGRESS.length,
-    [boardQuery.data, tasksByStatus.IN_PROGRESS.length],
-  );
-  const todoTasks = useMemo(
-    () =>
-      boardQuery.data?.summary.totalsByStatus.TODO ?? tasksByStatus.TODO.length,
-    [boardQuery.data, tasksByStatus.TODO.length],
-  );
+    workspaceSummary?.totalTasks ??
+    unfilteredFallbackSummary?.totalTasks ??
+    (!hasActiveFilters
+      ? (tasksQuery.data?.total ?? tasksQuery.tasks.length)
+      : 0);
+  const completedTasks =
+    workspaceSummary?.totalsByStatus.DONE ??
+    unfilteredFallbackSummary?.totalsByStatus.DONE ??
+    (!hasActiveFilters ? tasksByStatus.DONE.length : 0);
+  const activeTasks =
+    workspaceSummary?.totalsByStatus.IN_PROGRESS ??
+    unfilteredFallbackSummary?.totalsByStatus.IN_PROGRESS ??
+    (!hasActiveFilters ? tasksByStatus.IN_PROGRESS.length : 0);
+  const todoTasks =
+    workspaceSummary?.totalsByStatus.TODO ??
+    unfilteredFallbackSummary?.totalsByStatus.TODO ??
+    (!hasActiveFilters ? tasksByStatus.TODO.length : 0);
+  const isWorkspaceStatsLoading =
+    workspaceBoardQuery.isLoading && !workspaceSummary;
 
   const applyBoardFilterState = useCallback((state: BoardFilterState) => {
     setStatusFilter(state.statusFilter);
@@ -1147,7 +1154,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const firstName = user.name?.split(" ")[0] ?? "there";
 
   const isEmpty =
-    !hasActiveFilters && !tasksQuery.isLoading && !tasksQuery.isError && totalTasks === 0;
+    !hasActiveFilters &&
+    !tasksQuery.isLoading &&
+    !isWorkspaceStatsLoading &&
+    !tasksQuery.isError &&
+    totalTasks === 0;
   const isFilteredEmpty =
     hasActiveFilters &&
     !tasksQuery.isLoading &&
@@ -1533,7 +1544,11 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   };
 
   const refetchBoardAndTasks = () =>
-    Promise.all([tasksQuery.refetch(), boardQuery.refetch()]);
+    Promise.all([
+      tasksQuery.refetch(),
+      boardQuery.refetch(),
+      workspaceBoardQuery.refetch(),
+    ]);
 
   return (
     <div className="space-y-10">
@@ -1551,7 +1566,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             Welcome back, {firstName}!
           </h2>
           <p className="text-lg text-muted-foreground">
-            {tasksQuery.isLoading
+            {tasksQuery.isLoading || isWorkspaceStatsLoading
               ? "We are syncing your workspace tasks—hang tight for a moment."
               : totalTasks > 0
                 ? `Here is a quick snapshot of your work: ${activeTasks} in progress, ${todoTasks} queued up, and ${completedTasks} already done.`
@@ -1566,16 +1581,24 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
               variant="ghost"
               className="gap-2"
               onClick={() => void refetchBoardAndTasks()}
-              disabled={tasksQuery.isFetching || boardQuery.isFetching}
+              disabled={
+                tasksQuery.isFetching ||
+                boardQuery.isFetching ||
+                workspaceBoardQuery.isFetching
+              }
             >
               <RefreshCcw
                 className={cn(
                   "h-4 w-4",
-                  (tasksQuery.isFetching || boardQuery.isFetching) &&
+                  (tasksQuery.isFetching ||
+                    boardQuery.isFetching ||
+                    workspaceBoardQuery.isFetching) &&
                     "animate-spin",
                 )}
               />
-              {tasksQuery.isFetching || boardQuery.isFetching
+              {tasksQuery.isFetching ||
+              boardQuery.isFetching ||
+              workspaceBoardQuery.isFetching
                 ? "Refreshing"
                 : "Refresh"}
             </Button>
@@ -1614,7 +1637,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   <span className="flex items-center gap-2 text-foreground">
                     <Timer className="h-4 w-4 text-primary" /> Active tasks
                   </span>
-                  {tasksQuery.isLoading ? (
+                  {tasksQuery.isLoading || isWorkspaceStatsLoading ? (
                     <Skeleton className="h-4 w-10" />
                   ) : (
                     <span className="font-medium text-foreground">
@@ -1626,7 +1649,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   <span className="flex items-center gap-2 text-foreground">
                     <ListTodo className="h-4 w-4 text-primary" /> Up next
                   </span>
-                  {tasksQuery.isLoading ? (
+                  {tasksQuery.isLoading || isWorkspaceStatsLoading ? (
                     <Skeleton className="h-4 w-10" />
                   ) : (
                     <span className="font-medium text-foreground">
@@ -1638,7 +1661,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   <span className="flex items-center gap-2 text-foreground">
                     <CheckCircle2 className="h-4 w-4 text-primary" /> Completed
                   </span>
-                  {tasksQuery.isLoading ? (
+                  {tasksQuery.isLoading || isWorkspaceStatsLoading ? (
                     <Skeleton className="h-4 w-10" />
                   ) : (
                     <span className="font-medium text-foreground">

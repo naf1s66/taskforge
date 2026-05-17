@@ -11,11 +11,12 @@ import { DashboardContent } from './dashboard-content';
 const routerReplace = vi.fn();
 const toast = vi.fn();
 const moveTaskMutateAsync = vi.fn();
+const searchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ replace: routerReplace }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('framer-motion', () => ({
@@ -274,34 +275,79 @@ const board: TaskBoardResponse = {
   generatedAt: '2026-05-13T00:00:00.000Z',
 };
 
+const filteredInProgressBoard: TaskBoardResponse = {
+  ...board,
+  columns: board.columns.map((column) =>
+    column.status === 'IN_PROGRESS'
+      ? column
+      : {
+          ...column,
+          tasks: [],
+          total: 0,
+          overdueCount: 0,
+          tags: [],
+        },
+  ),
+  summary: {
+    totalsByStatus: {
+      TODO: 0,
+      IN_PROGRESS: 1,
+      DONE: 0,
+    },
+    overdueByStatus: {
+      TODO: 0,
+      IN_PROGRESS: 0,
+      DONE: 0,
+    },
+    totalTasks: 1,
+    totalOverdue: 0,
+  },
+};
+
 vi.mock('@/lib/tasks-hooks', () => ({
-  useTasksQuery: () => ({
-    data: { items: tasks, page: 1, pageSize: 50, total: tasks.length },
-    tasks,
-    isLoading: false,
-    isFetching: false,
-    isError: false,
-    isSuccess: true,
-    status: 'success',
-    fetchStatus: 'idle',
-    refetch: vi.fn(),
-    queryKey: ['tasks', 'user-1', 'list', {}],
-    error: null,
-    rawError: null,
-  }),
-  useTaskBoardQuery: () => ({
-    data: board,
-    isLoading: false,
-    isFetching: false,
-    isError: false,
-    isSuccess: true,
-    status: 'success',
-    fetchStatus: 'idle',
-    refetch: vi.fn(),
-    queryKey: ['tasks', 'user-1', 'board', {}],
-    error: null,
-    rawError: null,
-  }),
+  useTasksQuery: (filters?: { status?: TaskListItem['status'] }) => {
+    const visibleTasks = filters?.status
+      ? tasks.filter((task) => task.status === filters.status)
+      : tasks;
+
+    return {
+      data: {
+        items: visibleTasks,
+        page: 1,
+        pageSize: 50,
+        total: visibleTasks.length,
+      },
+      tasks: visibleTasks,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      isSuccess: true,
+      status: 'success',
+      fetchStatus: 'idle',
+      refetch: vi.fn(),
+      queryKey: ['tasks', 'user-1', 'list', filters ?? {}],
+      error: null,
+      rawError: null,
+    };
+  },
+  useTaskBoardQuery: (filters?: { status?: TaskListItem['status'] }) => {
+    const data =
+      filters?.status === 'IN_PROGRESS' ? filteredInProgressBoard : board;
+
+    return {
+      data,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      isSuccess: true,
+      status: 'success',
+      fetchStatus: 'idle',
+      refetch: vi.fn(),
+      queryKey: ['tasks', 'user-1', 'board', filters ?? {}],
+      error: null,
+      rawError: null,
+    };
+  },
   useTagsQuery: () => ({
     data: { items: [] },
     tags: [],
@@ -378,6 +424,19 @@ describe('DashboardContent board drag behavior', () => {
       targetStatus: 'TODO',
       targetIndex: 2,
     });
+  });
+
+  it('keeps workspace totals sourced from the unfiltered board while filters are active', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await user.click(screen.getByRole('button', { name: 'In Progress' }));
+
+    await waitFor(() => expect(screen.queryByText('Todo A')).not.toBeInTheDocument());
+    expect(screen.getByText('Doing A')).toBeInTheDocument();
+    expect(screen.getByRole('contentinfo')).toHaveTextContent(
+      'Tracking 4 tasks across your workspace.',
+    );
   });
 
   it('does not submit same-lane moves while a derived sort is active', async () => {
