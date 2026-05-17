@@ -6,6 +6,7 @@ import {
   emptyColumnOrder,
   findTaskStatusInOrder,
   getColumnEndTargetIndex,
+  getFullLaneTargetIndex,
   getStatusFromColumnId,
   moveTaskToColumnEnd,
 } from './board-order-utils';
@@ -76,5 +77,23 @@ describe('Kanban Drag and Drop helpers', () => {
 
     expect(getColumnEndTargetIndex(order, 'a', 'IN_PROGRESS')).toBe(2);
     expect(getColumnEndTargetIndex(order, 'd', 'TODO')).toBe(2);
+  });
+
+  test('should translate filtered visible reorders to full-lane target indices', () => {
+    expect(
+      getFullLaneTargetIndex(
+        ['hidden-before', 'a', 'hidden-middle', 'c', 'hidden-after'],
+        ['c', 'a'],
+        'a',
+      ),
+    ).toBe(3);
+    expect(
+      getFullLaneTargetIndex(
+        ['hidden-before', 'a', 'hidden-middle', 'c', 'hidden-after'],
+        ['c', 'a'],
+        'c',
+      ),
+    ).toBe(1);
+    expect(getFullLaneTargetIndex(['hidden'], ['a'], 'a')).toBe(1);
   });
 });

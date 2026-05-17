@@ -78,3 +78,34 @@ export function getColumnEndTargetIndex(
 ): number {
   return order[targetStatus].filter((id) => id !== taskId).length;
 }
+
+export function getFullLaneTargetIndex(
+  fullLaneIds: string[],
+  visibleLaneIds: string[],
+  taskId: string,
+): number {
+  const visibleIndex = visibleLaneIds.indexOf(taskId);
+  if (visibleIndex === -1) {
+    return -1;
+  }
+
+  const fullWithoutTask = fullLaneIds.filter((id) => id !== taskId);
+  const previousVisibleId = visibleLaneIds
+    .slice(0, visibleIndex)
+    .reverse()
+    .find((id) => fullWithoutTask.includes(id));
+
+  if (previousVisibleId) {
+    return fullWithoutTask.indexOf(previousVisibleId) + 1;
+  }
+
+  const nextVisibleId = visibleLaneIds
+    .slice(visibleIndex + 1)
+    .find((id) => fullWithoutTask.includes(id));
+
+  if (nextVisibleId) {
+    return fullWithoutTask.indexOf(nextVisibleId);
+  }
+
+  return fullWithoutTask.length;
+}

@@ -91,6 +91,7 @@ import {
   findTaskStatusInOrder,
   getColumnId,
   getColumnEndTargetIndex,
+  getFullLaneTargetIndex,
   getStatusFromColumnId,
   moveTaskToColumnEnd,
   type ColumnOrderState,
@@ -812,6 +813,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   );
   const isManualSort = sortBy === "manual";
   const columnOrderRef = useRef(columnOrder);
+  const boardOrderRef = useRef<ColumnOrderState | null>(null);
+  const workspaceBoardOrderRef = useRef<ColumnOrderState | null>(null);
+  const canDragTasksRef = useRef(false);
   const dragSnapshotRef = useRef<ColumnOrderState | null>(null);
   const inFlightTaskIdsRef = useRef<Set<string>>(new Set());
   const dueRange = useMemo(
@@ -871,9 +875,27 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     }
     return next;
   }, [boardQuery.data]);
+  const workspaceBoardOrder = useMemo(() => {
+    if (!workspaceBoardQuery.data) {
+      return null;
+    }
+
+    const next = cloneColumnOrder(emptyColumnOrder);
+    for (const column of workspaceBoardQuery.data.columns) {
+      next[column.status] = column.tasks.map((task) => task.id);
+    }
+    return next;
+  }, [workspaceBoardQuery.data]);
 
   const isBoardReady = Boolean(boardOrder);
-  const canDragTasks = isBoardReady && !boardQuery.error;
+  const canDragTasks =
+    isBoardReady &&
+    !boardQuery.error &&
+    (!hasActiveFilters || Boolean(workspaceBoardOrder));
+
+  boardOrderRef.current = boardOrder;
+  workspaceBoardOrderRef.current = workspaceBoardOrder;
+  canDragTasksRef.current = canDragTasks;
 
   useEffect(() => {
     if (!boardOrder || activeId) {
@@ -895,7 +917,12 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         }
       }
 
-      return changed ? next : prev;
+      if (changed) {
+        columnOrderRef.current = next;
+        return next;
+      }
+
+      return prev;
     });
   }, [activeId, boardOrder]);
 
@@ -977,7 +1004,12 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
         }
       }
 
-      return changed ? next : prev;
+      if (changed) {
+        columnOrderRef.current = next;
+        return next;
+      }
+
+      return prev;
     });
   }, [boardOrder, tasksByStatus]);
 
@@ -1334,7 +1366,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (!canDragTasks) {
+    if (!canDragTasksRef.current) {
       return;
     }
 
@@ -1350,7 +1382,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over || !canDragTasks) {
+    if (!over || !canDragTasksRef.current) {
       if (!isManualSort) {
         setOverColumnStatus(null);
       }
@@ -1460,7 +1492,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     setActiveId(null);
     setOverColumnStatus(null);
 
-    if (!canDragTasks) {
+    if (!canDragTasksRef.current) {
       dragSnapshotRef.current = null;
       return;
     }
@@ -1497,9 +1529,19 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
       : -1;
 
     const nextOrder = columnOrderRef.current;
+    const fullBoardOrder =
+      workspaceBoardOrderRef.current ?? boardOrderRef.current ?? nextOrder;
     const targetIndex = isManualSort
-      ? nextOrder[destinationStatus].indexOf(activeTaskId)
-      : getColumnEndTargetIndex(nextOrder, activeTaskId, destinationStatus);
+      ? getFullLaneTargetIndex(
+          fullBoardOrder[destinationStatus],
+          nextOrder[destinationStatus],
+          activeTaskId,
+        )
+      : getColumnEndTargetIndex(
+          fullBoardOrder,
+          activeTaskId,
+          destinationStatus,
+        );
 
     const hasMoved =
       isManualSort
