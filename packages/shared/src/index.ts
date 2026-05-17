@@ -4,7 +4,7 @@ export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export const TAG_LABEL_MAX_LENGTH = 64;
 
 export function normalizeTagLabel(label: string): string {
-  return label.trim().toLocaleLowerCase();
+  return label.trim().toLowerCase();
 }
 
 export function isValidNormalizedTagLabel(label: string): boolean {
