@@ -34,6 +34,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
+      nodemailer:
+        specifier: ^6.9.14
+        version: 6.10.1
       swagger-ui-express:
         specifier: ^5.0.0
         version: 5.0.1(express@4.21.2)
@@ -68,6 +71,9 @@ importers:
       '@types/node':
         specifier: ^20.11.19
         version: 20.19.19
+      '@types/nodemailer':
+        specifier: ^6.4.15
+        version: 6.4.23
       '@types/supertest':
         specifier: ^2.0.16
         version: 2.0.16
@@ -3019,6 +3025,12 @@ packages:
     resolution: {integrity: sha512-pb1Uqj5WJP7wrcbLU7Ru4QtA0+3kAXrkutGiD26wUKzSMgNNaPARTUDQmElUXp64kh3cWdou3Q0C7qwwxqSFmg==}
     dependencies:
       undici-types: 6.21.0
+    dev: true
+
+  /@types/nodemailer@6.4.23:
+    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
+    dependencies:
+      '@types/node': 20.19.19
     dev: true
 
   /@types/prop-types@15.7.15:
@@ -7248,6 +7260,11 @@ packages:
 
   /node-releases@2.0.23:
     resolution: {integrity: sha512-cCmFDMSm26S6tQSDpBCg/NR8NENrVPhAJSf+XbxBG4rPFaaonlEoE9wHQmun+cls499TQGSb7ZyPBRlzgKfpeg==}
+
+  /nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
+    dev: false
 
   /normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}

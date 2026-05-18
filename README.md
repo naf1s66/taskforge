@@ -199,6 +199,6 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: planned future scope. MailHog remains in the local compose stack for SMTP work when the Nodemailer adapter is implemented.
+- Email: Nodemailer SMTP adapter is available. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`). See `docs/prod/resend-email-setup.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
