@@ -12,7 +12,7 @@ async function main() {
 
   const passwordHash = await hasher.hash(demoPassword);
 
-  await prisma.user.upsert({
+  const demoUser = await prisma.user.upsert({
     where: { email: demoEmail },
     update: {
       name: 'Taskforge Demo',
@@ -22,6 +22,21 @@ async function main() {
       email: demoEmail,
       name: 'Taskforge Demo',
       passwordHash,
+    },
+  });
+
+  await prisma.emailPreference.upsert({
+    where: { userId: demoUser.id },
+    update: {
+      welcomeEmailEnabled: true,
+      dailyDigestEnabled: false,
+      dailyDigestHourUtc: null,
+    },
+    create: {
+      userId: demoUser.id,
+      welcomeEmailEnabled: true,
+      dailyDigestEnabled: false,
+      dailyDigestHourUtc: null,
     },
   });
 }
