@@ -1,6 +1,7 @@
 const RESEND_SMTP_HOST = 'smtp.resend.com';
 const RESEND_SMTP_USER = 'resend';
-const PLACEHOLDER_VALUES = ['changeme', 'change-me', 'example', 'placeholder', '<resend_api_key>'];
+const SECRET_PLACEHOLDER_VALUES = ['changeme', 'change-me', 'example', 'placeholder', '<resend_api_key>'];
+const SENDER_PLACEHOLDER_VALUES = ['<verified sender>', 'placeholder'];
 const PUBLIC_MAILBOX_DOMAINS = new Set([
   'gmail.com',
   'googlemail.com',
@@ -33,9 +34,9 @@ function parsePort(rawPort: string | undefined, fallback: number): number {
   return port;
 }
 
-function isPlaceholder(value: string): boolean {
+function containsPlaceholder(value: string, placeholders: string[]): boolean {
   const normalized = value.trim().toLowerCase();
-  return PLACEHOLDER_VALUES.some(placeholder => normalized.includes(placeholder));
+  return placeholders.some(placeholder => normalized.includes(placeholder));
 }
 
 function extractSenderAddress(sender: string): string | undefined {
@@ -58,9 +59,11 @@ function assertProductionSender(sender: string): void {
     domain.endsWith('.local') ||
     domain.endsWith('.test') ||
     domain.endsWith('.invalid') ||
+    domain === 'example.com' ||
+    domain === 'example.net' ||
+    domain === 'example.org' ||
     domain.endsWith('.example') ||
     domain.startsWith('example.') ||
-    domain.includes('example') ||
     PUBLIC_MAILBOX_DOMAINS.has(domain)
   ) {
     throw new Error('EMAIL_FROM must use a verified production mail domain, not a placeholder or public mailbox domain.');
@@ -100,11 +103,11 @@ export function getSmtpConfig(): SmtpConfig {
   const safePass = pass as string;
   const safeFrom = from as string;
 
-  if (isPlaceholder(safePass)) {
+  if (containsPlaceholder(safePass, SECRET_PLACEHOLDER_VALUES)) {
     throw new Error('SMTP_PASS appears to be a placeholder. Set SMTP_PASS to a real Resend API key.');
   }
 
-  if (isPlaceholder(safeFrom) || safeFrom.toLowerCase().includes('<verified sender>')) {
+  if (containsPlaceholder(safeFrom, SENDER_PLACEHOLDER_VALUES)) {
     throw new Error('EMAIL_FROM appears to be a placeholder. Set EMAIL_FROM to a verified production sender.');
   }
 

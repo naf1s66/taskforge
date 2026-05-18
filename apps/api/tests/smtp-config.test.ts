@@ -84,6 +84,21 @@ describe('getSmtpConfig', () => {
     });
   });
 
+  it('allows legitimate sender domains that include the word example', () => {
+    resetEnv({
+      NODE_ENV: 'production',
+      SMTP_HOST: 'smtp.resend.com',
+      SMTP_PORT: '587',
+      SMTP_USER: 'resend',
+      SMTP_PASS: 're_123456789',
+      EMAIL_FROM: 'TaskForge <alerts@myexamplecorp.com>',
+    });
+
+    expect(getSmtpConfig()).toMatchObject({
+      from: 'TaskForge <alerts@myexamplecorp.com>',
+    });
+  });
+
   it('rejects placeholder credentials and senders in production', () => {
     resetEnv({
       NODE_ENV: 'production',
@@ -105,6 +120,19 @@ describe('getSmtpConfig', () => {
       SMTP_USER: 'resend',
       SMTP_PASS: 're_123456789',
       EMAIL_FROM: 'TaskForge <taskforge@gmail.com>',
+    });
+
+    expect(() => getSmtpConfig()).toThrow('EMAIL_FROM must use a verified production mail domain');
+  });
+
+  it('rejects reserved example domains for production senders', () => {
+    resetEnv({
+      NODE_ENV: 'production',
+      SMTP_HOST: 'smtp.resend.com',
+      SMTP_PORT: '587',
+      SMTP_USER: 'resend',
+      SMTP_PASS: 're_123456789',
+      EMAIL_FROM: 'TaskForge <noreply@example.com>',
     });
 
     expect(() => getSmtpConfig()).toThrow('EMAIL_FROM must use a verified production mail domain');
