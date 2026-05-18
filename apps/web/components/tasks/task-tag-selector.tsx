@@ -76,7 +76,7 @@ export function TaskTagSelector({
       return false;
     }
 
-    return !options.some((tag) => tag.toLowerCase().includes(search));
+    return !options.some((tag) => tag.toLowerCase() === search);
   }, [inputValue, options]);
 
   useEffect(() => {
