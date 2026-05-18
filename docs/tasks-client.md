@@ -32,10 +32,11 @@ When `TF_DEV_BYPASS_AUTH=true` is enabled outside production and both the web an
 that token through the `x-taskforge-dev-bypass` header so task and board requests continue to work even if the normal
 session bridge cookie cannot be minted locally.
 
-The shared development env examples currently enable this by default. Production should leave
-`TF_DEV_BYPASS_AUTH` disabled and should not configure `TF_DEV_BYPASS_CLIENT_SECRET`.
+The shared development env examples keep this disabled by default. Enable it deliberately in both apps only when local
+auth wiring blocks task API usage. Production should leave `TF_DEV_BYPASS_AUTH` disabled and should not configure
+`TF_DEV_BYPASS_CLIENT_SECRET`.
 
-See [dev-auth-bypass.md](./dev-auth-bypass.md) for the setup and deployment split.
+See [dev-auth-bypass.md](./prod/dev-auth-bypass.md) for the setup and deployment split.
 
 On the server the client attempts to read the session cookie from:
 

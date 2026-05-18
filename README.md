@@ -4,7 +4,8 @@ Full-stack task manager built with Next.js (TS), shadcn/ui, Tailwind, Framer Mot
 
 - PRD: `docs/PRD.md`
 - Agents: `docs/AGENTS.md`
-- ADRs: `docs/adr/`
+- ADRs: `docs/adr/`; production/deployment ADRs: `docs/prod/adr/`
+- Production runbooks: `docs/prod/`
 
 ## Structure
 ```
@@ -82,6 +83,9 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen and redirect URIs to match `NEXTAUTH_URL`. |
 | `TF_DEV_BYPASS_AUTH` | both | `false` | Development/test-only escape hatch for local auth issues. Set to `true` in both apps only when using the documented dev bypass flow. |
 | `TF_DEV_BYPASS_CLIENT_SECRET` | both | _(blank)_ | Shared HMAC secret for the dev bypass client token. Configure only with `TF_DEV_BYPASS_AUTH=true`; never set it in production. |
+| `SMTP_HOST` / `SMTP_PORT` | `apps/api/.env` | `mailhog` / `1025` | Local Docker sends through MailHog. Production uses Resend SMTP; see `infra/env/api.prod.env.example` and `docs/prod/resend-email-setup.md`. |
+| `SMTP_USER` / `SMTP_PASS` | `apps/api/.env` | _(blank)_ | Production Resend SMTP uses `SMTP_USER=resend` and stores the Resend API key in `SMTP_PASS`. Never commit real credentials. |
+| `EMAIL_FROM` | `apps/api/.env` | `TaskForge <noreply@taskforge.local>` | Production must use a sender on the verified Resend domain. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
@@ -110,7 +114,7 @@ pnpm -C apps/api prisma migrate dev
 
 Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
 
-Before the first production database is created, development migrations may be squashed into a clean timestamped baseline. See [Database Migration Squash Before Production](docs/database-migration-squash.md) for the rules and verification checklist.
+Before the first production database is created, development migrations may be squashed into a clean timestamped baseline. See [Database Migration Squash Before Production](docs/prod/database-migration-squash.md) for the rules and verification checklist.
 
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 
@@ -199,6 +203,6 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: planned future scope. MailHog remains in the local compose stack for SMTP work when the Nodemailer adapter is implemented.
+- Email: Nodemailer SMTP adapter is available. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`). See `docs/prod/resend-email-setup.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.

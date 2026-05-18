@@ -14,7 +14,7 @@
 
 ## Notes
 - Default digest state should be conservative until the UI and delivery safeguards are ready.
-- Keep the schema compatible with ADR 0003's planned SMTP adapter and future multi-provider support.
+- Keep the schema compatible with ADR 0003's SMTP adapter and future multi-provider support.
 
 ## Implementation Notes
 - Added `EmailPreference` with conservative daily digest defaults and a database check that allows only UTC hours 0-23 when a digest hour is set.
