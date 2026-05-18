@@ -8,7 +8,7 @@
 - Primary: single user (personal). Future: org workspaces.
 
 ## Success
-- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, Swagger at `/api/taskforge/docs`, API and frontend automated tests, `.http` suite, Docker + CI, README + ADRs. Email digest remains planned future scope.
+- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, Swagger at `/api/taskforge/docs`, API and frontend automated tests, `.http` suite, Docker + CI, README + ADRs. Email delivery infrastructure is staged; digest and welcome-email product flows remain planned future scope.
 
 ## Scope
 - Auth: NextAuth (GitHub/Google) backed by Prisma, credential login against the API, and a session bridge that exchanges
@@ -16,7 +16,7 @@
 - Tasks: title, description (MD), status, priority, **tags**, **dueDate**.
 - Kanban: DnD with optimistic UI.
 - Filters/search: tag/status/due range/text.
-- Email: planned daily digest + welcome email adapter; not part of the shipped milestones yet.
+- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; daily digest and welcome-email product flows remain planned.
 - UI: Next.js, Tailwind, shadcn/ui, Framer Motion, desktop-first dark theme.
 - Docs: Swagger/OpenAPI + ADRs. `.http` pack.
 - Tests: Jest/Supertest for API coverage and Vitest/React Testing Library for frontend coverage.
@@ -30,7 +30,7 @@
 - BE: Express (TS), Zod validation, Prisma (Postgres), Swagger. Auth router issues JWT access/refresh pairs, maintains
   `tf_session` HttpOnly cookies, and exposes a `session-bridge` endpoint for trusted frontends.
 - DB: Neon/Supabase Postgres; Prisma migrations + seed.
-- Email: planned Nodemailer adapter; MailHog is available in local compose for future SMTP testing.
+- Email: Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once pre-launch verification is complete.
 - Infra: Dockerfiles + docker-compose; CI with GitHub Actions.
 
 ## Data Model (Prisma Sketch)
@@ -109,7 +109,7 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - Auth: NextAuth + backend JWT verification with dedicated session bridge and shared Prisma adapter.
 - Backend: Express TS + Zod + Swagger.
 - DB: Postgres (Neon/Supabase) + Prisma.
-- Email: ADR 0003 records the planned Nodemailer adapter and MailHog dev path; implementation is deferred.
+- Email: ADR 0003 records the Nodemailer adapter, MailHog dev path, and Resend SMTP production default.
 - Monorepo rationale: shared types, unified tooling, single CI.
 
 

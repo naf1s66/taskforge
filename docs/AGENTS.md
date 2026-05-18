@@ -20,7 +20,7 @@
 - Prefer `apps/web/lib/tasks-hooks.ts` from React components so cache keys, optimistic updates, rollback, and toast-friendly errors stay consistent.
 
 ## Env Examples
-- **API**: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `SESSION_BRIDGE_SECRET`, `TF_DEV_BYPASS_AUTH`
+- **API**: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `SESSION_BRIDGE_SECRET`, `TF_DEV_BYPASS_AUTH`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`
 - **WEB**: `NEXT_PUBLIC_API_BASE_URL`, `API_BASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `SESSION_BRIDGE_SECRET`, `TF_DEV_BYPASS_AUTH`
 
 ## DoD

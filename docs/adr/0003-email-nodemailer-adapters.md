@@ -1,12 +1,12 @@
 # ADR 0003 - Email (Nodemailer adapters)
 
-**Status:** Accepted, implementation deferred
+**Status:** Accepted, adapter implemented
 
 ## Context
-We need basic emails (welcome, daily digest) on free setup for dev/prod. The adapter is planned future scope; it has not shipped in milestones 1-4.
+We need basic emails (welcome, daily digest) on free setup for dev/prod. The provider-neutral SMTP adapter is implemented in milestone 5; product flows such as welcome sends and digests remain separate follow-up work.
 
 ## Decision
-Use **Nodemailer** when email work starts. Dev uses **MailHog** (docker). Production defaults to **Resend SMTP** for milestone 5, with credentials supplied via env.
+Use **Nodemailer** behind a small adapter. Dev uses **MailHog** (docker). Production defaults to **Resend SMTP** for milestone 5, with credentials supplied via env.
 
 Expected production SMTP shape:
 
