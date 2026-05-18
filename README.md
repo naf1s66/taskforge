@@ -110,6 +110,8 @@ pnpm -C apps/api prisma migrate dev
 
 Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
 
+Before the first production database is created, development migrations may be squashed into a clean timestamped baseline. See [Database Migration Squash Before Production](docs/database-migration-squash.md) for the rules and verification checklist.
+
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 
 ```bash
