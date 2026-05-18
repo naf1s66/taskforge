@@ -8,17 +8,17 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String    @unique
-  passwordHash  String?   @map("password_hash")
-  name          String?
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  sessions      Session[]
-  tasks         Task[]
+  id                     String                 @id @default(uuid()) @db.Uuid
+  email                  String                 @unique
+  passwordHash           String?                @map("password_hash")
+  name                   String?
+  image                  String?
+  emailVerified          DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  accounts               Account[]
+  sessions               Session[]
+  tasks                  Task[]
   tags                   Tag[]
   emailPreference        EmailPreference?
   notificationDeliveries NotificationDelivery[]
@@ -59,8 +59,8 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
 
-  @@unique([identifier, token])
   @@id([identifier, token])
+  @@unique([identifier, token])
 }
 
 model Task {
@@ -114,36 +114,49 @@ enum TaskPriority {
   HIGH
 }
 
-
 model EmailPreference {
-  userId               String   @id @db.Uuid
-  welcomeEmailEnabled  Boolean  @default(true)
-  dailyDigestEnabled   Boolean  @default(false)
-  dailyDigestHourUtc   Int?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String   @id @db.Uuid
+  welcomeEmailEnabled Boolean  @default(true)
+  dailyDigestEnabled  Boolean  @default(false)
+  dailyDigestHourUtc  Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model NotificationDelivery {
-  id            String                     @id @default(uuid()) @db.Uuid
-  userId        String                     @db.Uuid
-  idempotencyKey String                    @unique
-  type          NotificationDeliveryType
-  recipient     String
-  provider      String
-  providerMessageId String?
-  providerMetadata Json?
-  status        NotificationDeliveryStatus
-  errorCode     String?
-  errorMessage  String?
-  attemptedAt   DateTime                   @default(now())
-  deliveredAt   DateTime?
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
-  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String                        @id @default(uuid()) @db.Uuid
+  userId         String                        @db.Uuid
+  idempotencyKey String                        @unique
+  type           NotificationDeliveryType
+  recipient      String
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  user           User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts       NotificationDeliveryAttempt[]
 
   @@index([userId, type])
+}
+
+model NotificationDeliveryAttempt {
+  id                String                     @id @default(uuid()) @db.Uuid
+  deliveryId        String                     @db.Uuid
+  attemptNumber     Int
+  type              NotificationDeliveryType
+  recipient         String
+  status            NotificationDeliveryStatus
+  provider          String
+  providerMessageId String?
+  providerMetadata  Json?
+  errorCode         String?
+  errorMessage      String?
+  attemptedAt       DateTime                   @default(now())
+  deliveredAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  delivery          NotificationDelivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
   @@index([status, attemptedAt])
 }
 
