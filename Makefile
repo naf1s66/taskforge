@@ -42,7 +42,7 @@ seed:
 
 .PHONY: up
 up:
-	cd $(INFRA_DIR) && docker compose up -d
+	cd $(INFRA_DIR) && docker compose up -d --build
 
 .PHONY: down
 down:
