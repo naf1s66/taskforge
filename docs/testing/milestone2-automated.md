@@ -8,7 +8,7 @@ Use these scripts/commands to continuously validate the auth stack. Run them loc
 | Install deps | `pnpm install` | Needed after pulling new lockfile changes. |
 | Generate Prisma client | `pnpm --filter @taskforge/api exec prisma generate` | Safe to skip if `node_modules/.prisma` already matches, but required in clean environments. |
 | API lint/typecheck | `make lint` / `make typecheck` | Runs per-app ESLint + `tsc --noEmit` via Makefile. |
-| API tests | `pnpm -C apps/api test` | Executes Jest + Supertest suite (`apps/api/tests/auth.e2e.test.ts`). Uses in-memory user store by default. |
+| API tests | `pnpm -C apps/api test` | Executes Jest + Supertest coverage for auth, tasks, tags, and dev bypass flows. Uses Testcontainers unless `DATABASE_URL` points at an existing test database. |
 | Web tests | `pnpm -C apps/web test` | Runs Vitest + Testing Library coverage for the auth forms (login happy/error flows). |
 | Docker smoke | `make auth-smoke` | Reuses `apps/web/scripts/docker-auth-smoke.mjs` to validate register/login/bridge inside containers. |
 | CI dry run | `make ci` | Optional local rehearsal of the GitHub Actions steps. |
@@ -30,4 +30,4 @@ Use these scripts/commands to continuously validate the auth stack. Run them loc
 ## Troubleshooting tips
 - If Prisma migrations fail in CI, reproduce locally with `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public pnpm -C apps/api prisma migrate deploy`.
 - Flaky Docker smoke tests often indicate the API container was still starting. Re-run `make auth-smoke` after `docker compose ps` shows `api` as healthy.
-- When Google OAuth tests hang, verify `GOOGLE_ID/GOOGLE_SECRET` exist in the CI environment or mock the provider in your frontend tests.
+- OAuth providers are env-gated in automated runs. If provider-specific UI tests are added later, mock the provider metadata instead of calling live Google/GitHub OAuth services.
