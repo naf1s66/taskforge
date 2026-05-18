@@ -94,7 +94,7 @@ const notFoundExample = { value: { error: 'Not found' } } satisfies OpenAPIV3.Ex
 const logoutSuccessExample = { value: { success: true } } satisfies OpenAPIV3.ExampleObject;
 
 const authMeSuccessExample = {
-  value: { user: authUser.example },
+  value: { user: authUser.example as Record<string, unknown> },
 } satisfies OpenAPIV3.ExampleObject;
 
 const authMeAnonymousExample = { value: { user: null } } satisfies OpenAPIV3.ExampleObject;
@@ -134,6 +134,203 @@ const taskRecord: OpenAPIV3.SchemaObject = {
   },
 };
 
+const taskBoardItem: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    title: { type: 'string' },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    position: { type: 'integer', minimum: 0 },
+    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    tags: { type: 'array', items: { type: 'string' } },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+  required: ['id', 'title', 'status', 'priority', 'position', 'tags', 'updatedAt'],
+  example: {
+    id: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    title: 'Draft project brief',
+    status: 'IN_PROGRESS',
+    priority: 'HIGH',
+    position: 0,
+    dueDate: '2024-07-10T16:00:00.000Z',
+    tags: ['planning', 'product'],
+    updatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const tagSummary: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
+    count: { type: 'integer', minimum: 0 },
+  },
+  required: ['label', 'count'],
+  example: {
+    label: 'planning',
+    count: 3,
+  },
+};
+
+const tagRecord: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Canonical lowercase tag label. Length limit applies after normalization.',
+    },
+  },
+  required: ['id', 'label'],
+  example: {
+    id: '8d367c45-8d3c-4e96-a59e-4254920fb828',
+    label: 'planning',
+  },
+};
+
+const tagCreateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    label: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 64,
+      description: 'Tag label to create. Length limit applies after lowercase normalization.',
+    },
+  },
+  required: ['label'],
+  additionalProperties: false,
+  example: {
+    label: 'Planning',
+  },
+};
+
+const tagListResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TagSummary' },
+    },
+  },
+  required: ['items'],
+  example: {
+    items: [tagSummary.example],
+  },
+};
+
+const boardColumn: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    title: { type: 'string' },
+    order: { type: 'integer', minimum: 1 },
+    tasks: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TaskBoardItem' },
+    },
+    total: { type: 'integer', minimum: 0 },
+    overdueCount: { type: 'integer', minimum: 0 },
+    tags: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/TagSummary' },
+    },
+  },
+  required: ['status', 'title', 'order', 'tasks', 'total', 'overdueCount', 'tags'],
+  example: {
+    status: 'IN_PROGRESS',
+    title: 'In Progress',
+    order: 2,
+    tasks: [taskBoardItem.example],
+    total: 1,
+    overdueCount: 0,
+    tags: [tagSummary.example],
+  },
+};
+
+const boardSummary: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    totalsByStatus: {
+      type: 'object',
+      properties: {
+        TODO: { type: 'integer', minimum: 0 },
+        IN_PROGRESS: { type: 'integer', minimum: 0 },
+        DONE: { type: 'integer', minimum: 0 },
+      },
+      required: ['TODO', 'IN_PROGRESS', 'DONE'],
+    },
+    overdueByStatus: {
+      type: 'object',
+      properties: {
+        TODO: { type: 'integer', minimum: 0 },
+        IN_PROGRESS: { type: 'integer', minimum: 0 },
+        DONE: { type: 'integer', minimum: 0 },
+      },
+      required: ['TODO', 'IN_PROGRESS', 'DONE'],
+    },
+    totalTasks: { type: 'integer', minimum: 0 },
+    totalOverdue: { type: 'integer', minimum: 0 },
+  },
+  required: ['totalsByStatus', 'overdueByStatus', 'totalTasks', 'totalOverdue'],
+  example: {
+    totalsByStatus: {
+      TODO: 3,
+      IN_PROGRESS: 2,
+      DONE: 5,
+    },
+    overdueByStatus: {
+      TODO: 1,
+      IN_PROGRESS: 0,
+      DONE: 0,
+    },
+    totalTasks: 10,
+    totalOverdue: 1,
+  },
+};
+
+const boardResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    columns: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/BoardColumn' },
+    },
+    summary: { $ref: '#/components/schemas/BoardSummary' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    generatedAt: { type: 'string', format: 'date-time' },
+  },
+  required: ['columns', 'summary', 'updatedAt', 'generatedAt'],
+  example: {
+    columns: [boardColumn.example as Record<string, unknown>],
+    summary: boardSummary.example as Record<string, unknown>,
+    updatedAt: '2024-06-03T09:30:00.000Z',
+    generatedAt: '2024-06-03T09:30:00.000Z',
+  },
+};
+
+const boardMoveRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    taskId: { type: 'string', format: 'uuid' },
+    targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    targetIndex: { type: 'integer', minimum: 0 },
+  },
+  required: ['taskId', 'targetStatus', 'targetIndex'],
+  example: {
+    taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+    targetStatus: 'DONE',
+    targetIndex: 0,
+  },
+};
+
 const taskCreateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -144,7 +341,12 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
-      items: { type: 'string', minLength: 1 },
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
     },
   },
   required: ['title'],
@@ -166,7 +368,15 @@ const taskUpdateInput: OpenAPIV3.SchemaObject = {
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
-    tags: { type: 'array', items: { type: 'string', minLength: 1 } },
+    tags: {
+      type: 'array',
+      items: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 64,
+        description: 'Tag label. Length limit applies after lowercase normalization.',
+      },
+    },
   },
   additionalProperties: false,
   example: {
@@ -262,6 +472,18 @@ const taskDeletedExample = {
   value: taskDeletedResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const tagCreateExample = {
+  value: tagCreateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const tagCreatedExample = {
+  value: tagRecord.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const tagListResponseExample = {
+  value: tagListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
@@ -319,6 +541,15 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
       ErrorResponse: errorResponse,
       TaskRecord: taskRecord,
+      TaskBoardItem: taskBoardItem,
+      TagSummary: tagSummary,
+      TagRecord: tagRecord,
+      TagCreateInput: tagCreateInput,
+      TagListResponse: tagListResponse,
+      BoardColumn: boardColumn,
+      BoardSummary: boardSummary,
+      BoardResponse: boardResponse,
+      BoardMoveRequest: boardMoveRequest,
       TaskCreateInput: taskCreateInput,
       TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
@@ -700,7 +931,230 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    '/api/taskforge/v1/tasks/board': {
+      get: {
+        tags: ['Tasks'],
+        summary: 'Retrieve the Kanban board read model',
+        description:
+          'Returns a board-friendly representation of tasks grouped by status lanes. Repeating `tag` requires tasks to include every selected tag. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+            description: 'Filter board tasks by workflow status.',
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+            description: 'Filter board tasks by priority.',
+          },
+          {
+            name: 'tag',
+            in: 'query',
+            style: 'form',
+            explode: true,
+            schema: { type: 'array', items: { type: 'string' } },
+            description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
+          },
+          {
+            name: 'q',
+            in: 'query',
+            schema: { type: 'string', minLength: 1 },
+            description: 'Case-insensitive search over the title and description.',
+          },
+          {
+            name: 'dueFrom',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return board tasks due on or after this ISO timestamp.',
+          },
+          {
+            name: 'dueTo',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'Only return board tasks due on or before this ISO timestamp.',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Task board',
+            headers: {
+              ETag: {
+                description: 'Entity tag representing the latest board update timestamp.',
+                schema: { type: 'string' },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BoardResponse' },
+                examples: {
+                  default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidFilters: taskListInvalidFiltersExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/tasks/board/move': {
+      patch: {
+        tags: ['Tasks'],
+        summary: 'Move a task within the Kanban board',
+        description:
+          'Updates the status and ordering of a task on the board. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/BoardMoveRequest' },
+              examples: {
+                default: { value: boardMoveRequest.example as Record<string, unknown> },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Task board updated',
+            headers: {
+              ETag: {
+                description: 'Entity tag representing the latest board update timestamp.',
+                schema: { type: 'string' },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BoardResponse' },
+                examples: {
+                  default: { value: boardResponse.example as Record<string, unknown> },
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: { value: { error: 'Not found' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/taskforge/v1/tasks/{id}': {
+      get: {
+        tags: ['Tasks'],
+        summary: 'Retrieve a task',
+        description:
+          'Returns a single task owned by the authenticated user. Requires a valid JWT via `Authorization` header or the `tf_session` cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Task retrieved',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/TaskRecord' },
+                examples: {
+                  default: taskCreatedExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid identifier',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidIdentifier: invalidIdentifierExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'Task not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: notFoundExample,
+                },
+              },
+            },
+          },
+        },
+      },
       patch: {
         tags: ['Tasks'],
         summary: 'Update a task',
@@ -848,9 +1302,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Tag collection',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TagListResponse' },
+                examples: {
+                  default: tagListResponseExample,
                 },
               },
             },
@@ -875,9 +1329,9 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: true,
+              schema: { $ref: '#/components/schemas/TagCreateInput' },
+              examples: {
+                default: tagCreateExample,
               },
             },
           },
@@ -887,9 +1341,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Tag created',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  additionalProperties: true,
+                schema: { $ref: '#/components/schemas/TagRecord' },
+                examples: {
+                  default: tagCreatedExample,
                 },
               },
             },
@@ -916,4 +1370,3 @@ export const openApiDocument: OpenAPIV3.Document = {
   },
   security: [],
 };
-

@@ -2,7 +2,7 @@
 
 ## Summary
 - Replace the ad-hoc in-memory store with a dedicated Prisma-backed `taskRepository` that scopes every read/write to the authenticated user.
-- Centralize DTO ↔ Prisma conversions (tags, enums, timestamps) so subsequent API handlers and tests can reuse the same helpers.
+- Centralize DTO <-> Prisma conversions (tags, enums, timestamps) so subsequent API handlers and tests can reuse the same helpers.
 
 **Status:** Completed.
 **Concurrency:** Blocks every other milestone-3 task; land this before touching any API route logic.

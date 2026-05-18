@@ -17,6 +17,8 @@ export interface CreateAppOptions {
   jwtSecret?: string;
   userStore?: UserStore;
   sessionBridgeSecret?: string;
+  devBypassEnabled?: boolean;
+  devBypassClientSecret?: string;
   taskRepository?: TaskRepository;
 }
 
@@ -75,6 +77,8 @@ export function createApp(options: CreateAppOptions = {}) {
     jwtSecret: options.jwtSecret,
     userStore,
     sessionBridgeSecret: options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET,
+    devBypassEnabled: options.devBypassEnabled,
+    devBypassClientSecret: options.devBypassClientSecret,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 

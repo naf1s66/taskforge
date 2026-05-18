@@ -3,6 +3,8 @@ declare module 'dotenv-flow' {
     node_env?: string;
     default_node_env?: string;
     path?: string;
+    purge_dotenv?: boolean;
+    silent?: boolean;
   }
 
   export function config(options?: ConfigOptions): void;

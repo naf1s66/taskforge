@@ -11,7 +11,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/components/ui/use-toast';
 import { sanitizeTags } from '@/lib/task-tags';
-import { useTaskFromCache, useTaskReplacementId, useUpdateTask, toTaskOperationError } from '@/lib/tasks-hooks';
+import {
+  useTaskFromCache,
+  useTaskRecordQuery,
+  useTaskReplacementId,
+  useUpdateTask,
+  toTaskOperationError,
+} from '@/lib/tasks-hooks';
 
 import {
   TaskFormFields,
@@ -35,7 +41,13 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
     resolver: zodResolver(taskFormSchema),
     defaultValues: TASK_FORM_DEFAULT_VALUES,
   });
-  const task = useTaskFromCache(open ? taskId ?? undefined : undefined);
+  const cachedTask = useTaskFromCache(open ? taskId ?? undefined : undefined);
+  const taskRecordQuery = useTaskRecordQuery(open ? taskId ?? undefined : undefined, {
+    enabled: open && Boolean(taskId) && (!cachedTask || Boolean(cachedTask._partial)),
+  });
+  const task =
+    taskRecordQuery.data ??
+    (cachedTask && !cachedTask._partial ? cachedTask : null);
   const [optimisticSnapshot, setOptimisticSnapshot] = useState<typeof task>(null);
   const previousTaskIdRef = useRef<string | null>(null);
   const lastKnownTaskRef = useRef<typeof task>(null);
@@ -159,8 +171,9 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
   }, [replacementId, taskId, onTaskIdChange]);
 
   const resolvedTask = task ?? lastKnownTaskRef.current;
-  const hasRequestError = Boolean(updateTask.error);
+  const hasRequestError = Boolean(updateTask.error || taskRecordQuery.error);
   const isOptimistic = Boolean(resolvedTask?._optimistic);
+  const isHydratingTask = Boolean(open && taskId && cachedTask?._partial && !taskRecordQuery.data);
 
   function handleSubmit(values: TaskFormValues) {
     if (!taskId || isOptimistic) {
@@ -171,10 +184,10 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
       id: taskId,
       input: {
         title: values.title.trim(),
-        description: values.description?.trim() ? values.description.trim() : undefined,
+        description: values.description?.trim() ? values.description.trim() : null,
         status: values.status,
         priority: values.priority,
-        dueDate: values.dueDate,
+        dueDate: values.dueDate ?? null,
         tags: sanitizeTags(values.tags),
       },
     });
@@ -216,9 +229,13 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
         {lastUpdatedLabel ? (
           <p className="text-xs text-muted-foreground">Last updated {lastUpdatedLabel}</p>
         ) : null}
-        {hasRequestError && updateTask.error ? (
+        {hasRequestError ? (
           <Alert variant="destructive">
-            <AlertDescription>{updateTask.error.message}</AlertDescription>
+            <AlertDescription>
+              {updateTask.error?.message ??
+                taskRecordQuery.error?.message ??
+                'Something went wrong while loading this task.'}
+            </AlertDescription>
           </Alert>
         ) : null}
         {isOptimistic ? (
@@ -228,14 +245,21 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
             </AlertDescription>
           </Alert>
         ) : null}
+        {isHydratingTask ? (
+          <Alert>
+            <AlertDescription>Loading the full task details before editing.</AlertDescription>
+          </Alert>
+        ) : null}
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)} noValidate aria-busy={updateTask.isPending}>
-            <TaskFormFields form={form} availableTags={availableTags} />
+            {!isHydratingTask ? (
+              <TaskFormFields form={form} availableTags={availableTags} />
+            ) : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={updateTask.isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateTask.isPending || !resolvedTask || isOptimistic}>
+              <Button type="submit" disabled={updateTask.isPending || !resolvedTask || isOptimistic || isHydratingTask}>
                 {updateTask.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> Saving…

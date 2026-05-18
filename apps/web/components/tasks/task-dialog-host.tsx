@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useToast } from '@/components/ui/use-toast';
+import { sanitizeTags } from '@/lib/task-tags';
+import { useTagsQuery } from '@/lib/tasks-hooks';
 
 import { TaskCreateDialog } from './task-create-dialog';
 import { TaskEditDialog } from './task-edit-dialog';
@@ -12,6 +14,8 @@ type ActiveDialog = { type: 'create' } | { type: 'edit'; taskId: string } | null
 export function TaskDialogHost() {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const { toast } = useToast();
+  const tagsQuery = useTagsQuery();
+  const availableTags = sanitizeTags(tagsQuery.tags.map((tag) => tag.label));
 
   const handleDocumentClick = useCallback(
     (event: MouseEvent) => {
@@ -68,12 +72,18 @@ export function TaskDialogHost() {
 
   return (
     <>
-      <TaskCreateDialog open={activeDialog?.type === 'create'} onOpenChange={handleCreateOpenChange} trigger={null} />
+      <TaskCreateDialog
+        open={activeDialog?.type === 'create'}
+        onOpenChange={handleCreateOpenChange}
+        trigger={null}
+        availableTags={availableTags}
+      />
       <TaskEditDialog
         taskId={activeTaskId}
         open={activeDialog?.type === 'edit'}
         onOpenChange={handleEditOpenChange}
         onTaskIdChange={handleEditTaskIdChange}
+        availableTags={availableTags}
       />
     </>
   );

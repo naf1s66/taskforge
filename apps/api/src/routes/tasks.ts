@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { getPrismaClient } from '../prisma';
-import { TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
+import { TaskBoardMoveSchema, TaskCreateSchema, TaskUpdateSchema } from '../schemas/task';
 import {
   createTaskRepository,
   type TaskCreateInput,
@@ -10,6 +10,8 @@ import {
   type TaskUpdateInput,
 } from '../repositories/task-repository';
 import { normalizeTagLabels } from '../repositories/task-mapper';
+
+const Rfc3339DateTimeSchema = z.string().datetime({ offset: true });
 
 const TaskListQuerySchema = z
   .object({
@@ -19,8 +21,32 @@ const TaskListQuerySchema = z
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
     tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
     q: z.string().trim().min(1).optional(),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
+  })
+  .passthrough()
+  .superRefine((data, ctx) => {
+    if (data.dueFrom && data.dueTo) {
+      const from = new Date(data.dueFrom);
+      const to = new Date(data.dueTo);
+      if (from.getTime() > to.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo',
+        });
+      }
+    }
+  });
+
+const TaskBoardQuerySchema = z
+  .object({
+    status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1))]).optional(),
+    q: z.string().trim().min(1).optional(),
+    dueFrom: Rfc3339DateTimeSchema.optional(),
+    dueTo: Rfc3339DateTimeSchema.optional(),
   })
   .passthrough()
   .superRefine((data, ctx) => {
@@ -100,6 +126,92 @@ export function createTaskRouter(taskRepository?: TaskRepository) {
       const task = await repository.createTask(user.id, payload);
       console.info('task.created', { userId: user.id, taskId: task.id });
       res.status(201).json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/board', async (req, res, next) => {
+    try {
+      const parseQuery = TaskBoardQuerySchema.safeParse(req.query);
+      if (!parseQuery.success) {
+        return res
+          .status(400)
+          .json({ error: 'Invalid payload', details: parseQuery.error.flatten() });
+      }
+
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { status, priority, tag, q, dueFrom, dueTo } = parseQuery.data;
+      const normalizedTags = normalizeTagLabels(
+        Array.isArray(tag) ? tag : tag ? [tag] : undefined,
+      );
+
+      const board = await repository.getTaskBoard(user.id, {
+        status,
+        priority,
+        tags: normalizedTags.length ? normalizedTags : undefined,
+        search: q,
+        dueFrom: dueFrom ? new Date(dueFrom) : undefined,
+        dueTo: dueTo ? new Date(dueTo) : undefined,
+      });
+      res.set('ETag', `"${board.updatedAt}"`);
+      res.json(board);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/:id', async (req, res, next) => {
+    const params = TaskIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      return res.status(400).json({ error: 'Invalid identifier' });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const task = await repository.getTask(user.id, params.data.id);
+      if (!task) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      res.json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch('/board/move', async (req, res, next) => {
+    const parsed = TaskBoardMoveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    try {
+      const user = res.locals.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const result = await repository.moveTaskOnBoard(user.id, parsed.data);
+      if (result.status === 'not_found') {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (result.status === 'invalid') {
+        return res
+          .status(400)
+          .json({ error: 'Invalid payload', details: { targetIndex: result.message } });
+      }
+
+      res.set('ETag', `"${result.board.updatedAt}"`);
+      res.json(result.board);
     } catch (error) {
       next(error);
     }

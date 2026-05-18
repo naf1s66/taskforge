@@ -1,46 +1,45 @@
 # Title
-<!-- e.g., milestone-1: project bootstrap, monorepo scaffold, Docker setup, API + frontend foundations -->
+<!-- e.g., milestone-4: Kanban board, tags, filters, and automated coverage -->
 
 ## Summary
-Explain the purpose of this PR and the outcome in 2–4 sentences.
+Explain the purpose of this PR and the outcome in 2-4 sentences.
 
-## What’s Included
-- [ ] Monorepo / workspace setup
-- [ ] Docker Compose (db, mailhog)
-- [ ] API health endpoint + Swagger
-- [ ] Next.js + Tailwind + shadcn/ui + Framer Motion
-- [ ] Docs updated (README, PRD, ADRs)
+## What's Included
+- [ ] Product behavior / user workflow changes
+- [ ] API, schema, or data model changes
+- [ ] Frontend UI / state management changes
+- [ ] Tests, fixtures, or CI updates
+- [ ] Docs updated (README, PRD, ADRs, task docs, testing docs)
 
 ## How to Test
-1. **Infra**
+1. **Automated**
+   ```bash
+   make lint
+   make typecheck
+   make test
+   make build
+   ```
+2. **API / HTTP packs**
+   ```bash
+   pnpm -C apps/api run lint:http
+   # run relevant apps/api/tests/*.http pack in your HTTP client
+   ```
+3. **Manual smoke**
    ```bash
    make up
-   docker ps
-   ```
-2. **API**
-   ```bash
-   pnpm -C apps/api dev
-   # in another terminal
-   curl http://localhost:4000/api/taskforge/v1/health
-   ```
-3. **Web**
-   ```bash
-   pnpm -C apps/web dev
-   # open http://localhost:3000
+   # open http://localhost:3000 and exercise the changed workflow
    ```
 
 ## Screenshots / Logs
-<!-- Swagger page, dark UI, curl health output, docker ps -->
+<!-- Add UI screenshots, terminal logs, CI links, or HTTP responses when they help review. -->
 
 ## Checklist
-- [ ] Lints pass (`make lint` or `pnpm -r run lint`)
-- [ ] Typecheck passes (`pnpm run typecheck`)
+- [ ] Lints pass (`make lint`)
+- [ ] Typecheck passes (`make typecheck`)
+- [ ] Tests pass (`make test` plus any focused suites listed above)
+- [ ] Build passes (`make build`)
 - [ ] Updated docs where needed
 - [ ] No secrets committed
 
 ## Notes / Follow-ups
-<!-- TODOs for next milestone, known limitations, decisions -->
-
----
-
-If anything in the typecheck output looks noisy after this, paste the exact error lines and I’ll give you the fix line-by-line.
+<!-- Known limitations, deferred scope, rollout notes, or next-milestone handoff. -->

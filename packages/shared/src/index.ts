@@ -1,6 +1,37 @@
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
+export const TAG_LABEL_MAX_LENGTH = 64;
+
+export function normalizeTagLabel(label: string): string {
+  return label.trim().toLowerCase();
+}
+
+export function isValidNormalizedTagLabel(label: string): boolean {
+  const normalized = normalizeTagLabel(label);
+  return normalized.length > 0 && normalized.length <= TAG_LABEL_MAX_LENGTH;
+}
+
+export function normalizeTagLabels(tags?: string[]): string[] {
+  if (!tags?.length) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const label of tags) {
+    const key = normalizeTagLabel(label);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(key);
+  }
+
+  return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
 export interface TaskDTO {
   id?: string;
   title: string;
@@ -21,6 +52,66 @@ export interface TaskRecordDTO {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskBoardItemDTO {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  position: number;
+  dueDate?: string;
+  tags: string[];
+  updatedAt: string;
+}
+
+export interface TagDTO {
+  id: string;
+  label: string;
+}
+
+export interface TagCreateDTO {
+  label: string;
+}
+
+export interface TagListItemDTO {
+  label: string;
+  count: number;
+}
+
+export interface TagSummaryDTO {
+  label: string;
+  count: number;
+}
+
+export interface BoardColumnDTO {
+  status: TaskStatus;
+  title: string;
+  order: number;
+  tasks: TaskBoardItemDTO[];
+  total: number;
+  overdueCount: number;
+  tags: TagSummaryDTO[];
+}
+
+export interface BoardSummaryDTO {
+  totalsByStatus: Record<TaskStatus, number>;
+  overdueByStatus: Record<TaskStatus, number>;
+  totalTasks: number;
+  totalOverdue: number;
+}
+
+export interface BoardReadModelDTO {
+  columns: BoardColumnDTO[];
+  summary: BoardSummaryDTO;
+  updatedAt: string;
+  generatedAt: string;
+}
+
+export interface BoardMoveRequestDTO {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
 }
 
 export interface AuthUserDTO {

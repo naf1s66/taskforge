@@ -9,18 +9,18 @@ install:
 
 .PHONY: build
 build:
-	$(PKG_MGR) -C $(API_DIR) build || true
-	$(PKG_MGR) -C $(WEB_DIR) build || true
+	$(PKG_MGR) -C $(API_DIR) build
+	$(PKG_MGR) -C $(WEB_DIR) build
 
 .PHONY: lint
 lint:
-	$(PKG_MGR) -C $(API_DIR) lint || true
-	$(PKG_MGR) -C $(WEB_DIR) lint || true
+	$(PKG_MGR) -C $(API_DIR) lint
+	$(PKG_MGR) -C $(WEB_DIR) lint
 
 .PHONY: typecheck
 typecheck:
-	$(PKG_MGR) -C $(API_DIR) tsc --noEmit || true
-	$(PKG_MGR) -C $(WEB_DIR) tsc --noEmit || true
+	$(PKG_MGR) -C $(API_DIR) typecheck
+	$(PKG_MGR) -C $(WEB_DIR) typecheck
 
 .PHONY: dev
 dev:
@@ -30,6 +30,7 @@ dev:
 .PHONY: test
 test:
 	$(PKG_MGR) -C $(API_DIR) test
+	$(PKG_MGR) -C $(WEB_DIR) test
 
 .PHONY: migrate
 migrate:
@@ -41,7 +42,7 @@ seed:
 
 .PHONY: up
 up:
-	cd $(INFRA_DIR) && docker compose up -d
+	cd $(INFRA_DIR) && docker compose up -d --build
 
 .PHONY: down
 down:

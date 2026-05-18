@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  clearBrowserTaskClientAuthState,
   clearManualTaskClientAuthState,
   createTask,
   deleteTask,
+  getTask,
+  getTaskBoard,
+  listTags,
   listTasks,
+  setBrowserTaskClientAuthState,
   TaskClientError,
   updateTask,
   withTaskClientAuth,
@@ -37,11 +42,11 @@ const originalWindow = globalThis.window;
 
 describe('tasks-client', () => {
   afterEach(() => {
+    clearBrowserTaskClientAuthState();
     clearManualTaskClientAuthState();
     if (originalWindow) {
       globalThis.window = originalWindow;
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete (globalThis as Record<string, unknown>).window;
     }
   });
@@ -60,7 +65,7 @@ describe('tasks-client', () => {
           priority: 'MEDIUM',
           tag: ['frontend', 'api'],
           q: '   sprint ',
-          dueFrom: '2024-06-01T00:00:00.000Z',
+          dueFrom: '2024-06-01T02:00:00+02:00',
         },
         { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
       );
@@ -76,7 +81,7 @@ describe('tasks-client', () => {
       expect(parsedUrl.searchParams.get('priority')).toBe('MEDIUM');
       expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
       expect(parsedUrl.searchParams.get('q')).toBe('sprint');
-      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2024-06-01T00:00:00.000Z');
+      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2024-06-01T02:00:00+02:00');
       expect((init as RequestInit)?.credentials).toBe('include');
       const headers = (init as RequestInit).headers as Headers;
       expect(headers.get('accept')).toBe('application/json');
@@ -84,7 +89,6 @@ describe('tasks-client', () => {
     });
 
     it('supports relative base URLs on the server', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete (globalThis as Record<string, unknown>).window;
 
       const fetchMock = vi
@@ -108,6 +112,20 @@ describe('tasks-client', () => {
         ),
       ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
     });
+
+    it('attaches the dev bypass token header on the browser when present', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({ items: [], page: 1, pageSize: 20, total: 0 }),
+      );
+
+      setBrowserTaskClientAuthState({ devBypassToken: 'dev-bypass-token-123' });
+
+      await listTasks(undefined, { baseUrl: API_BASE_URL, fetchImpl: fetchMock });
+
+      const [, init] = fetchMock.mock.calls[0];
+      const headers = (init as RequestInit).headers as Headers;
+      expect(headers.get('x-taskforge-dev-bypass')).toBe('dev-bypass-token-123');
+    });
   });
 
   describe('createTask', () => {
@@ -115,7 +133,6 @@ describe('tasks-client', () => {
       await expect(
         createTask(
           {
-            // @ts-expect-error intentionally invalid title
             title: '   ',
           },
           { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },
@@ -125,7 +142,6 @@ describe('tasks-client', () => {
 
     it('sends the session cookie when running on the server', async () => {
       // Simulate server environment
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete (globalThis as Record<string, unknown>).window;
 
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sampleTask));
@@ -163,6 +179,29 @@ describe('tasks-client', () => {
       expect(headers.get('authorization')).toBe('Bearer token-123');
     });
 
+    it('serializes null optional fields so edits can clear them', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...sampleTask,
+          description: undefined,
+          dueDate: undefined,
+          updatedAt: '2024-06-02T12:00:00.000Z',
+        }),
+      );
+
+      await updateTask(
+        sampleTask.id,
+        { description: null, dueDate: null },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        description: null,
+        dueDate: null,
+      });
+    });
+
     it('throws a serialization error when the server response is malformed', async () => {
       const fetchMock = vi.fn().mockResolvedValue(
         jsonResponse({
@@ -174,6 +213,96 @@ describe('tasks-client', () => {
       await expect(
         updateTask(sampleTask.id, { status: 'DONE' }, { baseUrl: API_BASE_URL, fetchImpl: fetchMock }),
       ).rejects.toMatchObject({ kind: 'serialization' satisfies TaskClientError['kind'] });
+    });
+  });
+
+  describe('getTask', () => {
+    it('requests a single task record by id', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sampleTask));
+
+      const result = await getTask(sampleTask.id, {
+        baseUrl: API_BASE_URL,
+        fetchImpl: fetchMock,
+      });
+
+      expect(result).toEqual(sampleTask);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tasks/${sampleTask.id}`);
+      expect((init as RequestInit)?.method).toBe('GET');
+    });
+  });
+
+  describe('getTaskBoard', () => {
+    it('serializes board filters', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          columns: [],
+          summary: {
+            totalsByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            overdueByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            totalTasks: 0,
+            totalOverdue: 0,
+          },
+          updatedAt: '2024-06-01T00:00:00.000Z',
+          generatedAt: '2024-06-01T00:00:00.000Z',
+        }),
+      );
+
+      await getTaskBoard(
+        {
+          status: 'IN_PROGRESS',
+          priority: 'HIGH',
+          tag: ['frontend', 'api'],
+          q: ' board search ',
+          dueFrom: '2026-05-01T02:00:00+02:00',
+          dueTo: '2026-06-01T01:59:59+02:00',
+        },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [url] = fetchMock.mock.calls[0];
+      const parsedUrl = new URL(url as string);
+      expect(parsedUrl.pathname).toBe('/api/taskforge/v1/tasks/board');
+      expect(parsedUrl.searchParams.get('status')).toBe('IN_PROGRESS');
+      expect(parsedUrl.searchParams.get('priority')).toBe('HIGH');
+      expect(parsedUrl.searchParams.getAll('tag')).toEqual(['frontend', 'api']);
+      expect(parsedUrl.searchParams.get('q')).toBe('board search');
+      expect(parsedUrl.searchParams.get('dueFrom')).toBe('2026-05-01T02:00:00+02:00');
+      expect(parsedUrl.searchParams.get('dueTo')).toBe('2026-06-01T01:59:59+02:00');
+    });
+
+    it('rejects inverted board due ranges before sending a request', async () => {
+      const fetchMock = vi.fn();
+
+      await expect(
+        getTaskBoard(
+          {
+            dueFrom: '2026-05-31T00:00:00.000Z',
+            dueTo: '2026-05-01T00:00:00.000Z',
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({
+        kind: 'validation' satisfies TaskClientError['kind'],
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listTags', () => {
+    it('requests tag summaries from the tags endpoint', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({ items: [{ label: 'api', count: 2 }] }),
+      );
+
+      const result = await listTags({ baseUrl: API_BASE_URL, fetchImpl: fetchMock });
+
+      expect(result).toEqual({ items: [{ label: 'api', count: 2 }] });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tags`);
+      expect((init as RequestInit)?.method).toBe('GET');
     });
   });
 
@@ -193,7 +322,6 @@ describe('tasks-client', () => {
 
   describe('withTaskClientAuth', () => {
     it('binds the session cookie to nested requests on the server', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
       delete (globalThis as Record<string, unknown>).window;
       const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [], page: 1, pageSize: 20, total: 0 }));
 

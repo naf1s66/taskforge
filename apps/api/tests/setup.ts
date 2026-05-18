@@ -8,7 +8,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 
 const appRoot = process.cwd();
 
-loadEnv({ node_env: 'test', path: appRoot });
+loadEnv({ node_env: 'test', path: appRoot, purge_dotenv: true });
 
 const DEFAULT_TEST_DB_URL =
   'postgresql://postgres:postgres@localhost:5432/taskforge_test?schema=public';
@@ -51,9 +51,7 @@ beforeAll(async () => {
   };
 
   if (shouldStartContainer()) {
-    container = await new PostgreSqlContainer('postgres:16-alpine')
-      .withTmpFs('/var/lib/postgresql/data')
-      .start();
+    container = await new PostgreSqlContainer('postgres:16-alpine').start();
 
     process.env.DATABASE_URL = container.getConnectionUri();
   }

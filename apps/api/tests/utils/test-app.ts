@@ -15,6 +15,8 @@ export interface TestAgentContext {
 export interface CreateTestAgentOptions {
   jwtSecret?: string;
   sessionBridgeSecret?: string;
+  devBypassEnabled?: boolean;
+  devBypassClientSecret?: string;
   userStore?: UserStore;
   taskRepository?: TaskRepository;
 }
@@ -26,6 +28,8 @@ export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgent
   const app = createApp({
     jwtSecret: options.jwtSecret ?? process.env.JWT_SECRET ?? 'test-secret',
     sessionBridgeSecret: options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET,
+    devBypassEnabled: options.devBypassEnabled,
+    devBypassClientSecret: options.devBypassClientSecret,
     userStore,
     taskRepository,
   });

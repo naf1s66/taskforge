@@ -12,11 +12,15 @@ import {
 import { useSession } from 'next-auth/react';
 
 import type { AuthenticatedUser } from './server-auth';
+import { clearBrowserTaskClientAuthState, setBrowserTaskClientAuthState } from './tasks-client';
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'error';
 
+const DEV_BYPASS_CLIENT_AUTH_REFRESH_MS = 12 * 60 * 1000;
+
 type ApiMeResponse = {
   user: { id: string; email: string | null } | null;
+  clientAuth?: { strategy: 'dev-bypass'; token: string } | null;
 };
 
 type AuthContextValue = {
@@ -65,6 +69,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let cancelled = false;
+    let devBypassRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     if (sessionStatus === 'loading') {
       setIsCheckingApi(true);
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     if (sessionStatus === 'authenticated') {
+      clearBrowserTaskClientAuthState();
       setApiUser(null);
       setIsCheckingApi(false);
       setHasCheckedApi(true);
@@ -98,6 +104,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
 
         if (payload?.user?.id) {
+          if (payload.clientAuth?.strategy === 'dev-bypass' && payload.clientAuth.token) {
+            setBrowserTaskClientAuthState({ devBypassToken: payload.clientAuth.token });
+            devBypassRefreshTimer = setTimeout(refresh, DEV_BYPASS_CLIENT_AUTH_REFRESH_MS);
+          } else {
+            clearBrowserTaskClientAuthState();
+          }
+
           setApiUser({
             id: payload.user.id,
             email: payload.user.email,
@@ -106,6 +119,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           });
           setError(null);
         } else {
+          clearBrowserTaskClientAuthState();
           setApiUser(null);
           setError(null);
         }
@@ -118,6 +132,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         if (status === 401) {
           // A 401 simply means no authenticated user; treat it as an idle session
+          clearBrowserTaskClientAuthState();
           setApiUser(null);
           setError(null);
           return;
@@ -129,6 +144,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             : 'We could not verify your session. Please check your connection or sign in again.';
 
         console.error('[auth] Failed to resolve API user', fetchError);
+        clearBrowserTaskClientAuthState();
         setApiUser(null);
         setError(friendlyMessage);
       } finally {
@@ -145,8 +161,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       cancelled = true;
+      if (devBypassRefreshTimer) {
+        clearTimeout(devBypassRefreshTimer);
+      }
     };
-  }, [sessionStatus, refreshNonce]);
+  }, [refresh, sessionStatus, refreshNonce]);
 
   const resolvedUser = sessionUser ?? apiUser;
 

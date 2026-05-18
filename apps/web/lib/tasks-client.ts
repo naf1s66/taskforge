@@ -1,12 +1,33 @@
-import { getSessionCookieName, type TaskDTO, type TaskRecordDTO, type TaskPriority, type TaskStatus } from '@taskforge/shared';
+import {
+  getSessionCookieName,
+  type BoardReadModelDTO,
+  type TaskBoardItemDTO,
+  type TaskDTO,
+  type TagDTO,
+  type TagListItemDTO,
+  type TaskRecordDTO,
+  type TaskPriority,
+  type TaskStatus,
+} from '@taskforge/shared';
 import { z } from 'zod';
+import type { AsyncLocalStorage } from 'async_hooks';
 
 import { getApiBaseUrl } from './env';
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
 
+export type {
+  BoardReadModelDTO,
+  TaskBoardItemDTO,
+  TaskDTO,
+  TaskPriority,
+  TaskRecordDTO,
+  TaskStatus,
+} from '@taskforge/shared';
+
 const TaskStatusSchema = z.union([z.literal('TODO'), z.literal('IN_PROGRESS'), z.literal('DONE')]);
 const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.literal('HIGH')]);
+const QueryDateTimeSchema = z.string().datetime({ offset: true });
 
 const NonEmptyTrimmedString = z.string().trim().min(1);
 
@@ -25,16 +46,93 @@ const NullableString = z
   .nullable()
   .transform((value) => value ?? undefined);
 
-const TaskRecordSchema = z.object({
+const TaskRecordSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    description: NullableString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    description: value.description ?? undefined,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskRecordDTO>;
+
+const TaskBoardItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: NonEmptyTrimmedString,
+    status: TaskStatusSchema,
+    priority: TaskPrioritySchema,
+    position: z.number().int().min(0),
+    dueDate: NullableDateString,
+    tags: z.array(z.string().min(1)).default([]),
+    updatedAt: z.string().datetime(),
+  })
+  .transform((value) => ({
+    ...value,
+    dueDate: value.dueDate ?? undefined,
+    tags: value.tags ?? [],
+  })) as z.ZodType<TaskBoardItemDTO>;
+
+const TagSummarySchema = z.object({
+  label: NonEmptyTrimmedString,
+  count: z.number().int().min(0),
+});
+
+const TagRecordSchema = z.object({
   id: z.string().uuid(),
-  title: NonEmptyTrimmedString,
-  description: NullableString,
+  label: NonEmptyTrimmedString,
+}) as z.ZodType<TagDTO>;
+
+const TagListItemSchema = z.object({
+  label: NonEmptyTrimmedString,
+  count: z.number().int().min(0),
+}) as z.ZodType<TagListItemDTO>;
+
+const BoardColumnSchema = z.object({
   status: TaskStatusSchema,
-  priority: TaskPrioritySchema,
-  dueDate: NullableDateString,
-  tags: z.array(z.string().min(1)).default([]),
-  createdAt: z.string().datetime(),
+  title: NonEmptyTrimmedString,
+  order: z.number().int().min(1),
+  tasks: z.array(TaskBoardItemSchema),
+  total: z.number().int().min(0),
+  overdueCount: z.number().int().min(0),
+  tags: z.array(TagSummarySchema),
+});
+
+const BoardSummarySchema = z.object({
+  totalsByStatus: z.object({
+    TODO: z.number().int().min(0),
+    IN_PROGRESS: z.number().int().min(0),
+    DONE: z.number().int().min(0),
+  }),
+  overdueByStatus: z.object({
+    TODO: z.number().int().min(0),
+    IN_PROGRESS: z.number().int().min(0),
+    DONE: z.number().int().min(0),
+  }),
+  totalTasks: z.number().int().min(0),
+  totalOverdue: z.number().int().min(0),
+});
+
+const BoardResponseSchema = z.object({
+  columns: z.array(BoardColumnSchema),
+  summary: BoardSummarySchema,
   updatedAt: z.string().datetime(),
+  generatedAt: z.string().datetime(),
+});
+
+const BoardMoveSchema = z.object({
+  taskId: z.string().uuid(),
+  targetStatus: TaskStatusSchema,
+  targetIndex: z.number().int().min(0),
 });
 
 const TaskListResponseSchema = z.object({
@@ -42,6 +140,10 @@ const TaskListResponseSchema = z.object({
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1).max(100),
   total: z.number().int().min(0),
+});
+
+const TagListResponseSchema = z.object({
+  items: z.array(TagListItemSchema),
 });
 
 const TaskDeleteResponseSchema = z.object({
@@ -73,10 +175,10 @@ const TaskCreateSchema = z
 const TaskUpdateSchema = z
   .object({
     title: NonEmptyTrimmedString.optional(),
-    description: NullableString,
+    description: z.union([NonEmptyTrimmedString, z.null()]).optional(),
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
-    dueDate: NullableDateString,
+    dueDate: z.union([z.string().datetime(), z.null()]).optional(),
     tags: z.array(NonEmptyTrimmedString).optional(),
   })
   .superRefine((value, ctx) => {
@@ -109,8 +211,39 @@ const TaskListQuerySchema = z
         return Array.isArray(value) ? value : [value];
       }),
     q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
-    dueFrom: z.string().datetime().optional(),
-    dueTo: z.string().datetime().optional(),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.dueFrom && value.dueTo) {
+      const from = Date.parse(value.dueFrom);
+      const to = Date.parse(value.dueTo);
+      if (!Number.isNaN(from) && !Number.isNaN(to) && from > to) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['dueFrom'],
+          message: 'dueFrom must be earlier than or equal to dueTo.',
+        });
+      }
+    }
+  });
+
+const BoardQuerySchema = z
+  .object({
+    status: TaskStatusSchema.optional(),
+    priority: TaskPrioritySchema.optional(),
+    tag: z
+      .union([NonEmptyTrimmedString, z.array(NonEmptyTrimmedString)])
+      .optional()
+      .transform((value) => {
+        if (!value) {
+          return undefined;
+        }
+        return Array.isArray(value) ? value : [value];
+      }),
+    q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
+    dueFrom: QueryDateTimeSchema.optional(),
+    dueTo: QueryDateTimeSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.dueFrom && value.dueTo) {
@@ -128,9 +261,16 @@ const TaskListQuerySchema = z
 
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskDeleteResponse = z.infer<typeof TaskDeleteResponseSchema>;
+export type TaskBoardResponse = z.infer<typeof BoardResponseSchema>;
+export type BoardMoveInput = z.infer<typeof BoardMoveSchema>;
+export type TagListResponse = z.infer<typeof TagListResponseSchema>;
+export type TagRecord = z.infer<typeof TagRecordSchema>;
 
 export type CreateTaskInput = Omit<TaskDTO, 'id'>;
-export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id'>>;
+export type UpdateTaskInput = Partial<Omit<TaskDTO, 'id' | 'description' | 'dueDate'>> & {
+  description?: string | null;
+  dueDate?: string | null;
+};
 export type TaskListQuery = {
   page?: number;
   pageSize?: number;
@@ -142,7 +282,17 @@ export type TaskListQuery = {
   dueTo?: string;
 };
 
+export type TaskBoardQuery = {
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  tag?: string | string[];
+  q?: string;
+  dueFrom?: string;
+  dueTo?: string;
+};
+
 type NormalizedTaskListQuery = z.infer<typeof TaskListQuerySchema>;
+type NormalizedTaskBoardQuery = z.infer<typeof BoardQuerySchema>;
 
 export type TaskClientErrorKind = 'validation' | 'http' | 'network' | 'serialization';
 
@@ -172,7 +322,6 @@ export class TaskClientError extends Error {
     this.issues = init.issues;
 
     if (init.cause !== undefined) {
-      // @ts-expect-error Node 18 target may not include the cause property
       this.cause = init.cause;
     }
 
@@ -183,6 +332,7 @@ export class TaskClientError extends Error {
 export interface TaskClientAuthState {
   sessionCookie?: string;
   accessToken?: string;
+  devBypassToken?: string;
 }
 
 export interface TaskClientRequestOptions extends TaskClientAuthState {
@@ -195,16 +345,17 @@ export interface TaskClientRequestOptions extends TaskClientAuthState {
 }
 
 let manualServerAuthState: TaskClientAuthState | undefined;
+let browserAuthState: TaskClientAuthState | undefined;
 let triedLoadingNextCookies = false;
 let nextCookiesGetter: (() => { get(name: string): { value?: string } | undefined } | undefined) | undefined;
-let serverAuthStoragePromise: Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
-let serverAuthStorage: import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null | undefined;
+let serverAuthStoragePromise: Promise<AsyncLocalStorage<TaskClientAuthState> | null> | null = null;
+let serverAuthStorage: AsyncLocalStorage<TaskClientAuthState> | null | undefined;
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.document !== 'undefined';
 }
 
-async function loadServerAuthStorage(): Promise<import('node:async_hooks').AsyncLocalStorage<TaskClientAuthState> | null> {
+async function loadServerAuthStorage(): Promise<AsyncLocalStorage<TaskClientAuthState> | null> {
   if (isBrowser()) {
     return null;
   }
@@ -217,7 +368,7 @@ async function loadServerAuthStorage(): Promise<import('node:async_hooks').Async
     return serverAuthStoragePromise;
   }
 
-  serverAuthStoragePromise = import('node:async_hooks')
+  serverAuthStoragePromise = import(/* webpackIgnore: true */ 'async_hooks')
     .then((module) => {
       serverAuthStorage = new module.AsyncLocalStorage<TaskClientAuthState>();
       return serverAuthStorage;
@@ -246,6 +397,14 @@ async function getServerAuthState(): Promise<TaskClientAuthState | undefined> {
   return manualServerAuthState;
 }
 
+function getBrowserAuthState(): TaskClientAuthState | undefined {
+  if (!isBrowser()) {
+    return undefined;
+  }
+
+  return browserAuthState;
+}
+
 async function tryReadNextSessionCookie(): Promise<string | undefined> {
   if (isBrowser()) {
     return undefined;
@@ -254,9 +413,9 @@ async function tryReadNextSessionCookie(): Promise<string | undefined> {
   if (!triedLoadingNextCookies) {
     triedLoadingNextCookies = true;
     try {
-      const module = await import('next/headers');
-      if (typeof module.cookies === 'function') {
-        nextCookiesGetter = module.cookies;
+      const headersModule = await import('next/headers');
+      if (typeof headersModule.cookies === 'function') {
+        nextCookiesGetter = headersModule.cookies;
       } else {
         nextCookiesGetter = undefined;
       }
@@ -296,8 +455,25 @@ async function resolveAccessToken(options?: TaskClientRequestOptions): Promise<s
     return options.accessToken;
   }
 
+  if (isBrowser()) {
+    return getBrowserAuthState()?.accessToken;
+  }
+
   const state = await getServerAuthState();
   return state?.accessToken;
+}
+
+async function resolveDevBypassToken(options?: TaskClientRequestOptions): Promise<string | undefined> {
+  if (options?.devBypassToken) {
+    return options.devBypassToken;
+  }
+
+  if (isBrowser()) {
+    return getBrowserAuthState()?.devBypassToken;
+  }
+
+  const state = await getServerAuthState();
+  return state?.devBypassToken;
 }
 
 function ensureBaseUrl(options?: TaskClientRequestOptions): string {
@@ -390,6 +566,11 @@ async function applyAuth(headers: Headers, options?: TaskClientRequestOptions): 
   const accessToken = await resolveAccessToken(options);
   if (accessToken) {
     headers.set('authorization', accessToken.startsWith('Bearer ') ? accessToken : `Bearer ${accessToken}`);
+  } else {
+    const devBypassToken = await resolveDevBypassToken(options);
+    if (devBypassToken) {
+      headers.set('x-taskforge-dev-bypass', devBypassToken);
+    }
   }
 
   if (options?.credentials) {
@@ -535,6 +716,89 @@ export async function listTasks(
   );
 }
 
+export async function getTask(
+  id: string,
+  options?: TaskClientRequestOptions,
+): Promise<TaskRecordDTO> {
+  const validatedId = TaskIdSchema.safeParse(id);
+  if (!validatedId.success) {
+    throw new TaskClientError('Task identifier was invalid.', {
+      kind: 'validation',
+      issues: validatedId.error.issues,
+    });
+  }
+
+  return requestJson(
+    `v1/tasks/${validatedId.data}`,
+    {
+      method: 'GET',
+      schema: TaskRecordSchema,
+    },
+    options,
+  );
+}
+
+export async function getTaskBoard(
+  params?: TaskBoardQuery,
+  options?: TaskClientRequestOptions,
+): Promise<BoardReadModelDTO> {
+  let normalizedQuery: NormalizedTaskBoardQuery | undefined;
+  if (params) {
+    const parsed = BoardQuerySchema.safeParse(params);
+    if (!parsed.success) {
+      throw new TaskClientError('Board filters were invalid.', {
+        kind: 'validation',
+        issues: parsed.error.issues,
+      });
+    }
+    normalizedQuery = parsed.data;
+  }
+
+  return requestJson(
+    'v1/tasks/board',
+    {
+      method: 'GET',
+      query: toQueryRecord(normalizedQuery),
+      schema: BoardResponseSchema,
+    },
+    options,
+  );
+}
+
+export async function listTags(options?: TaskClientRequestOptions): Promise<TagListResponse> {
+  return requestJson(
+    'v1/tags',
+    {
+      method: 'GET',
+      schema: TagListResponseSchema,
+    },
+    options,
+  );
+}
+
+export async function moveTaskOnBoard(
+  input: BoardMoveInput,
+  options?: TaskClientRequestOptions,
+): Promise<BoardReadModelDTO> {
+  const parsed = BoardMoveSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new TaskClientError('Board move payload was invalid.', {
+      kind: 'validation',
+      issues: parsed.error.issues,
+    });
+  }
+
+  return requestJson(
+    'v1/tasks/board/move',
+    {
+      method: 'PATCH',
+      body: parsed.data,
+      schema: BoardResponseSchema,
+    },
+    options,
+  );
+}
+
 export async function createTask(
   input: CreateTaskInput,
   options?: TaskClientRequestOptions,
@@ -633,4 +897,12 @@ export async function withTaskClientAuth<T>(
 
 export function clearManualTaskClientAuthState(): void {
   manualServerAuthState = undefined;
+}
+
+export function setBrowserTaskClientAuthState(auth: TaskClientAuthState | undefined): void {
+  browserAuthState = auth;
+}
+
+export function clearBrowserTaskClientAuthState(): void {
+  browserAuthState = undefined;
 }

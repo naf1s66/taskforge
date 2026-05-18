@@ -17,21 +17,31 @@ import type { ZodIssue } from 'zod';
 import {
   createTask,
   deleteTask,
+  getTask,
   listTasks,
+  listTags,
+  getTaskBoard,
+  moveTaskOnBoard,
   updateTask,
   TaskClientError,
 } from './tasks-client';
 import type {
+  BoardMoveInput,
   CreateTaskInput,
   TaskClientErrorKind,
+  TaskDeleteResponse,
   TaskListQuery,
   TaskListResponse,
+  TaskBoardQuery,
+  TaskBoardResponse,
+  TagListResponse,
   TaskRecordDTO,
   UpdateTaskInput,
 } from './tasks-client';
 import { useAuth } from './use-auth';
+import type { TaskStatus } from '@taskforge/shared';
 
-export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean };
+export type TaskListItem = TaskRecordDTO & { _optimistic?: boolean; _partial?: boolean };
 
 export interface TaskListData extends Omit<TaskListResponse, 'items'> {
   items: TaskListItem[];
@@ -40,18 +50,44 @@ export interface TaskListData extends Omit<TaskListResponse, 'items'> {
 type TaskQueryFnData = TaskListData;
 
 type TaskQueryKey = ReturnType<typeof taskQueryKeys.list>;
+type TaskBoardQueryKey = ReturnType<typeof taskQueryKeys.board>;
+type TaskDetailQueryKey = ReturnType<typeof taskQueryKeys.detail>;
+type TagQueryKey = ReturnType<typeof taskQueryKeys.tags>;
 
 type TaskQueryOptions = Omit<
   UseQueryOptions<TaskQueryFnData, TaskClientError, TaskQueryFnData, TaskQueryKey>,
   'queryKey' | 'queryFn'
 >;
 
-type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
+type TaskBoardQueryOptions = Omit<
+  UseQueryOptions<TaskBoardResponse, TaskClientError, TaskBoardResponse, TaskBoardQueryKey>,
+  'queryKey' | 'queryFn'
+>;
 
-interface TaskMutationContext {
+type TaskDetailQueryOptions = Omit<
+  UseQueryOptions<TaskListItem, TaskClientError, TaskListItem, TaskDetailQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
+type TagQueryOptions = Omit<
+  UseQueryOptions<TagListResponse, TaskClientError, TagListResponse, TagQueryKey>,
+  'queryKey' | 'queryFn'
+>;
+
+type TaskListQueryResult = UseQueryResult<TaskQueryFnData, TaskClientError>;
+type TaskBoardQueryResult = UseQueryResult<TaskBoardResponse, TaskClientError>;
+type TaskDetailQueryResult = UseQueryResult<TaskListItem, TaskClientError>;
+type TagQueryResult = UseQueryResult<TagListResponse, TaskClientError>;
+
+interface InternalTaskMutationContext {
   touchedQueries: Array<[QueryKey, TaskListData | undefined]>;
   optimisticTaskId?: string;
+  boardSnapshots?: Array<[QueryKey, TaskBoardResponse | undefined]>;
+  taskSnapshot?: TaskListItem | null;
 }
+
+type TaskMutationContext<TContext extends object = object> =
+  TContext & InternalTaskMutationContext;
 
 export interface TaskOperationError {
   message: string;
@@ -74,6 +110,49 @@ export interface UseTasksQueryResult {
   fetchStatus: TaskListQueryResult['fetchStatus'];
   refetch: TaskListQueryResult['refetch'];
   queryKey: TaskQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
+export interface UseTaskBoardQueryResult {
+  data: TaskBoardResponse | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TaskBoardQueryResult['status'];
+  fetchStatus: TaskBoardQueryResult['fetchStatus'];
+  refetch: TaskBoardQueryResult['refetch'];
+  queryKey: TaskBoardQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
+export interface UseTagsQueryResult {
+  data: TagListResponse | undefined;
+  tags: TagListResponse['items'];
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TagQueryResult['status'];
+  fetchStatus: TagQueryResult['fetchStatus'];
+  refetch: TagQueryResult['refetch'];
+  queryKey: TagQueryKey;
+  error: TaskOperationError | null;
+  rawError: unknown;
+}
+
+export interface UseTaskRecordQueryResult {
+  data: TaskListItem | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  status: TaskDetailQueryResult['status'];
+  fetchStatus: TaskDetailQueryResult['fetchStatus'];
+  refetch: TaskDetailQueryResult['refetch'];
+  queryKey: TaskDetailQueryKey | null;
   error: TaskOperationError | null;
   rawError: unknown;
 }
@@ -106,14 +185,29 @@ interface NormalizedTaskListFilters {
   dueTo?: string;
 }
 
+interface NormalizedTaskBoardFilters {
+  status?: TaskBoardQuery['status'];
+  priority?: TaskBoardQuery['priority'];
+  tag?: string[];
+  q?: string;
+  dueFrom?: string;
+  dueTo?: string;
+}
+
 const TASK_QUERY_SCOPE = 'tasks';
 
 const FALLBACK_USER_KEY = 'anonymous';
+const isDevMode = process.env.NODE_ENV !== 'production';
 
 const taskQueryKeys = {
   all: (userKey: string) => [TASK_QUERY_SCOPE, userKey] as const,
   list: (userKey: string, filters: NormalizedTaskListFilters | undefined) =>
     [...taskQueryKeys.all(userKey), 'list', filters ?? {}] as const,
+  boardRoot: (userKey: string) => [...taskQueryKeys.all(userKey), 'board'] as const,
+  board: (userKey: string, filters?: NormalizedTaskBoardFilters | undefined) =>
+    [...taskQueryKeys.boardRoot(userKey), filters ?? {}] as const,
+  detail: (userKey: string, taskId: string) => [...taskQueryKeys.all(userKey), 'detail', taskId] as const,
+  tags: (userKey: string) => [...taskQueryKeys.all(userKey), 'tags'] as const,
 };
 
 const OPTIMISTIC_ID_MAP_SCOPE = 'task-optimistic-map';
@@ -214,6 +308,32 @@ function extractFiltersFromKey(queryKey: QueryKey): NormalizedTaskListFilters | 
   }
 
   return undefined;
+}
+
+function extractBoardFiltersFromKey(queryKey: QueryKey): NormalizedTaskBoardFilters | undefined {
+  if (!Array.isArray(queryKey) || queryKey.length < 4) {
+    return undefined;
+  }
+
+  const maybeFilters = queryKey[3];
+  if (maybeFilters && typeof maybeFilters === 'object') {
+    const entries = Object.entries(maybeFilters as Record<string, unknown>).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) {
+      return undefined;
+    }
+
+    return maybeFilters as NormalizedTaskBoardFilters;
+  }
+
+  return undefined;
+}
+
+function isTaskListQueryKey(queryKey: QueryKey, userScope: string): boolean {
+  return Array.isArray(queryKey) && queryKey[0] === TASK_QUERY_SCOPE && queryKey[1] === userScope && queryKey[2] === 'list';
+}
+
+function isOptimisticIdMapQueryKey(queryKey: QueryKey, userScope: string): boolean {
+  return Array.isArray(queryKey) && queryKey[0] === OPTIMISTIC_ID_MAP_SCOPE && queryKey[1] === userScope;
 }
 
 function createTaskClientErrorMessage(error: TaskClientError): string {
@@ -349,6 +469,329 @@ function updateTaskInList(list: TaskListData, taskId: string, patch: Partial<Tas
   return next;
 }
 
+function reconcileTaskInList(
+  list: TaskListData,
+  task: TaskListItem,
+  filters: NormalizedTaskListFilters | undefined,
+  previousId?: string,
+): TaskListData {
+  if (!taskMatchesFilters(task, filters)) {
+    return removeTaskFromList(list, previousId ?? task.id);
+  }
+
+  return replaceTaskInList(list, previousId, task);
+}
+
+function taskListItemFromBoardTask(task: TaskBoardResponse['columns'][number]['tasks'][number]): TaskListItem {
+  return {
+    id: task.id,
+    title: task.title,
+    description: undefined,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    tags: [...task.tags],
+    createdAt: task.updatedAt,
+    updatedAt: task.updatedAt,
+    _partial: true,
+  };
+}
+
+function mergeMutationContext<TContext extends object>(
+  internalContext: InternalTaskMutationContext,
+  externalContext: TContext | undefined,
+): TaskMutationContext<TContext> {
+  if (!externalContext) {
+    return internalContext as TaskMutationContext<TContext>;
+  }
+
+  return {
+    ...externalContext,
+    ...internalContext,
+  };
+}
+
+function summarizeBoardTaskTags(tasks: TaskBoardResponse['columns'][number]['tasks']) {
+  const counts = new Map<string, number>();
+
+  for (const task of tasks) {
+    for (const label of task.tags) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }));
+}
+
+function isBoardTaskOverdue(task: TaskBoardResponse['columns'][number]['tasks'][number], now: Date): boolean {
+  if (!task.dueDate || task.status === 'DONE') {
+    return false;
+  }
+
+  const due = Date.parse(task.dueDate);
+  if (Number.isNaN(due)) {
+    return false;
+  }
+
+  return due < now.getTime();
+}
+
+function rebuildBoardColumns(columns: TaskBoardResponse['columns'], now: Date): TaskBoardResponse['columns'] {
+  return columns.map((column) => {
+    const tasks = column.tasks.map((task, index) => ({
+      ...task,
+      position: index,
+    }));
+
+    return {
+      ...column,
+      tasks,
+      total: tasks.length,
+      overdueCount: tasks.filter((task) => isBoardTaskOverdue(task, now)).length,
+      tags: summarizeBoardTaskTags(tasks),
+    };
+  });
+}
+
+function buildBoardSummary(columns: TaskBoardResponse['columns']): TaskBoardResponse['summary'] {
+  const totalsByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies TaskBoardResponse['summary']['totalsByStatus'];
+  const overdueByStatus = {
+    TODO: 0,
+    IN_PROGRESS: 0,
+    DONE: 0,
+  } satisfies TaskBoardResponse['summary']['overdueByStatus'];
+
+  for (const column of columns) {
+    totalsByStatus[column.status] = column.total;
+    overdueByStatus[column.status] = column.overdueCount;
+  }
+
+  return {
+    totalsByStatus,
+    overdueByStatus,
+    totalTasks: Object.values(totalsByStatus).reduce((sum, value) => sum + value, 0),
+    totalOverdue: Object.values(overdueByStatus).reduce((sum, value) => sum + value, 0),
+  };
+}
+
+function boardTaskMatchesFilters(
+  task: Pick<TaskListItem, 'title' | 'status' | 'priority' | 'dueDate' | 'tags'> & { description?: string },
+  filters: NormalizedTaskBoardFilters | undefined,
+): boolean {
+  if (!filters) {
+    return true;
+  }
+
+  if (filters.status && task.status !== filters.status) {
+    return false;
+  }
+
+  if (filters.priority && task.priority !== filters.priority) {
+    return false;
+  }
+
+  if (filters.tag?.length) {
+    const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+    if (filterTags.length > 0 && filterTags.some((tag) => !taskTags.has(tag))) {
+      return false;
+    }
+  }
+
+  if (filters.q) {
+    const needle = filters.q.toLowerCase();
+    const titleMatches = task.title.toLowerCase().includes(needle);
+    const description = task.description;
+    const descriptionMatches = description === undefined || description.toLowerCase().includes(needle);
+
+    if (!titleMatches && !descriptionMatches) {
+      return false;
+    }
+  }
+
+  if (filters.dueFrom) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) < Date.parse(filters.dueFrom)) {
+      return false;
+    }
+  }
+
+  if (filters.dueTo) {
+    if (!task.dueDate) {
+      return false;
+    }
+    if (Date.parse(task.dueDate) > Date.parse(filters.dueTo)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function taskBoardItemFromTask(
+  task: TaskListItem,
+  position: number,
+): TaskBoardResponse['columns'][number]['tasks'][number] {
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    position,
+    dueDate: task.dueDate,
+    tags: [...task.tags],
+    updatedAt: task.updatedAt,
+  };
+}
+
+function taskListPatchFromUpdateInput(input: UpdateTaskInput): Partial<TaskListItem> {
+  const patch: Partial<TaskListItem> = {};
+
+  if (Object.prototype.hasOwnProperty.call(input, 'title')) {
+    patch.title = input.title;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'description')) {
+    patch.description = input.description ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'status')) {
+    patch.status = input.status;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'priority')) {
+    patch.priority = input.priority;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'dueDate')) {
+    patch.dueDate = input.dueDate ?? undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'tags')) {
+    patch.tags = input.tags;
+  }
+
+  return patch;
+}
+
+function applyTaskUpdateToBoard(
+  board: TaskBoardResponse,
+  taskId: string,
+  patch: Partial<TaskListItem>,
+  now: Date = new Date(),
+  filters?: NormalizedTaskBoardFilters,
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((task) => ({ ...task })),
+  }));
+  const sourceColumn = columns.find((column) => column.tasks.some((task) => task.id === taskId));
+
+  if (!sourceColumn) {
+    return board;
+  }
+
+  const sourceIndex = sourceColumn.tasks.findIndex((task) => task.id === taskId);
+  const existingTask = sourceColumn.tasks[sourceIndex];
+  const hasDueDatePatch = Object.prototype.hasOwnProperty.call(patch, 'dueDate');
+  const hasTagsPatch = Object.prototype.hasOwnProperty.call(patch, 'tags');
+  const nextStatus = patch.status ?? existingTask.status;
+  const updatedTask = {
+    ...existingTask,
+    title: patch.title ?? existingTask.title,
+    status: nextStatus,
+    priority: patch.priority ?? existingTask.priority,
+    dueDate: hasDueDatePatch ? patch.dueDate : existingTask.dueDate,
+    tags: hasTagsPatch ? patch.tags ?? [] : existingTask.tags,
+    updatedAt: patch.updatedAt ?? existingTask.updatedAt,
+  };
+
+  sourceColumn.tasks.splice(sourceIndex, 1);
+
+  if (boardTaskMatchesFilters(updatedTask, filters)) {
+    if (nextStatus === sourceColumn.status) {
+      sourceColumn.tasks.splice(sourceIndex, 0, updatedTask);
+    } else {
+      const targetColumn = columns.find((column) => column.status === nextStatus);
+      if (!targetColumn) {
+        return board;
+      }
+
+      targetColumn.tasks.push(updatedTask);
+    }
+  }
+
+  const nextColumns = rebuildBoardColumns(columns, now);
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: patch.updatedAt ?? now.toISOString(),
+  };
+}
+
+function reconcileTaskInBoard(
+  board: TaskBoardResponse,
+  task: TaskListItem,
+  filters?: NormalizedTaskBoardFilters,
+  now: Date = new Date(),
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((boardTask) => ({ ...boardTask })),
+  }));
+  const sourceColumn = columns.find((column) => column.tasks.some((boardTask) => boardTask.id === task.id));
+  const sourceIndex = sourceColumn
+    ? sourceColumn.tasks.findIndex((boardTask) => boardTask.id === task.id)
+    : -1;
+  const matchesFilters = boardTaskMatchesFilters(task, filters);
+
+  if (sourceColumn && sourceIndex !== -1) {
+    sourceColumn.tasks.splice(sourceIndex, 1);
+  }
+
+  if (!matchesFilters) {
+    if (!sourceColumn) {
+      return board;
+    }
+
+    const nextColumns = rebuildBoardColumns(columns, now);
+    return {
+      ...board,
+      columns: nextColumns,
+      summary: buildBoardSummary(nextColumns),
+      updatedAt: task.updatedAt,
+    };
+  }
+
+  const targetColumn = columns.find((column) => column.status === task.status);
+  if (!targetColumn) {
+    return board;
+  }
+
+  const insertIndex =
+    sourceColumn?.status === task.status && sourceIndex >= 0
+      ? sourceIndex
+      : targetColumn.tasks.length;
+  targetColumn.tasks.splice(
+    insertIndex,
+    0,
+    taskBoardItemFromTask(task, insertIndex),
+  );
+
+  const nextColumns = rebuildBoardColumns(columns, now);
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: task.updatedAt,
+  };
+}
+
 function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
   const index = list.items.findIndex((item) => item.id === taskId);
   if (index === -1) {
@@ -360,6 +803,109 @@ function removeTaskFromList(list: TaskListData, taskId: string): TaskListData {
     ...list,
     items: nextItems,
     total: Math.max(0, list.total - 1),
+  };
+}
+
+function removeTaskFromBoard(board: TaskBoardResponse, taskId: string): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.filter((task) => task.id !== taskId).map((task) => ({ ...task })),
+  }));
+
+  const removedCount = board.columns.reduce((count, column) => {
+    const remaining = columns.find((nextColumn) => nextColumn.status === column.status);
+    return count + (column.tasks.length - (remaining?.tasks.length ?? 0));
+  }, 0);
+
+  if (removedCount === 0) {
+    return board;
+  }
+
+  const now = new Date();
+  const nextColumns = rebuildBoardColumns(columns, now);
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: now.toISOString(),
+  };
+}
+
+function normalizeTaskBoardFilters(filters?: TaskBoardQuery): NormalizedTaskBoardFilters | undefined {
+  if (!filters) {
+    return undefined;
+  }
+
+  const normalized: NormalizedTaskBoardFilters = {};
+  if (filters.status) {
+    normalized.status = filters.status;
+  }
+
+  if (filters.priority) {
+    normalized.priority = filters.priority;
+  }
+
+  if (filters.tag) {
+    const tags = Array.isArray(filters.tag) ? filters.tag : [filters.tag];
+    const normalizedTags = Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).sort();
+    if (normalizedTags.length > 0) {
+      normalized.tag = normalizedTags;
+    }
+  }
+  if (filters.q?.trim()) {
+    normalized.q = filters.q.trim();
+  }
+  if (filters.dueFrom) {
+    normalized.dueFrom = filters.dueFrom;
+  }
+  if (filters.dueTo) {
+    normalized.dueTo = filters.dueTo;
+  }
+
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function applyOptimisticMoveToBoard(
+  board: TaskBoardResponse,
+  input: MoveTaskVariables,
+  filters?: NormalizedTaskBoardFilters,
+): TaskBoardResponse {
+  const columns = board.columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.map((task) => ({ ...task })),
+  }));
+  let movedTask: (typeof columns)[number]['tasks'][number] | null = null;
+
+  for (const column of columns) {
+    const index = column.tasks.findIndex((task) => task.id === input.taskId);
+    if (index !== -1) {
+      const [task] = column.tasks.splice(index, 1);
+      movedTask = { ...task, status: input.targetStatus };
+      break;
+    }
+  }
+
+  if (!movedTask) {
+    return board;
+  }
+
+  if (boardTaskMatchesFilters(movedTask, filters)) {
+    const targetColumn = columns.find((column) => column.status === input.targetStatus);
+    if (!targetColumn) {
+      return board;
+    }
+
+    const insertIndex = Math.max(0, Math.min(input.targetIndex, targetColumn.tasks.length));
+    targetColumn.tasks.splice(insertIndex, 0, movedTask);
+  }
+  const now = new Date();
+  const nextColumns = rebuildBoardColumns(columns, now);
+
+  return {
+    ...board,
+    columns: nextColumns,
+    summary: buildBoardSummary(nextColumns),
+    updatedAt: now.toISOString(),
   };
 }
 
@@ -376,8 +922,13 @@ function taskMatchesFilters(task: TaskListItem, filters?: NormalizedTaskListFilt
     return false;
   }
 
-  if (filters.tag && filters.tag.some((tag) => !task.tags.includes(tag))) {
-    return false;
+  if (filters.tag?.length) {
+    const taskTags = new Set(task.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+    const filterTags = filters.tag.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+
+    if (filterTags.length > 0 && filterTags.some((tag) => !taskTags.has(tag))) {
+      return false;
+    }
   }
 
   if (filters.q) {
@@ -496,6 +1047,196 @@ export function useTasksQuery(filters?: TaskListQuery, options?: TaskQueryOption
   };
 }
 
+export function useTaskBoardQuery(filters?: TaskBoardQuery, options?: TaskBoardQueryOptions): UseTaskBoardQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+  const filtersSignature = useMemo(() => stableSerialize(filters), [filters]);
+  const normalizedHash = useMemo(() => {
+    const parsedFilters = deserializeFilters(filtersSignature);
+    const normalized = normalizeTaskBoardFilters(parsedFilters);
+    return stableSerialize(normalized);
+  }, [filtersSignature]);
+
+  const userScope = scopedQueryKey(user?.id);
+  const normalizedFilters = useMemo(
+    () => deserializeNormalizedFilters(normalizedHash) as NormalizedTaskBoardFilters | undefined,
+    [normalizedHash],
+  );
+  const queryKey = useMemo(
+    () => taskQueryKeys.board(userScope, normalizedFilters),
+    [userScope, normalizedFilters],
+  );
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => getTaskBoard(normalizedFilters),
+    staleTime: 15_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
+export function useTagsQuery(options?: TagQueryOptions): UseTagsQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(() => taskQueryKeys.tags(userScope), [userScope]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled;
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => listTags(),
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    tags: query.data?.items ?? [],
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
+export function useTaskRecordQuery(
+  taskId?: string,
+  options?: TaskDetailQueryOptions,
+): UseTaskRecordQueryResult {
+  const { user, status } = useAuth();
+  const queryClient = useQueryClient();
+  const previousUserIdRef = useRef<string | null>(null);
+  const userScope = scopedQueryKey(user?.id);
+  const queryKey = useMemo(
+    () => (taskId ? taskQueryKeys.detail(userScope, taskId) : null),
+    [taskId, userScope],
+  );
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(FALLBACK_USER_KEY) });
+    }
+  }, [queryClient, status]);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const nextUserId = user?.id ?? null;
+
+    if (previousUserId && previousUserId !== nextUserId) {
+      queryClient.removeQueries({ queryKey: taskQueryKeys.all(scopedQueryKey(previousUserId)) });
+    }
+
+    previousUserIdRef.current = nextUserId;
+  }, [queryClient, user?.id]);
+
+  const { enabled: optionsEnabled = true, ...queryOptions } = options ?? {};
+  const isAuthenticated = status === 'authenticated' && Boolean(user?.id);
+  const shouldDelayForAuth = optionsEnabled && status === 'loading';
+  const effectiveEnabled = isAuthenticated && optionsEnabled && Boolean(taskId) && Boolean(queryKey);
+
+  const query = useQuery({
+    queryKey: queryKey ?? taskQueryKeys.detail(userScope, '__disabled__'),
+    queryFn: async () => {
+      const payload = await getTask(taskId as string);
+      return { ...payload } satisfies TaskListItem;
+    },
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    enabled: effectiveEnabled,
+    ...queryOptions,
+  });
+
+  const friendlyError = toTaskOperationError(query.error);
+
+  return {
+    data: query.data,
+    isLoading: shouldDelayForAuth || query.isLoading,
+    isFetching: shouldDelayForAuth || query.isFetching,
+    isError: query.isError,
+    isSuccess: query.isSuccess,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    queryKey,
+    error: friendlyError,
+    rawError: query.error,
+  };
+}
+
 function buildOptimisticTask(input: CreateTaskInput): TaskListItem {
   const now = new Date().toISOString();
   const randomId =
@@ -525,7 +1266,7 @@ function collectMatchingQueries(
   const touched: Array<[QueryKey, TaskListData | undefined]> = [];
 
   for (const [key, data] of candidates) {
-    if (!data) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
@@ -541,6 +1282,43 @@ function collectMatchingQueries(
   return touched;
 }
 
+function collectBoardQueries(
+  queryClient: QueryClient,
+  userScope: string,
+  predicate: (
+    board: TaskBoardResponse,
+    filters: NormalizedTaskBoardFilters | undefined,
+  ) => TaskBoardResponse,
+): Array<[QueryKey, TaskBoardResponse | undefined]> {
+  const candidates = queryClient.getQueriesData<TaskBoardResponse>({ queryKey: taskQueryKeys.boardRoot(userScope) });
+  const touched: Array<[QueryKey, TaskBoardResponse | undefined]> = [];
+
+  for (const [key, data] of candidates) {
+    if (!data) {
+      continue;
+    }
+
+    const filters = extractBoardFiltersFromKey(key);
+    const next = predicate(data, filters);
+
+    if (next !== data) {
+      touched.push([key, data]);
+      queryClient.setQueryData(key, next);
+    }
+  }
+
+  return touched;
+}
+
+function restoreBoardSnapshots(
+  queryClient: QueryClient,
+  snapshots: Array<[QueryKey, TaskBoardResponse | undefined]> | undefined,
+): void {
+  for (const [key, snapshot] of snapshots ?? []) {
+    queryClient.setQueryData(key, snapshot);
+  }
+}
+
 function selectTaskFromCache(
   queryClient: QueryClient,
   userScope: string,
@@ -551,14 +1329,29 @@ function selectTaskFromCache(
   }
 
   const candidates = queryClient.getQueriesData<TaskListData>({ queryKey: taskQueryKeys.all(userScope) });
-  for (const [, data] of candidates) {
-    if (!data) {
+  for (const [key, data] of candidates) {
+    if (!isTaskListQueryKey(key, userScope) || !data) {
       continue;
     }
 
     const match = data.items.find((item) => item.id === taskId);
     if (match) {
       return match;
+    }
+  }
+
+  const detail = queryClient.getQueryData<TaskListItem>(taskQueryKeys.detail(userScope, taskId));
+  if (detail) {
+    return detail;
+  }
+
+  const boards = queryClient.getQueriesData<TaskBoardResponse>({ queryKey: taskQueryKeys.boardRoot(userScope) });
+  for (const [, board] of boards) {
+    const boardTask = board?.columns
+      .flatMap((column) => column.tasks)
+      .find((task) => task.id === taskId);
+    if (boardTask) {
+      return taskListItemFromBoardTask(boardTask);
     }
   }
 
@@ -590,7 +1383,7 @@ export function useCreateTask(
   const userScope = scopedQueryKey(user?.id);
   const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskRecordDTO, TaskClientError, CreateTaskInput, TaskMutationContext>({
     mutationFn: (input) => createTask(input),
     onMutate: async (input) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
@@ -607,7 +1400,7 @@ export function useCreateTask(
 
       return { touchedQueries, optimisticTaskId: optimisticTask.id } satisfies TaskMutationContext;
     },
-    onError: (error, _variables, context) => {
+    onError: (error, _variables, context, mutationContext) => {
       if (!context) {
         return;
       }
@@ -616,14 +1409,15 @@ export function useCreateTask(
         queryClient.setQueryData(key, snapshot);
       }
 
-      onError?.(error, _variables, context);
+      onError?.(error, _variables, context, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
+    onSuccess: (result, variables, context, mutationContext) => {
       const taskItem: TaskListItem = { ...result };
-      if (context?.optimisticTaskId) {
+      if (typeof context?.optimisticTaskId === 'string') {
+        const optimisticTaskId = context.optimisticTaskId;
         queryClient.setQueryData<Record<string, string>>(optimisticIdMapKey(userScope), (previous) => ({
           ...(previous ?? {}),
-          [context.optimisticTaskId]: taskItem.id,
+          [optimisticTaskId]: taskItem.id,
         }));
       }
 
@@ -638,10 +1432,10 @@ export function useCreateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId, taskItem);
       });
 
-      onSuccess?.(result, variables, context);
+      onSuccess?.(result, variables, context, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, context, mutationContext) => {
+      onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
     ...restOptions,
@@ -715,7 +1509,7 @@ export function useTaskReplacementId(optimisticTask: TaskListItem | null): strin
 
       const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
         const key = event.query?.queryKey;
-        if (Array.isArray(key) && key[0] === TASK_QUERY_SCOPE && key[1] === userScope) {
+        if (key && isOptimisticIdMapQueryKey(key, userScope)) {
           onStoreChange();
         }
       });
@@ -739,11 +1533,15 @@ export function useUpdateTask(
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskRecordDTO, TaskClientError, UpdateTaskVariables, TaskMutationContext>({
     mutationFn: ({ id, input }) => updateTask(id, input),
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+      const optimisticUpdatedAt = new Date().toISOString();
+      const taskSnapshot = selectTaskFromCache(queryClient, userScope, id);
+      const optimisticPatch = taskListPatchFromUpdateInput(input);
 
       const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload) => {
         const existing = payload.items.find((item) => item.id === id);
@@ -752,24 +1550,42 @@ export function useUpdateTask(
         }
 
         return updateTaskInList(payload, id, {
-          ...input,
-          updatedAt: new Date().toISOString(),
+          ...optimisticPatch,
+          updatedAt: optimisticUpdatedAt,
           _optimistic: true,
         });
       });
 
-      return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board, filters) =>
+        applyTaskUpdateToBoard(
+          board,
+          id,
+          {
+            ...optimisticPatch,
+            description: Object.prototype.hasOwnProperty.call(input, 'description')
+              ? optimisticPatch.description
+              : taskSnapshot?.description,
+            updatedAt: optimisticUpdatedAt,
+          },
+          new Date(optimisticUpdatedAt),
+          filters,
+        ),
+      );
+
+      return { touchedQueries, optimisticTaskId: id, boardSnapshots, taskSnapshot } satisfies TaskMutationContext;
     },
-    onError: (error, variables, context) => {
+    onError: (error, variables, context, mutationContext) => {
       if (context) {
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
+
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
+    onSuccess: (result, variables, context, mutationContext) => {
       const taskItem: TaskListItem = { ...result };
 
       collectMatchingQueries(queryClient, userScope, (payload, filters) => {
@@ -780,13 +1596,162 @@ export function useUpdateTask(
         return replaceTaskInList(payload, context?.optimisticTaskId ?? variables.id, taskItem);
       });
 
-      options?.onSuccess?.(result, variables, context);
+      collectBoardQueries(queryClient, userScope, (board, filters) =>
+        reconcileTaskInBoard(board, taskItem, filters),
+      );
+
+      onSuccess?.(result, variables, context, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, context, mutationContext) => {
+      onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
+  });
+
+  const friendlyError = toTaskOperationError(mutation.error);
+
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    reset: mutation.reset,
+    status: mutation.status,
+    isPending: mutation.isPending,
+    isSuccess: mutation.isSuccess,
+    isError: mutation.isError,
+    data: mutation.data,
+    variables: mutation.variables,
+    error: friendlyError,
+    rawError: mutation.error,
+  };
+}
+
+interface MoveTaskVariables extends BoardMoveInput {
+  taskId: string;
+  targetStatus: TaskStatus;
+  targetIndex: number;
+}
+
+export function useMoveTaskOnBoard<TContext extends object = Record<string, never>>(
+  options?: UseMutationOptions<
+    TaskBoardResponse,
+    TaskClientError,
+    MoveTaskVariables,
+    TaskMutationContext<TContext>
+  >,
+): UseTaskMutationResult<TaskBoardResponse, MoveTaskVariables> {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userScope = scopedQueryKey(user?.id);
+  const { onMutate, onError, onSuccess, onSettled, ...restOptions } = options ?? {};
+
+  const mutation = useMutation<TaskBoardResponse, TaskClientError, MoveTaskVariables, TaskMutationContext<TContext>>({
+    mutationFn: (input) => moveTaskOnBoard(input),
+    onMutate: async (variables, mutationContext) => {
+      const { taskId, targetStatus } = variables;
+      await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
+      const optimisticUpdatedAt = new Date().toISOString();
+      const taskSnapshot = selectTaskFromCache(queryClient, userScope, taskId);
+
+      const touchedQueries = collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+        const sourceTask = payload.items.find((item) => item.id === taskId) ?? taskSnapshot;
+        if (!sourceTask) {
+          return payload;
+        }
+
+        const movedTask: TaskListItem = {
+          ...sourceTask,
+          status: targetStatus,
+          updatedAt: optimisticUpdatedAt,
+          _optimistic: true,
+        };
+
+        return reconcileTaskInList(payload, movedTask, filters, taskId);
+      });
+
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board, filters) =>
+        applyOptimisticMoveToBoard(board, variables, filters),
+      );
+
+      const internalContext = {
+        touchedQueries,
+        optimisticTaskId: taskId,
+        boardSnapshots,
+        taskSnapshot,
+      } satisfies InternalTaskMutationContext;
+      const externalContext = await onMutate?.(variables, mutationContext);
+      return mergeMutationContext(internalContext, externalContext);
+    },
+    onError: (error, variables, context, mutationContext) => {
+      if (context) {
+        for (const [key, snapshot] of context.touchedQueries) {
+          queryClient.setQueryData(key, snapshot);
+        }
+
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
+      }
+
+      onError?.(error, variables, context, mutationContext);
+    },
+    onSuccess: (result, variables, context, mutationContext) => {
+      if (context?.optimisticTaskId) {
+        const boardTask =
+          result.columns
+            .flatMap((column) => column.tasks)
+            .find((task) => task.id === context.optimisticTaskId) ?? null;
+
+        collectMatchingQueries(queryClient, userScope, (payload, filters) => {
+          const sourceTask =
+            payload.items.find((item) => item.id === context.optimisticTaskId) ?? context.taskSnapshot;
+          if (!sourceTask) {
+            return payload;
+          }
+
+          const movedTask: TaskListItem = {
+            ...sourceTask,
+            _optimistic: false,
+            title: boardTask?.title ?? sourceTask.title,
+            status: boardTask?.status ?? variables.targetStatus,
+            priority: boardTask?.priority ?? sourceTask.priority,
+            dueDate: boardTask?.dueDate ?? sourceTask.dueDate,
+            tags: boardTask?.tags ?? sourceTask.tags,
+            updatedAt: boardTask?.updatedAt ?? new Date().toISOString(),
+          };
+
+          return reconcileTaskInList(
+            payload,
+            movedTask,
+            filters,
+            context.optimisticTaskId as string,
+          );
+        });
+      }
+
+      queryClient.setQueryData(taskQueryKeys.board(userScope), result);
+
+      onSuccess?.(result, variables, context, mutationContext);
+    },
+    onSettled: (result, error, variables, context, mutationContext) => {
+      onSettled?.(result, error, variables, context, mutationContext);
+
+      if (isDevMode) {
+        console.info('[board-move] mutation settled; scheduling revalidation', {
+          taskId: variables.taskId,
+          success: !error,
+        });
+      }
+
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.boardRoot(userScope),
+        type: 'active',
+      });
+      void queryClient.refetchQueries({
+        queryKey: taskQueryKeys.list(userScope, undefined),
+        type: 'active',
+      });
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+    },
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
@@ -808,17 +1773,18 @@ export function useUpdateTask(
 
 export function useDeleteTask(
   options?: UseMutationOptions<
-    { id: string },
+    TaskDeleteResponse,
     TaskClientError,
     { id: string },
     TaskMutationContext
   >,
-): UseTaskMutationResult<{ id: string }, { id: string }> {
+): UseTaskMutationResult<TaskDeleteResponse, { id: string }> {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userScope = scopedQueryKey(user?.id);
+  const { onError, onSuccess, onSettled, ...restOptions } = options ?? {};
 
-  const mutation = useMutation({
+  const mutation = useMutation<TaskDeleteResponse, TaskClientError, { id: string }, TaskMutationContext>({
     mutationFn: ({ id }) => deleteTask(id),
     onMutate: async ({ id }) => {
       await queryClient.cancelQueries({ queryKey: taskQueryKeys.all(userScope) });
@@ -827,25 +1793,31 @@ export function useDeleteTask(
         removeTaskFromList(payload, id),
       );
 
-      return { touchedQueries, optimisticTaskId: id } satisfies TaskMutationContext;
+      const boardSnapshots = collectBoardQueries(queryClient, userScope, (board) =>
+        removeTaskFromBoard(board, id),
+      );
+
+      return { touchedQueries, optimisticTaskId: id, boardSnapshots } satisfies TaskMutationContext;
     },
-    onError: (error, variables, context) => {
+    onError: (error, variables, context, mutationContext) => {
       if (context) {
         for (const [key, snapshot] of context.touchedQueries) {
           queryClient.setQueryData(key, snapshot);
         }
+
+        restoreBoardSnapshots(queryClient, context.boardSnapshots);
       }
 
-      options?.onError?.(error, variables, context);
+      onError?.(error, variables, context, mutationContext);
     },
-    onSuccess: (result, variables, context) => {
-      options?.onSuccess?.(result, variables, context);
+    onSuccess: (result, variables, context, mutationContext) => {
+      onSuccess?.(result, variables, context, mutationContext);
     },
-    onSettled: (result, error, variables, context) => {
-      options?.onSettled?.(result, error, variables, context);
+    onSettled: (result, error, variables, context, mutationContext) => {
+      onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
     },
-    ...options,
+    ...restOptions,
   });
 
   const friendlyError = toTaskOperationError(mutation.error);
@@ -875,6 +1847,16 @@ export const __testing = {
   addTaskToList,
   replaceTaskInList,
   updateTaskInList,
+  reconcileTaskInList,
+  taskListItemFromBoardTask,
+  selectTaskFromCache,
+  mergeMutationContext,
+  applyTaskUpdateToBoard,
+  reconcileTaskInBoard,
+  applyOptimisticMoveToBoard,
   removeTaskFromList,
+  removeTaskFromBoard,
+  collectBoardQueries,
+  restoreBoardSnapshots,
   taskQueryKeys,
 };
