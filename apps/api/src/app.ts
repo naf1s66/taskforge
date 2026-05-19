@@ -28,6 +28,8 @@ export interface CreateAppOptions {
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   welcomeEmailPendingAttemptStaleAfterMs?: number;
   digestEmailAdapter?: EmailAdapter;
+  digestJobSecret?: string;
+  digestDailySendLimit?: number;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -89,7 +91,7 @@ export function createApp(options: CreateAppOptions = {}) {
   });
   const digestRunner = new DailyDigestRunner({
     prisma: getOrCreatePrisma(),
-    emailAdapter: options.digestEmailAdapter ?? options.welcomeEmailAdapter ?? { sendMail: async () => undefined },
+    emailAdapter: options.digestEmailAdapter ?? options.welcomeEmailAdapter ?? { sendMail: () => Promise.resolve() },
   });
 
   const authRouterFactory = createAuthRouter({
@@ -102,9 +104,15 @@ export function createApp(options: CreateAppOptions = {}) {
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 
-  const digestJobSecret = process.env.DIGEST_JOB_SECRET;
+  const digestJobSecret = options.digestJobSecret ?? process.env.DIGEST_JOB_SECRET;
   if (digestJobSecret) {
-    app.use('/api/taskforge/v1/jobs', createJobsRouter(digestRunner, digestJobSecret));
+    app.use(
+      '/api/taskforge/v1/jobs',
+      createJobsRouter(digestRunner, {
+        defaultSendLimit: options.digestDailySendLimit ?? 100,
+        secret: digestJobSecret,
+      }),
+    );
   }
 
   app.use(authRouterFactory.authMiddleware);

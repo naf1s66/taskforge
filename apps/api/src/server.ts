@@ -1,4 +1,5 @@
 import { createApp } from './app';
+import { getDigestJobConfig } from './config/digest';
 import { getSmtpConfig } from './config/smtp';
 import { NodemailerEmailAdapter } from './email/nodemailer-adapter';
 
@@ -11,8 +12,15 @@ if (!jwtSecret) {
 
 const smtpConfig = getSmtpConfig();
 const emailAdapter = new NodemailerEmailAdapter(smtpConfig);
+const digestJobConfig = getDigestJobConfig();
 
-const app = createApp({ jwtSecret, welcomeEmailAdapter: emailAdapter, digestEmailAdapter: emailAdapter });
+const app = createApp({
+  jwtSecret,
+  welcomeEmailAdapter: emailAdapter,
+  digestEmailAdapter: emailAdapter,
+  digestDailySendLimit: digestJobConfig.dailySendLimit,
+  digestJobSecret: digestJobConfig.secret,
+});
 
 app.listen(port, () => {
   console.log(`API on http://localhost:${port}`);
