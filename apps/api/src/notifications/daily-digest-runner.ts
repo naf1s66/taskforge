@@ -40,6 +40,11 @@ type DeliveryWithLatestAttempt = NotificationDelivery & {
   attempts: NotificationDeliveryAttempt[];
 };
 
+type ReserveAttemptResult =
+  | { status: 'reserved'; attempt: NotificationDeliveryAttempt }
+  | { status: 'budget_exhausted' }
+  | { status: 'duplicate' };
+
 export class DailyDigestRunner {
   private readonly queryService: DailyDigestQueryService;
 
@@ -53,7 +58,6 @@ export class DailyDigestRunner {
 
     const sendLimit = normalizeSendLimit(input.sendLimit);
     const dryRun = input.dryRun ?? false;
-    const consumedBudget = await countConsumedBudget(this.options.prisma, input.digestDate);
     const users = await this.options.prisma.user.findMany({
       select: {
         id: true,
@@ -113,12 +117,6 @@ export class DailyDigestRunner {
         continue;
       }
 
-      if (consumedBudget + sent + failed >= sendLimit) {
-        skipped += 1;
-        budgetSkipped += 1;
-        continue;
-      }
-
       const template = renderDailyDigestTemplate({
         recipientEmail: recipient,
         digestDate: input.digestDate,
@@ -130,45 +128,22 @@ export class DailyDigestRunner {
         continue;
       }
 
-      const delivery = await this.options.prisma.notificationDelivery.upsert({
-        where: { idempotencyKey },
-        create: {
-          userId: user.id,
-          type: NotificationDeliveryType.DAILY_DIGEST,
-          recipient,
-          idempotencyKey,
-        },
-        update: { recipient },
-        include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
+      const reservation = await reserveDeliveryAttempt({
+        prisma: this.options.prisma,
+        digestDate: input.digestDate,
+        sendLimit,
+        userId: user.id,
+        recipient,
+        idempotencyKey,
       });
 
-      if (isTerminalOrInFlightDuplicate(delivery)) {
+      if (reservation.status === 'budget_exhausted') {
         skipped += 1;
-        duplicateSkipped += 1;
+        budgetSkipped += 1;
         continue;
       }
 
-      const nextAttempt = (delivery.attempts[0]?.attemptNumber ?? 0) + 1;
-      const attempt = await this.options.prisma.notificationDeliveryAttempt
-        .create({
-          data: {
-            deliveryId: delivery.id,
-            attemptNumber: nextAttempt,
-            type: NotificationDeliveryType.DAILY_DIGEST,
-            recipient,
-            provider: 'smtp',
-            status: NotificationDeliveryStatus.PENDING,
-          },
-        })
-        .catch(error => {
-          if (!isUniqueConstraintError(error)) {
-            throw error;
-          }
-
-          return null;
-        });
-
-      if (!attempt) {
+      if (reservation.status === 'duplicate') {
         skipped += 1;
         duplicateSkipped += 1;
         continue;
@@ -183,13 +158,13 @@ export class DailyDigestRunner {
         });
 
         await this.options.prisma.notificationDeliveryAttempt.update({
-          where: { id: attempt.id },
+          where: { id: reservation.attempt.id },
           data: { status: NotificationDeliveryStatus.SENT, deliveredAt: new Date() },
         });
         sent += 1;
       } catch (error) {
         await this.options.prisma.notificationDeliveryAttempt.update({
-          where: { id: attempt.id },
+          where: { id: reservation.attempt.id },
           data: {
             status: NotificationDeliveryStatus.FAILED,
             errorCode: 'SMTP_SEND_FAILED',
@@ -252,10 +227,16 @@ function normalizeSendLimit(sendLimit: number | undefined): number {
   return sendLimit;
 }
 
-async function countConsumedBudget(prisma: PrismaClient, digestDate: string): Promise<number> {
+async function countConsumedBudget(prisma: PrismaClient | Prisma.TransactionClient, digestDate: string): Promise<number> {
   return prisma.notificationDeliveryAttempt.count({
     where: {
-      status: { in: [NotificationDeliveryStatus.SENT, NotificationDeliveryStatus.FAILED] },
+      status: {
+        in: [
+          NotificationDeliveryStatus.PENDING,
+          NotificationDeliveryStatus.SENT,
+          NotificationDeliveryStatus.FAILED,
+        ],
+      },
       delivery: {
         type: NotificationDeliveryType.DAILY_DIGEST,
         idempotencyKey: { startsWith: `digest:${digestDate}:` },
@@ -264,8 +245,52 @@ async function countConsumedBudget(prisma: PrismaClient, digestDate: string): Pr
   });
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+async function reserveDeliveryAttempt(input: {
+  prisma: PrismaClient;
+  digestDate: string;
+  sendLimit: number;
+  userId: string;
+  recipient: string;
+  idempotencyKey: string;
+}): Promise<ReserveAttemptResult> {
+  return input.prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`digest-budget:${input.digestDate}`}))`;
+
+    const delivery = await tx.notificationDelivery.upsert({
+      where: { idempotencyKey: input.idempotencyKey },
+      create: {
+        userId: input.userId,
+        type: NotificationDeliveryType.DAILY_DIGEST,
+        recipient: input.recipient,
+        idempotencyKey: input.idempotencyKey,
+      },
+      update: { recipient: input.recipient },
+      include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
+    });
+
+    if (isTerminalOrInFlightDuplicate(delivery)) {
+      return { status: 'duplicate' };
+    }
+
+    const consumedBudget = await countConsumedBudget(tx, input.digestDate);
+    if (consumedBudget >= input.sendLimit) {
+      return { status: 'budget_exhausted' };
+    }
+
+    const nextAttempt = (delivery.attempts[0]?.attemptNumber ?? 0) + 1;
+    const attempt = await tx.notificationDeliveryAttempt.create({
+      data: {
+        deliveryId: delivery.id,
+        attemptNumber: nextAttempt,
+        type: NotificationDeliveryType.DAILY_DIGEST,
+        recipient: input.recipient,
+        provider: 'smtp',
+        status: NotificationDeliveryStatus.PENDING,
+      },
+    });
+
+    return { status: 'reserved', attempt };
+  });
 }
 
 function isTerminalOrInFlightDuplicate(delivery: DeliveryWithLatestAttempt | null): boolean {
