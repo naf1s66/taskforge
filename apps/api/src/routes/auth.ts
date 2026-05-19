@@ -10,6 +10,7 @@ import { createPasswordHasher, PasswordHasher } from '../auth/password';
 import { createTokenService, TokenService } from '../auth/token';
 import { InMemoryUserStore, StoredUser, UserStore } from '../auth/user-store';
 import { createAuthMiddleware } from '../middleware/auth';
+import type { WelcomeEmailService } from '../notifications/welcome-email';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -71,6 +72,7 @@ export interface AuthRouterOptions {
   bcryptSaltRounds?: number;
   accessTokenExpiresIn?: string | number;
   refreshTokenExpiresIn?: string | number;
+  welcomeEmailService?: WelcomeEmailService;
 }
 
 function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -165,6 +167,16 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     };
 
     await store.create(user);
+
+    if (options.welcomeEmailService) {
+      void options.welcomeEmailService.sendWelcomeEmail(user).catch(error => {
+        console.error('[notifications] Welcome email scheduling failed', {
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+
     const issuedTokens = await tokens.issueTokens(user.id);
 
     // Set HttpOnly cookie with shared domain for cross-subdomain access

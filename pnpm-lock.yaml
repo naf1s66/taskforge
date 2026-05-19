@@ -133,7 +133,7 @@ importers:
     dependencies:
       '@auth/prisma-adapter':
         specifier: ^2.11.1
-        version: 2.11.1(@prisma/client@5.22.0)
+        version: 2.11.1(@prisma/client@5.22.0)(nodemailer@6.10.1)
       '@dnd-kit/core':
         specifier: ^6.1.0
         version: 6.3.1(react-dom@18.3.1)(react@18.3.1)
@@ -196,7 +196,10 @@ importers:
         version: 14.2.33(@babel/core@7.28.4)(react-dom@18.3.1)(react@18.3.1)
       next-auth:
         specifier: ^5.0.0-beta.17
-        version: 5.0.0-beta.29(next@14.2.33)(react@18.3.1)
+        version: 5.0.0-beta.29(next@14.2.33)(nodemailer@6.10.1)(react@18.3.1)
+      nodemailer:
+        specifier: ^6.9.14
+        version: 6.10.1
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -231,6 +234,9 @@ importers:
       '@types/node':
         specifier: ^20.11.19
         version: 20.19.19
+      '@types/nodemailer':
+        specifier: ^6.4.15
+        version: 6.4.23
       '@types/react':
         specifier: ^18.2.55
         version: 18.3.26
@@ -290,7 +296,7 @@ packages:
       lru-cache: 10.4.3
     dev: true
 
-  /@auth/core@0.40.0:
+  /@auth/core@0.40.0(nodemailer@6.10.1):
     resolution: {integrity: sha512-n53uJE0RH5SqZ7N1xZoMKekbHfQgjd0sAEyUbE+IYJnmuQkbvuZnXItCU7d+i7Fj8VGOgqvNO7Mw4YfBTlZeQw==}
     peerDependencies:
       '@simplewebauthn/browser': ^9.0.1
@@ -306,12 +312,13 @@ packages:
     dependencies:
       '@panva/hkdf': 1.2.1
       jose: 6.1.0
+      nodemailer: 6.10.1
       oauth4webapi: 3.8.2
       preact: 10.24.3
       preact-render-to-string: 6.5.11(preact@10.24.3)
     dev: false
 
-  /@auth/core@0.41.1:
+  /@auth/core@0.41.1(nodemailer@6.10.1):
     resolution: {integrity: sha512-t9cJ2zNYAdWMacGRMT6+r4xr1uybIdmYa49calBPeTqwgAFPV/88ac9TEvCR85pvATiSPt8VaNf+Gt24JIT/uw==}
     peerDependencies:
       '@simplewebauthn/browser': ^9.0.1
@@ -327,17 +334,18 @@ packages:
     dependencies:
       '@panva/hkdf': 1.2.1
       jose: 6.1.0
+      nodemailer: 6.10.1
       oauth4webapi: 3.8.2
       preact: 10.24.3
       preact-render-to-string: 6.5.11(preact@10.24.3)
     dev: false
 
-  /@auth/prisma-adapter@2.11.1(@prisma/client@5.22.0):
+  /@auth/prisma-adapter@2.11.1(@prisma/client@5.22.0)(nodemailer@6.10.1):
     resolution: {integrity: sha512-Ke7DXP0Fy0Mlmjz/ZJLXwQash2UkA4621xCM0rMtEczr1kppLc/njCbUkHkIQ/PnmILjqSPEKeTjDPsYruvkug==}
     peerDependencies:
       '@prisma/client': '>=2.26.0 || >=3 || >=4 || >=5 || >=6'
     dependencies:
-      '@auth/core': 0.41.1
+      '@auth/core': 0.41.1(nodemailer@6.10.1)
       '@prisma/client': 5.22.0(prisma@5.22.0)
     transitivePeerDependencies:
       - '@simplewebauthn/browser'
@@ -7191,7 +7199,7 @@ packages:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
     dev: true
 
-  /next-auth@5.0.0-beta.29(next@14.2.33)(react@18.3.1):
+  /next-auth@5.0.0-beta.29(next@14.2.33)(nodemailer@6.10.1)(react@18.3.1):
     resolution: {integrity: sha512-Ukpnuk3NMc/LiOl32njZPySk7pABEzbjhMUFd5/n10I0ZNC7NCuVv8IY2JgbDek2t/PUOifQEoUiOOTLy4os5A==}
     peerDependencies:
       '@simplewebauthn/browser': ^9.0.1
@@ -7207,8 +7215,9 @@ packages:
       nodemailer:
         optional: true
     dependencies:
-      '@auth/core': 0.40.0
+      '@auth/core': 0.40.0(nodemailer@6.10.1)
       next: 14.2.33(@babel/core@7.28.4)(react-dom@18.3.1)(react@18.3.1)
+      nodemailer: 6.10.1
       react: 18.3.1
     dev: false
 

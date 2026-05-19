@@ -3,6 +3,7 @@ import request, { type SuperTest, type Test } from 'supertest';
 import { PrismaUserStore, type UserStore } from '../../src/auth/user-store';
 import { createApp } from '../../src/app';
 import { createTaskRepository, type TaskRepository } from '../../src/repositories/task-repository';
+import type { EmailAdapter } from '../../src/email/types';
 import { getTestPrisma, type PrismaClient } from './prisma';
 
 export interface TestAgentContext {
@@ -19,6 +20,7 @@ export interface CreateTestAgentOptions {
   devBypassClientSecret?: string;
   userStore?: UserStore;
   taskRepository?: TaskRepository;
+  welcomeEmailAdapter?: EmailAdapter;
 }
 
 export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgentContext {
@@ -32,6 +34,7 @@ export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgent
     devBypassClientSecret: options.devBypassClientSecret,
     userStore,
     taskRepository,
+    welcomeEmailAdapter: options.welcomeEmailAdapter ?? { sendMail: async () => undefined },
   });
 
   return { agent: request(app), prisma, userStore, taskRepository };

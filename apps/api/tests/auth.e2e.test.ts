@@ -8,8 +8,36 @@ import { createDevBypassClientToken } from '../src/auth/dev-bypass-client-token'
 import { createTestAgent } from './utils/test-app';
 import { loginTestUser, registerTestUser, extractSessionCookie } from './utils/auth';
 
+async function waitForNotificationAttempts(
+  prisma: import('./utils/prisma').PrismaClient,
+  userId: string,
+  expectedCount: number,
+) {
+  const deadline = Date.now() + 2_000;
+
+  while (Date.now() < deadline) {
+    const deliveries = await prisma.notificationDelivery.findMany({
+      where: { userId, type: 'WELCOME' },
+      include: { attempts: { orderBy: { attemptNumber: 'asc' } } },
+    });
+    const attemptCount = deliveries.reduce((sum, delivery) => sum + delivery.attempts.length, 0);
+
+    if (deliveries.length > 0 && attemptCount >= expectedCount) {
+      return deliveries;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+
+  return prisma.notificationDelivery.findMany({
+    where: { userId, type: 'WELCOME' },
+    include: { attempts: { orderBy: { attemptNumber: 'asc' } } },
+  });
+}
+
 describe('Auth API', () => {
   let agent: SuperTest<Test>;
+  let prisma: import('./utils/prisma').PrismaClient;
   const sessionBridgeSecret = 'test-bridge-secret';
   const devBypassClientSecret = 'test-dev-bypass-client-secret';
 
@@ -20,6 +48,7 @@ describe('Auth API', () => {
       devBypassClientSecret,
     });
     agent = context.agent;
+    prisma = context.prisma;
   });
 
   const bridgeSession = (payload: { userId: string; email?: string }) =>
@@ -46,6 +75,57 @@ describe('Auth API', () => {
       }),
     );
     expect(extractSessionCookie(result.cookies)).toBeDefined();
+  });
+
+  it('records and sends one welcome email after credentials registration', async () => {
+    const result = await registerTestUser(agent, { email: 'welcome@example.com' });
+
+    const deliveries = await waitForNotificationAttempts(prisma, result.user.id, 1);
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toEqual(
+      expect.objectContaining({
+        idempotencyKey: `welcome:${result.user.id}`,
+        recipient: 'welcome@example.com',
+        type: 'WELCOME',
+      }),
+    );
+    expect(deliveries[0].attempts).toHaveLength(1);
+    expect(deliveries[0].attempts[0]).toEqual(
+      expect.objectContaining({
+        status: 'SENT',
+        type: 'WELCOME',
+        recipient: 'welcome@example.com',
+        errorMessage: null,
+      }),
+    );
+  });
+
+  it('records welcome email failures without blocking credentials registration', async () => {
+    const failingContext = createTestAgent({
+      sessionBridgeSecret,
+      devBypassEnabled: true,
+      devBypassClientSecret,
+      welcomeEmailAdapter: {
+        sendMail: async () => {
+          throw new Error('SMTP unavailable');
+        },
+      },
+    });
+
+    const result = await registerTestUser(failingContext.agent, { email: 'welcome-failure@example.com' });
+    const deliveries = await waitForNotificationAttempts(failingContext.prisma, result.user.id, 1);
+
+    expect(result.tokens.accessToken).toEqual(expect.any(String));
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0].attempts).toHaveLength(1);
+    expect(deliveries[0].attempts[0]).toEqual(
+      expect.objectContaining({
+        status: 'FAILED',
+        errorCode: 'Error',
+        errorMessage: 'SMTP unavailable',
+      }),
+    );
   });
 
   it('rejects invalid registration payloads', async () => {
