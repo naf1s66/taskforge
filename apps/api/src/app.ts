@@ -14,6 +14,8 @@ import { createTaskRouter } from './routes/tasks';
 import { createTaskRepository, type TaskRepository } from './repositories/task-repository';
 import { WelcomeEmailService, type WelcomeEmailDeliveryDispatcher } from './notifications/welcome-email';
 import type { EmailAdapter } from './email/types';
+import { DailyDigestRunner } from './notifications/daily-digest-runner';
+import { createJobsRouter } from './routes/jobs';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
@@ -25,6 +27,7 @@ export interface CreateAppOptions {
   welcomeEmailAdapter?: EmailAdapter;
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   welcomeEmailPendingAttemptStaleAfterMs?: number;
+  digestEmailAdapter?: EmailAdapter;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -84,6 +87,11 @@ export function createApp(options: CreateAppOptions = {}) {
     deliveryDispatcher: options.welcomeEmailDeliveryDispatcher,
     pendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
   });
+  const digestRunner = new DailyDigestRunner({
+    prisma: getOrCreatePrisma(),
+    emailAdapter: options.digestEmailAdapter ?? options.welcomeEmailAdapter ?? { sendMail: async () => undefined },
+  });
+
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,
     userStore,
@@ -93,6 +101,11 @@ export function createApp(options: CreateAppOptions = {}) {
     welcomeEmailService,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
+
+  const digestJobSecret = process.env.DIGEST_JOB_SECRET;
+  if (digestJobSecret) {
+    app.use('/api/taskforge/v1/jobs', createJobsRouter(digestRunner, digestJobSecret));
+  }
 
   app.use(authRouterFactory.authMiddleware);
   app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
