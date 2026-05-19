@@ -110,7 +110,7 @@ export class WelcomeEmailService {
           provider: 'smtp',
         },
       })
-      .catch(async error => {
+      .catch(error => {
         if (!isUniqueConstraintError(error)) {
           throw error;
         }
