@@ -1,3 +1,5 @@
+import type { DailyDigestQueryResult } from '../notifications/digest-query-service';
+
 export interface WelcomeTemplateInput {
   appName: string;
   recipientEmail: string;
@@ -20,9 +22,6 @@ export function renderWelcomeTemplate(input: WelcomeTemplateInput) {
   return { subject, text, html };
 }
 
-
-import type { DailyDigestQueryResult } from '../notifications/digest-query-service';
-
 export interface DailyDigestTemplateInput {
   recipientEmail: string;
   digestDate: string;
@@ -30,19 +29,36 @@ export interface DailyDigestTemplateInput {
 }
 
 export function renderDailyDigestTemplate(input: DailyDigestTemplateInput) {
-  const totalItems = input.digest.groups.reduce((sum, group) => sum + group.total, 0);
+  const totalTasks = input.digest.totalTasksConsidered;
   const subject = `Your TaskForge daily digest for ${input.digestDate}`;
   const text = [
     `Hi ${input.recipientEmail},`,
-    `You have ${totalItems} digest items for ${input.digestDate}.`,
-    ...input.digest.groups.map(group => `- ${group.label}: ${group.total}`),
-  ].join("\n");
+    `You have ${totalTasks} task${totalTasks === 1 ? '' : 's'} in your digest for ${input.digestDate}.`,
+    ...input.digest.groups.flatMap(group => [
+      '',
+      `${group.label}: ${group.total}`,
+      ...group.tasks.map(task => {
+        const due = task.dueDate ? ` due ${task.dueDate.slice(0, 10)}` : '';
+        const tags = task.tags.length > 0 ? ` [${task.tags.join(', ')}]` : '';
+        return `- ${task.title} (${task.status}, ${task.priority})${due}${tags}`;
+      }),
+    ]),
+  ].join('\n');
 
   const htmlGroups = input.digest.groups
-    .map(group => `<li><strong>${escapeHtml(group.label)}</strong>: ${group.total}</li>`)
-    .join();
+    .map(group => {
+      const tasks = group.tasks
+        .map(task => {
+          const due = task.dueDate ? ` due ${escapeHtml(task.dueDate.slice(0, 10))}` : '';
+          const tags = task.tags.length > 0 ? ` [${escapeHtml(task.tags.join(', '))}]` : '';
+          return `<li>${escapeHtml(task.title)} (${escapeHtml(task.status)}, ${escapeHtml(task.priority)})${due}${tags}</li>`;
+        })
+        .join('');
+      return `<li><strong>${escapeHtml(group.label)}</strong>: ${group.total}<ul>${tasks}</ul></li>`;
+    })
+    .join('');
 
-  const html = `<p>Hi ${escapeHtml(input.recipientEmail)},</p><p>You have <strong>${totalItems}</strong> digest items for ${escapeHtml(input.digestDate)}.</p><ul>${htmlGroups}</ul>`;
+  const html = `<p>Hi ${escapeHtml(input.recipientEmail)},</p><p>You have <strong>${totalTasks}</strong> task${totalTasks === 1 ? '' : 's'} in your digest for ${escapeHtml(input.digestDate)}.</p><ul>${htmlGroups}</ul>`;
 
   return { subject, text, html };
 }
