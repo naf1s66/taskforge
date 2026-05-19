@@ -59,7 +59,25 @@ describe('DailyDigestQueryService', () => {
     });
 
     expect(findMany).toHaveBeenCalledTimes(1);
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-1' } }));
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'user-1',
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              status: { not: 'DONE' },
+              dueDate: { lt: new Date('2026-05-23T00:00:00.000Z') },
+            }),
+            expect.objectContaining({
+              status: { not: 'DONE' },
+              updatedAt: { gte: new Date('2026-05-17T12:00:00.000Z') },
+            }),
+            { status: 'TODO' },
+          ]),
+        }),
+        include: expect.any(Object),
+      }),
+    );
 
     expect(digest.totalTasksConsidered).toBe(5);
     expect(digest.groups.map(group => `${group.key}:${group.total}`)).toEqual([
@@ -75,6 +93,9 @@ describe('DailyDigestQueryService', () => {
       expect.objectContaining({ id: 'a', title: 'Overdue task', tags: ['a', 'z'] }),
     );
     expect(overdue?.tasks[0]).not.toHaveProperty('description');
+
+    const recentlyUpdated = digest.groups.find(group => group.key === 'recentlyUpdated');
+    expect(recentlyUpdated?.tasks.map(task => task.id)).toEqual(['d', 'a', 'b', 'c']);
   });
 
   it('returns empty groups for users without digest-worthy tasks', async () => {

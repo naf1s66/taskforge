@@ -1,4 +1,4 @@
-import type { PrismaClient, TaskStatus } from '@prisma/client';
+import type { Prisma, PrismaClient, TaskStatus } from '@prisma/client';
 
 import { taskWithTagsInclude, toTaskBoardItemDTO } from '../repositories/task-mapper';
 
@@ -51,11 +51,25 @@ export class DailyDigestQueryService {
     const maxTasksPerGroup = Math.max(1, options.maxTasksPerGroup ?? 10);
 
     const boundaries = computeUtcWindowBoundaries(now, timezone, dueSoonDays, recentlyUpdatedDays);
+    const where: Prisma.TaskWhereInput = {
+      userId,
+      OR: [
+        {
+          status: { not: 'DONE' },
+          dueDate: { lt: boundaries.dueSoonUntilUtc },
+        },
+        {
+          status: { not: 'DONE' },
+          updatedAt: { gte: boundaries.recentlyUpdatedSinceUtc },
+        },
+        {
+          status: 'TODO',
+        },
+      ],
+    };
 
     const tasks = await this.prisma.task.findMany({
-      where: {
-        userId,
-      },
+      where,
       include: taskWithTagsInclude,
       orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
     });
@@ -73,29 +87,36 @@ export class DailyDigestQueryService {
       } satisfies DailyDigestTaskSummary;
     });
 
-    const overdue = taskSummaries.filter(task =>
-      Boolean(task.dueDate) && new Date(task.dueDate as string) < boundaries.startOfTodayUtc && task.status !== 'DONE');
+    const overdue = taskSummaries
+      .filter(task =>
+        Boolean(task.dueDate) && new Date(task.dueDate as string) < boundaries.startOfTodayUtc && task.status !== 'DONE')
+      .sort(compareDueDigestTasks);
 
-    const dueToday = taskSummaries.filter(task => {
-      if (!task.dueDate || task.status === 'DONE') {
-        return false;
-      }
-      const due = new Date(task.dueDate);
-      return due >= boundaries.startOfTodayUtc && due < boundaries.startOfTomorrowUtc;
-    });
+    const dueToday = taskSummaries
+      .filter(task => {
+        if (!task.dueDate || task.status === 'DONE') {
+          return false;
+        }
+        const due = new Date(task.dueDate);
+        return due >= boundaries.startOfTodayUtc && due < boundaries.startOfTomorrowUtc;
+      })
+      .sort(compareDueDigestTasks);
 
-    const dueSoon = taskSummaries.filter(task => {
-      if (!task.dueDate || task.status === 'DONE') {
-        return false;
-      }
-      const due = new Date(task.dueDate);
-      return due >= boundaries.startOfTomorrowUtc && due < boundaries.dueSoonUntilUtc;
-    });
+    const dueSoon = taskSummaries
+      .filter(task => {
+        if (!task.dueDate || task.status === 'DONE') {
+          return false;
+        }
+        const due = new Date(task.dueDate);
+        return due >= boundaries.startOfTomorrowUtc && due < boundaries.dueSoonUntilUtc;
+      })
+      .sort(compareDueDigestTasks);
 
-    const recentlyUpdated = taskSummaries.filter(task =>
-      new Date(task.updatedAt) >= boundaries.recentlyUpdatedSinceUtc && task.status !== 'DONE');
+    const recentlyUpdated = taskSummaries
+      .filter(task => new Date(task.updatedAt) >= boundaries.recentlyUpdatedSinceUtc && task.status !== 'DONE')
+      .sort(compareUpdatedDigestTasks);
 
-    const blockedByStatus = taskSummaries.filter(task => task.status === 'TODO');
+    const blockedByStatus = taskSummaries.filter(task => task.status === 'TODO').sort(compareBlockedDigestTasks);
 
     return {
       generatedAt: now.toISOString(),
@@ -126,6 +147,60 @@ export class DailyDigestQueryService {
       ],
     };
   }
+}
+
+const priorityRank: Record<DailyDigestTaskSummary['priority'], number> = {
+  HIGH: 0,
+  MEDIUM: 1,
+  LOW: 2,
+};
+
+function compareDueDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
+  const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
+  const dueDelta = leftDue - rightDue;
+  if (dueDelta !== 0) {
+    return dueDelta;
+  }
+
+  return comparePriorityThenUpdatedThenTitle(left, right);
+}
+
+function compareUpdatedDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  return compareDueDigestTasks(left, right);
+}
+
+function compareBlockedDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  return compareDueDigestTasks(left, right);
+}
+
+function comparePriorityThenUpdatedThenTitle(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  const titleDelta = left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return left.id.localeCompare(right.id);
 }
 
 export function computeUtcWindowBoundaries(
