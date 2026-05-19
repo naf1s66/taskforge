@@ -106,4 +106,24 @@ describe('DailyDigestQueryService', () => {
     expect(windows.dueSoonUntilUtc.toISOString()).toBe('2026-05-23T07:00:00.000Z');
     expect(windows.recentlyUpdatedSinceUtc.toISOString()).toBe('2026-05-18T03:30:00.000Z');
   });
+
+  it('keeps local day windows aligned across daylight saving transitions', () => {
+    const springForward = computeUtcWindowBoundaries(
+      new Date('2026-03-08T12:00:00.000Z'),
+      'America/Los_Angeles',
+      1,
+      1,
+    );
+    expect(springForward.startOfTodayUtc.toISOString()).toBe('2026-03-08T08:00:00.000Z');
+    expect(springForward.startOfTomorrowUtc.toISOString()).toBe('2026-03-09T07:00:00.000Z');
+
+    const fallBack = computeUtcWindowBoundaries(
+      new Date('2026-11-01T12:00:00.000Z'),
+      'America/Los_Angeles',
+      1,
+      1,
+    );
+    expect(fallBack.startOfTodayUtc.toISOString()).toBe('2026-11-01T07:00:00.000Z');
+    expect(fallBack.startOfTomorrowUtc.toISOString()).toBe('2026-11-02T08:00:00.000Z');
+  });
 });

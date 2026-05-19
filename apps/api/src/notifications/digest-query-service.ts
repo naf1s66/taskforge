@@ -2,8 +2,6 @@ import type { PrismaClient, TaskStatus } from '@prisma/client';
 
 import { taskWithTagsInclude, toTaskBoardItemDTO } from '../repositories/task-mapper';
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 export interface DailyDigestTaskSummary {
   id: string;
   title: string;
@@ -143,13 +141,19 @@ export function computeUtcWindowBoundaries(
 } {
   const localDate = toLocalDateParts(now, timezone);
   const startOfTodayUtc = localMidnightToUtc(localDate.year, localDate.month, localDate.day, timezone);
-  const startOfTomorrowUtc = new Date(startOfTodayUtc.getTime() + MS_PER_DAY);
+  const startOfTomorrowUtc = localMidnightToUtc(localDate.year, localDate.month, localDate.day + 1, timezone);
+  const dueSoonUntilUtc = localMidnightToUtc(
+    localDate.year,
+    localDate.month,
+    localDate.day + 1 + dueSoonDays,
+    timezone,
+  );
 
   return {
     startOfTodayUtc,
     startOfTomorrowUtc,
-    dueSoonUntilUtc: new Date(startOfTomorrowUtc.getTime() + dueSoonDays * MS_PER_DAY),
-    recentlyUpdatedSinceUtc: new Date(now.getTime() - recentlyUpdatedDays * MS_PER_DAY),
+    dueSoonUntilUtc,
+    recentlyUpdatedSinceUtc: addUtcDays(now, -recentlyUpdatedDays),
   };
 }
 
@@ -189,11 +193,21 @@ function localMidnightToUtc(year: number, month: number, day: number, timezone: 
   const tzYear = Number(partsInTz.find(part => part.type === 'year')?.value);
   const tzMonth = Number(partsInTz.find(part => part.type === 'month')?.value);
   const tzDay = Number(partsInTz.find(part => part.type === 'day')?.value);
-  const tzHour = Number(partsInTz.find(part => part.type === 'hour')?.value);
+  const tzHour = normalizeIntlHour(Number(partsInTz.find(part => part.type === 'hour')?.value));
   const tzMinute = Number(partsInTz.find(part => part.type === 'minute')?.value);
   const tzSecond = Number(partsInTz.find(part => part.type === 'second')?.value);
 
   const asUtcFromTzView = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond);
   const offsetMs = asUtcFromTzView - utcGuess.getTime();
   return new Date(utcGuess.getTime() - offsetMs);
+}
+
+function normalizeIntlHour(hour: number): number {
+  return hour === 24 ? 0 : hour;
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 }
