@@ -53,6 +53,7 @@ export class DailyDigestRunner {
 
     const sendLimit = normalizeSendLimit(input.sendLimit);
     const dryRun = input.dryRun ?? false;
+    const consumedBudget = await countConsumedBudget(this.options.prisma, input.digestDate);
     const users = await this.options.prisma.user.findMany({
       select: {
         id: true,
@@ -112,7 +113,7 @@ export class DailyDigestRunner {
         continue;
       }
 
-      if (sent + failed >= sendLimit) {
+      if (consumedBudget + sent + failed >= sendLimit) {
         skipped += 1;
         budgetSkipped += 1;
         continue;
@@ -249,6 +250,18 @@ function normalizeSendLimit(sendLimit: number | undefined): number {
   }
 
   return sendLimit;
+}
+
+async function countConsumedBudget(prisma: PrismaClient, digestDate: string): Promise<number> {
+  return prisma.notificationDeliveryAttempt.count({
+    where: {
+      status: { in: [NotificationDeliveryStatus.SENT, NotificationDeliveryStatus.FAILED] },
+      delivery: {
+        type: NotificationDeliveryType.DAILY_DIGEST,
+        idempotencyKey: { startsWith: `digest:${digestDate}:` },
+      },
+    },
+  });
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

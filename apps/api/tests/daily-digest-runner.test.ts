@@ -104,6 +104,24 @@ describe('DailyDigestRunner', () => {
     expect(await prisma.notificationDeliveryAttempt.count()).toBe(1);
   });
 
+  it('enforces send budget across repeated runs for the same digest date', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'repeat-budget-a@taskforge.dev' });
+    await createDigestUser({ email: 'repeat-budget-b@taskforge.dev' });
+    await createDigestUser({ email: 'repeat-budget-c@taskforge.dev' });
+
+    const runner = new DailyDigestRunner({ prisma, emailAdapter: { sendMail: async msg => { sent.push(msg.to); } } });
+    const first = await runner.run({ digestDate: '2026-05-19', sendLimit: 2 });
+    const second = await runner.run({ digestDate: '2026-05-19', sendLimit: 2 });
+
+    expect(first.sent).toBe(2);
+    expect(first.budgetSkipped).toBe(1);
+    expect(second.sent).toBe(0);
+    expect(second.duplicateSkipped).toBe(2);
+    expect(second.budgetSkipped).toBe(1);
+    expect(await prisma.notificationDeliveryAttempt.count()).toBe(2);
+  });
+
   it('skips users that are disabled, unverified, off-hour, undeliverable, or empty', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ dailyDigestEnabled: false, email: 'disabled@taskforge.dev' });
