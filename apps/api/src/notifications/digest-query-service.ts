@@ -262,7 +262,24 @@ function toLocalDateParts(date: Date, timezone: string): { year: number; month: 
 }
 
 function localMidnightToUtc(year: number, month: number, day: number, timezone: string): Date {
-  const utcGuess = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  const targetWallTimeUtc = Date.UTC(year, month - 1, day, 0, 0, 0);
+  let candidate = new Date(targetWallTimeUtc);
+
+  for (let attempts = 0; attempts < 4; attempts += 1) {
+    const offsetMs = getTimeZoneOffsetMs(candidate, timezone);
+    const next = new Date(targetWallTimeUtc - offsetMs);
+
+    if (next.getTime() === candidate.getTime()) {
+      return next;
+    }
+
+    candidate = next;
+  }
+
+  return candidate;
+}
+
+function getTimeZoneOffsetMs(date: Date, timezone: string): number {
   const partsInTz = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     hour12: false,
@@ -272,7 +289,7 @@ function localMidnightToUtc(year: number, month: number, day: number, timezone: 
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  }).formatToParts(utcGuess);
+  }).formatToParts(date);
 
   const tzYear = Number(partsInTz.find(part => part.type === 'year')?.value);
   const tzMonth = Number(partsInTz.find(part => part.type === 'month')?.value);
@@ -282,8 +299,7 @@ function localMidnightToUtc(year: number, month: number, day: number, timezone: 
   const tzSecond = Number(partsInTz.find(part => part.type === 'second')?.value);
 
   const asUtcFromTzView = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond);
-  const offsetMs = asUtcFromTzView - utcGuess.getTime();
-  return new Date(utcGuess.getTime() - offsetMs);
+  return asUtcFromTzView - date.getTime();
 }
 
 function normalizeIntlHour(hour: number): number {

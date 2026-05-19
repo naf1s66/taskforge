@@ -168,4 +168,16 @@ describe('DailyDigestQueryService', () => {
     expect(fallBack.startOfTodayUtc.toISOString()).toBe('2026-11-01T07:00:00.000Z');
     expect(fallBack.startOfTomorrowUtc.toISOString()).toBe('2026-11-02T08:00:00.000Z');
   });
+
+  it('resolves local midnight using the offset at that local midnight', () => {
+    const windows = computeUtcWindowBoundaries(
+      new Date('2026-04-05T12:00:00.000Z'),
+      'Australia/Sydney',
+      1,
+      1,
+    );
+
+    expect(windows.startOfTodayUtc.toISOString()).toBe('2026-04-04T13:00:00.000Z');
+    expect(windows.startOfTomorrowUtc.toISOString()).toBe('2026-04-05T14:00:00.000Z');
+  });
 });
