@@ -22,8 +22,11 @@ async function waitForNotificationAttempts(
       include: { attempts: { orderBy: { attemptNumber: 'asc' } } },
     });
     const attemptCount = deliveries.reduce((sum, delivery) => sum + delivery.attempts.length, 0);
+    const hasOnlyTerminalAttempts = deliveries.every(delivery =>
+      delivery.attempts.every(attempt => attempt.status === 'SENT' || attempt.status === 'FAILED'),
+    );
 
-    if (deliveries.length > 0 && attemptCount >= expectedCount) {
+    if (deliveries.length > 0 && attemptCount >= expectedCount && hasOnlyTerminalAttempts) {
       return deliveries;
     }
 
@@ -125,6 +128,58 @@ describe('Auth API', () => {
         status: 'FAILED',
         errorCode: 'Error',
         errorMessage: 'SMTP unavailable',
+      }),
+    );
+  });
+
+  it('returns credentials registration before a slow welcome SMTP send resolves', async () => {
+    let releaseSend!: () => void;
+    const sendStarted = new Promise<void>(resolve => {
+      const slowSend = new Promise<void>(sendResolve => {
+        releaseSend = sendResolve;
+      });
+
+      const nonBlockingContext = createTestAgent({
+        sessionBridgeSecret,
+        devBypassEnabled: true,
+        devBypassClientSecret,
+        welcomeEmailAdapter: {
+          sendMail: async () => {
+            resolve();
+            await slowSend;
+          },
+        },
+        welcomeEmailDeliveryDispatcher: task => {
+          void task();
+        },
+      });
+
+      agent = nonBlockingContext.agent;
+      prisma = nonBlockingContext.prisma;
+    });
+
+    const result = await registerTestUser(agent, { email: 'welcome-slow@example.com' });
+    await sendStarted;
+
+    expect(result.tokens.accessToken).toEqual(expect.any(String));
+
+    const pendingDeliveries = await prisma.notificationDelivery.findMany({
+      where: { userId: result.user.id, type: 'WELCOME' },
+      include: { attempts: true },
+    });
+
+    expect(pendingDeliveries).toHaveLength(1);
+    expect(pendingDeliveries[0].attempts).toEqual([
+      expect.objectContaining({ status: 'PENDING' }),
+    ]);
+
+    releaseSend();
+    const deliveries = await waitForNotificationAttempts(prisma, result.user.id, 1);
+
+    expect(deliveries[0].attempts[0]).toEqual(
+      expect.objectContaining({
+        status: 'SENT',
+        recipient: 'welcome-slow@example.com',
       }),
     );
   });

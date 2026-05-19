@@ -12,7 +12,7 @@ import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { createTaskRouter } from './routes/tasks';
 import { createTaskRepository, type TaskRepository } from './repositories/task-repository';
-import { WelcomeEmailService } from './notifications/welcome-email';
+import { WelcomeEmailService, type WelcomeEmailDeliveryDispatcher } from './notifications/welcome-email';
 import type { EmailAdapter } from './email/types';
 
 export interface CreateAppOptions {
@@ -23,6 +23,7 @@ export interface CreateAppOptions {
   devBypassClientSecret?: string;
   taskRepository?: TaskRepository;
   welcomeEmailAdapter?: EmailAdapter;
+  welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -79,6 +80,7 @@ export function createApp(options: CreateAppOptions = {}) {
   const welcomeEmailService = new WelcomeEmailService({
     prisma: getOrCreatePrisma(),
     emailAdapter: options.welcomeEmailAdapter,
+    deliveryDispatcher: options.welcomeEmailDeliveryDispatcher,
   });
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,

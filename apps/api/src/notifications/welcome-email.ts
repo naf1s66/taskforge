@@ -13,14 +13,17 @@ export interface WelcomeEmailUser {
 export interface WelcomeEmailServiceOptions {
   prisma: PrismaClient;
   emailAdapter?: EmailAdapter;
+  deliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   appName?: string;
   logger?: Pick<Console, 'error' | 'info'>;
 }
 
 export interface WelcomeEmailResult {
   deliveryId: string;
-  status: 'sent' | 'failed' | 'skipped';
+  status: 'queued' | 'sent' | 'failed' | 'skipped';
 }
+
+export type WelcomeEmailDeliveryDispatcher = (task: () => Promise<void>) => void | Promise<void>;
 
 const WELCOME_TYPE = 'WELCOME';
 
@@ -47,10 +50,22 @@ function isUniqueConstraintError(error: unknown): boolean {
 export class WelcomeEmailService {
   private readonly appName: string;
   private readonly logger: Pick<Console, 'error' | 'info'>;
+  private readonly deliveryDispatcher: WelcomeEmailDeliveryDispatcher;
 
   constructor(private readonly options: WelcomeEmailServiceOptions) {
     this.appName = options.appName ?? 'TaskForge';
     this.logger = options.logger ?? console;
+    this.deliveryDispatcher =
+      options.deliveryDispatcher ??
+      (task => {
+        queueMicrotask(() => {
+          void task().catch(error => {
+            this.logger.error('[notifications] Welcome email delivery task failed', {
+              error: resolveErrorMessage(error),
+            });
+          });
+        });
+      });
   }
 
   async sendWelcomeEmail(user: WelcomeEmailUser): Promise<WelcomeEmailResult> {
@@ -127,6 +142,19 @@ export class WelcomeEmailService {
       return { deliveryId: delivery.id, status: 'skipped' };
     }
 
+    await this.deliveryDispatcher(async () => {
+      await this.deliverWelcomeEmailAttempt(user, recipient, delivery.id, attempt.id);
+    });
+
+    return { deliveryId: delivery.id, status: 'queued' };
+  }
+
+  private async deliverWelcomeEmailAttempt(
+    user: WelcomeEmailUser,
+    recipient: string,
+    deliveryId: string,
+    attemptId: string,
+  ): Promise<void> {
     try {
       const emailAdapter = this.options.emailAdapter ?? createDefaultEmailAdapter();
       const message = renderWelcomeTemplate({ appName: this.appName, recipientEmail: recipient });
@@ -139,7 +167,7 @@ export class WelcomeEmailService {
       });
 
       await this.options.prisma.notificationDeliveryAttempt.update({
-        where: { id: attempt.id },
+        where: { id: attemptId },
         data: {
           status: 'SENT',
           deliveredAt: new Date(),
@@ -148,15 +176,13 @@ export class WelcomeEmailService {
 
       this.logger.info('[notifications] Welcome email sent', {
         userId: user.id,
-        deliveryId: delivery.id,
+        deliveryId,
       });
-
-      return { deliveryId: delivery.id, status: 'sent' };
     } catch (error) {
       const errorMessage = resolveErrorMessage(error);
 
       await this.options.prisma.notificationDeliveryAttempt.update({
-        where: { id: attempt.id },
+        where: { id: attemptId },
         data: {
           status: 'FAILED',
           errorCode: error instanceof Error ? error.name : 'Error',
@@ -166,11 +192,9 @@ export class WelcomeEmailService {
 
       this.logger.error('[notifications] Welcome email failed', {
         userId: user.id,
-        deliveryId: delivery.id,
+        deliveryId,
         error: errorMessage,
       });
-
-      return { deliveryId: delivery.id, status: 'failed' };
     }
   }
 }
