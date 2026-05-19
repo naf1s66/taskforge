@@ -12,6 +12,8 @@ import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { createTaskRouter } from './routes/tasks';
 import { createTaskRepository, type TaskRepository } from './repositories/task-repository';
+import { WelcomeEmailService, type WelcomeEmailDeliveryDispatcher } from './notifications/welcome-email';
+import type { EmailAdapter } from './email/types';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
@@ -20,6 +22,9 @@ export interface CreateAppOptions {
   devBypassEnabled?: boolean;
   devBypassClientSecret?: string;
   taskRepository?: TaskRepository;
+  welcomeEmailAdapter?: EmailAdapter;
+  welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
+  welcomeEmailPendingAttemptStaleAfterMs?: number;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -73,12 +78,19 @@ export function createApp(options: CreateAppOptions = {}) {
 
   const userStore = options.userStore ?? new PrismaUserStore(getOrCreatePrisma());
   const taskRepository = options.taskRepository ?? createTaskRepository(getOrCreatePrisma());
+  const welcomeEmailService = new WelcomeEmailService({
+    prisma: getOrCreatePrisma(),
+    emailAdapter: options.welcomeEmailAdapter,
+    deliveryDispatcher: options.welcomeEmailDeliveryDispatcher,
+    pendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
+  });
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,
     userStore,
     sessionBridgeSecret: options.sessionBridgeSecret ?? process.env.SESSION_BRIDGE_SECRET,
     devBypassEnabled: options.devBypassEnabled,
     devBypassClientSecret: options.devBypassClientSecret,
+    welcomeEmailService,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 

@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@taskforge/shared': path.resolve(__dirname, '../..', 'packages', 'shared', 'src'),
+      'server-only': path.resolve(__dirname, 'test/server-only.ts'),
     },
   },
   test: {
