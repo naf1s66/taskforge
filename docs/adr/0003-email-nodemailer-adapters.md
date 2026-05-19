@@ -22,4 +22,5 @@ The email adapter remains provider-neutral so TaskForge can move to another SMTP
 - Zero cost dev setup; easy local testing.
 - Resend requires a verified sending domain before production sends; SPF and DKIM are mandatory, and DMARC should be configured before launch.
 - Resend's free plan has a daily send limit, so digest delivery needs an explicit send-budget guard.
+- Digest scheduling is a production invocation concern; see `docs/prod/adr/0006-digest-scheduler-invocation.md` for the protected endpoint and free scheduler decision.
 - SMTP provider variance remains; keep all provider details behind configuration and the adapter.

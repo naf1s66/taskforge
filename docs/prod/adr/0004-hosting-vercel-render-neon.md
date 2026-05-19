@@ -13,3 +13,4 @@ We need free-tier hosting for quick demos and a realistic deployment topology.
 ## Consequences
 - Easy pipelines and env config.
 - Cold starts possible on free plans; document caveats.
+- Scheduled digest delivery is handled separately by ADR 0006 because cron pricing and timing guarantees vary by platform.
