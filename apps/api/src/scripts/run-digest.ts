@@ -6,7 +6,7 @@ import { getPrismaClient } from '../prisma';
 
 const digestDate = process.argv[2] ?? new Date().toISOString().slice(0, 10);
 const dryRun = process.argv.includes('--dry-run');
-const sendLimit = parseDailySendLimit(process.env.EMAIL_DAILY_SEND_LIMIT, 100);
+const sendLimit = parseDailySendLimit(process.env.EMAIL_DAILY_SEND_LIMIT, 90);
 
 async function main() {
   const runner = new DailyDigestRunner({

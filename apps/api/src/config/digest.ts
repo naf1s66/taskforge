@@ -12,7 +12,7 @@ function containsPlaceholder(value: string): boolean {
   return SECRET_PLACEHOLDER_VALUES.some(placeholder => normalized.includes(placeholder));
 }
 
-export function parseDailySendLimit(rawLimit: string | undefined, fallback = 100): number {
+export function parseDailySendLimit(rawLimit: string | undefined, fallback = 90): number {
   const value = rawLimit?.trim();
   if (!value) {
     return fallback;
@@ -31,7 +31,7 @@ export function parseDailySendLimit(rawLimit: string | undefined, fallback = 100
 }
 
 export function getDigestJobConfig(env: NodeJS.ProcessEnv = process.env): DigestJobConfig {
-  const dailySendLimit = parseDailySendLimit(env.EMAIL_DAILY_SEND_LIMIT, 100);
+  const dailySendLimit = parseDailySendLimit(env.EMAIL_DAILY_SEND_LIMIT, 90);
   const secret = env.DIGEST_JOB_SECRET?.trim();
 
   if (!isLocalEnv(env)) {

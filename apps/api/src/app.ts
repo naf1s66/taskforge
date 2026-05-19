@@ -109,7 +109,7 @@ export function createApp(options: CreateAppOptions = {}) {
     app.use(
       '/api/taskforge/v1/jobs',
       createJobsRouter(digestRunner, {
-        defaultSendLimit: options.digestDailySendLimit ?? 100,
+        defaultSendLimit: options.digestDailySendLimit ?? 90,
         secret: digestJobSecret,
       }),
     );

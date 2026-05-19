@@ -235,7 +235,7 @@ function assertDigestHour(digestHourUtc: number | undefined): void {
 
 function normalizeSendLimit(sendLimit: number | undefined): number {
   if (sendLimit === undefined) {
-    return 100;
+    return 90;
   }
 
   if (!Number.isInteger(sendLimit) || sendLimit < 0 || !Number.isSafeInteger(sendLimit)) {
