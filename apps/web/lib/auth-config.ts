@@ -71,6 +71,15 @@ function normalizeEmail(value: string | null | undefined): string | null {
   return value.trim().toLowerCase();
 }
 
+function dispatchWelcomeEmail(user: Pick<AdapterUser, 'id' | 'email'>) {
+  void scheduleWelcomeEmail({ id: user.id, email: user.email }).catch(error => {
+    console.error('[notifications] Welcome email scheduling failed', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
 function mapAccountToPrisma(account: AdapterAccount) {
   const expiresAt = typeof account.expires_at === 'number' ? Math.floor(account.expires_at) : null;
   const sessionState = typeof account.session_state === 'string' ? account.session_state : null;
@@ -206,12 +215,7 @@ const adapter: Adapter = {
 
     const created = await baseAdapter.createUser(payload);
 
-    await scheduleWelcomeEmail({ id: created.id, email: created.email }).catch(error => {
-      console.error('[notifications] Welcome email scheduling failed', {
-        userId: created.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+    dispatchWelcomeEmail(created);
 
     return created;
   },
