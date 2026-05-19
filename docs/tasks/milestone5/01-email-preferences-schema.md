@@ -17,6 +17,6 @@
 - Keep the schema compatible with ADR 0003's SMTP adapter and future multi-provider support.
 
 ## Implementation Notes
-- Added `EmailPreference` with conservative daily digest defaults and a database check that allows only UTC hours 0-23 when a digest hour is set.
+- Added `EmailPreference` with conservative daily digest defaults, a persisted `dailyDigestTimezone` defaulting to `UTC`, and a database check that allows only UTC hours 0-23 when a digest hour is set.
 - Added `NotificationDelivery` for idempotent logical notifications and `NotificationDeliveryAttempt` for auditable provider send attempts.
 - Seed data upserts the local demo user's default email preferences deterministically.
