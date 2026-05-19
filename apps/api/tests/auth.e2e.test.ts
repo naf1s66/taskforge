@@ -182,6 +182,35 @@ describe('Auth API', () => {
     expect(deliveries).toHaveLength(0);
   });
 
+  it('skips welcome email attempts when the user preference disables them', async () => {
+    const created = await createUser({
+      email: 'welcome-disabled@example.com',
+      passwordHash: null,
+    });
+
+    await prisma.emailPreference.create({
+      data: {
+        userId: created.user.id,
+        welcomeEmailEnabled: false,
+        dailyDigestEnabled: false,
+      },
+    });
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: created.user.id, email: created.user.email })
+      .expect(202);
+
+    const deliveries = await prisma.notificationDelivery.findMany({
+      where: { userId: created.user.id, type: 'WELCOME' },
+      include: { attempts: true },
+    });
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0].attempts).toHaveLength(0);
+  });
+
   it('rejects invalid registration payloads', async () => {
     const invalid = await agent
       .post('/api/taskforge/v1/auth/register')

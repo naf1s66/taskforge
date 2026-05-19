@@ -85,6 +85,19 @@ export class WelcomeEmailService {
       return { deliveryId: delivery.id, status: 'skipped' };
     }
 
+    const preference = await this.options.prisma.emailPreference.findUnique({
+      where: { userId: user.id },
+      select: { welcomeEmailEnabled: true },
+    });
+
+    if (preference?.welcomeEmailEnabled === false) {
+      this.logger.info('[notifications] Welcome email disabled by user preference; skipping', {
+        userId: user.id,
+        deliveryId: delivery.id,
+      });
+      return { deliveryId: delivery.id, status: 'skipped' };
+    }
+
     const attemptNumber = (latestAttempt?.attemptNumber ?? 0) + 1;
     const attempt = await this.options.prisma.notificationDeliveryAttempt
       .create({
