@@ -48,6 +48,34 @@ describe('jobs router', () => {
     });
   });
 
+  it('parses explicit false dry-run query values as real sends', async () => {
+    const run = jest.fn().mockResolvedValue({ attempted: 1, sent: 1, skipped: 0, failed: 0 });
+    const app = express();
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .get('/jobs/digest?digestDate=2026-05-19&dryRun=false')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(200);
+    await request(app)
+      .get('/jobs/digest?digestDate=2026-05-20&dryRun=0')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(200);
+
+    expect(run).toHaveBeenNthCalledWith(1, {
+      digestDate: '2026-05-19',
+      digestHourUtc: undefined,
+      dryRun: false,
+      sendLimit: 90,
+    });
+    expect(run).toHaveBeenNthCalledWith(2, {
+      digestDate: '2026-05-20',
+      digestHourUtc: undefined,
+      dryRun: false,
+      sendLimit: 90,
+    });
+  });
+
   it('rejects unauthorized and invalid digest job requests', async () => {
     const run = jest.fn();
     const app = express();

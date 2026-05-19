@@ -16,7 +16,10 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 const runDigestSchema = z.object({
   digestDate: dateOnlySchema,
   digestHourUtc: z.coerce.number().int().min(0).max(23).optional(),
-  dryRun: z.coerce.boolean().default(false),
+  dryRun: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .optional()
+    .transform(value => value === true || value === 'true' || value === '1'),
   sendLimit: z.coerce.number().int().min(0).optional(),
 });
 
