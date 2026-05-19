@@ -1,6 +1,7 @@
 import { NotificationDeliveryStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
+import type { SendMailInput } from '../src/email/types';
 import { DailyDigestRunner } from '../src/notifications/daily-digest-runner';
 import { getTestPrisma } from './utils/prisma';
 
@@ -10,6 +11,7 @@ async function createDigestUser(options: {
   email?: string;
   emailVerified?: Date | null;
   task?: boolean;
+  taskDueDate?: Date;
 }) {
   const prisma = getTestPrisma();
   const user = await prisma.user.create({
@@ -33,7 +35,7 @@ async function createDigestUser(options: {
         title: `Digest task ${user.id}`,
         status: 'TODO',
         priority: 'HIGH',
-        dueDate: new Date('2026-05-19T12:00:00.000Z'),
+        dueDate: options.taskDueDate ?? new Date('2026-05-19T12:00:00.000Z'),
       },
     });
   }
@@ -43,10 +45,12 @@ async function createDigestUser(options: {
 
 describe('DailyDigestRunner', () => {
   const sent: string[] = [];
+  const sentMessages: SendMailInput[] = [];
 
   beforeEach(async () => {
     const prisma = getTestPrisma();
     sent.length = 0;
+    sentMessages.length = 0;
     await prisma.notificationDeliveryAttempt.deleteMany();
     await prisma.notificationDelivery.deleteMany();
     await prisma.emailPreference.deleteMany();
@@ -145,5 +149,33 @@ describe('DailyDigestRunner', () => {
     expect(result.duplicateSkipped).toBe(1);
     expect(sent).toHaveLength(0);
     expect(await prisma.notificationDeliveryAttempt.count()).toBe(1);
+  });
+
+  it('queries the requested digest date in each user timezone', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({
+      email: 'kiritimati@taskforge.dev',
+      taskDueDate: new Date('2026-05-18T10:30:00.000Z'),
+    });
+    const user = await prisma.user.findFirstOrThrow({ where: { email: 'kiritimati@taskforge.dev' } });
+    await prisma.emailPreference.update({
+      where: { userId: user.id },
+      data: { dailyDigestTimezone: 'Pacific/Kiritimati' },
+    });
+
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async msg => {
+          sentMessages.push(msg);
+        },
+      },
+    });
+
+    await runner.run({ digestDate: '2026-05-19' });
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]?.text).toContain('Due today: 1');
+    expect(sentMessages[0]?.text).not.toContain('Overdue: 1');
   });
 });

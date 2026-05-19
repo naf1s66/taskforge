@@ -224,12 +224,13 @@ export function computeUtcWindowBoundaries(
   recentlyUpdatedSinceUtc: Date;
 } {
   const localDate = toLocalDateParts(now, timezone);
-  const startOfTodayUtc = localMidnightToUtc(localDate.year, localDate.month, localDate.day, timezone);
-  const startOfTomorrowUtc = localMidnightToUtc(localDate.year, localDate.month, localDate.day + 1, timezone);
-  const dueSoonUntilUtc = localMidnightToUtc(
+  const startOfTodayUtc = localDateTimeToUtc(localDate.year, localDate.month, localDate.day, 0, timezone);
+  const startOfTomorrowUtc = localDateTimeToUtc(localDate.year, localDate.month, localDate.day + 1, 0, timezone);
+  const dueSoonUntilUtc = localDateTimeToUtc(
     localDate.year,
     localDate.month,
     localDate.day + 1 + dueSoonDays,
+    0,
     timezone,
   );
 
@@ -261,8 +262,8 @@ function toLocalDateParts(date: Date, timezone: string): { year: number; month: 
   return { year, month, day };
 }
 
-function localMidnightToUtc(year: number, month: number, day: number, timezone: string): Date {
-  const targetWallTimeUtc = Date.UTC(year, month - 1, day, 0, 0, 0);
+export function localDateTimeToUtc(year: number, month: number, day: number, hour: number, timezone: string): Date {
+  const targetWallTimeUtc = Date.UTC(year, month - 1, day, hour, 0, 0);
   let candidate = new Date(targetWallTimeUtc);
 
   for (let attempts = 0; attempts < 4; attempts += 1) {

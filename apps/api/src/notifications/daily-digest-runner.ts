@@ -9,7 +9,7 @@ import {
 
 import type { EmailAdapter } from '../email/types';
 import { renderDailyDigestTemplate } from '../email/templates';
-import { DailyDigestQueryService } from './digest-query-service';
+import { DailyDigestQueryService, localDateTimeToUtc } from './digest-query-service';
 
 export interface DailyDigestRunnerOptions {
   prisma: PrismaClient;
@@ -51,7 +51,6 @@ export class DailyDigestRunner {
     assertDigestDate(input.digestDate);
     assertDigestHour(input.digestHourUtc);
 
-    const now = input.now ?? new Date(`${input.digestDate}T12:00:00.000Z`);
     const sendLimit = normalizeSendLimit(input.sendLimit);
     const dryRun = input.dryRun ?? false;
     const users = await this.options.prisma.user.findMany({
@@ -75,6 +74,8 @@ export class DailyDigestRunner {
 
     for (const user of users) {
       attempted += 1;
+      const timezone = user.emailPreference?.dailyDigestTimezone ?? 'UTC';
+      const now = input.now ?? digestDateNoonInTimezone(input.digestDate, timezone);
       const isDigestEnabled = user.emailPreference?.dailyDigestEnabled ?? false;
       const recipient = normalizeDeliverableEmail(user.email);
       const digestHourMatches =
@@ -102,7 +103,7 @@ export class DailyDigestRunner {
 
       const digest = await this.queryService.queryForUser(user.id, {
         now,
-        timezone: user.emailPreference?.dailyDigestTimezone,
+        timezone,
       });
 
       if (isDigestEmpty(digest)) {
@@ -221,6 +222,11 @@ function assertDigestDate(digestDate: string): void {
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== digestDate) {
     throw new Error('digestDate must be a valid calendar date.');
   }
+}
+
+function digestDateNoonInTimezone(digestDate: string, timezone: string): Date {
+  const [year, month, day] = digestDate.split('-').map(Number);
+  return localDateTimeToUtc(year, month, day, 12, timezone);
 }
 
 function assertDigestHour(digestHourUtc: number | undefined): void {
