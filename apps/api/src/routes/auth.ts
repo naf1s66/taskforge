@@ -226,7 +226,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   });
 
   if (bridgeSecret) {
-    router.post('/welcome-email', authAttemptLimiter, async (req, res) => {
+    router.post('/welcome-email', async (req, res) => {
       const providedSecret = req.get('x-session-bridge-secret');
 
       if (!providedSecret || providedSecret !== bridgeSecret) {
