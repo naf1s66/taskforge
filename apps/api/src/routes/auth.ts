@@ -22,6 +22,7 @@ const sessionBridgeSchema = z.object({
   userId: z.string().min(1),
   email: z.string().email().optional(),
 });
+const welcomeEmailSchema = sessionBridgeSchema;
 
 // Helper function to get cookie options
 function getCookieOptions() {
@@ -225,6 +226,51 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   });
 
   if (bridgeSecret) {
+    router.post('/welcome-email', authAttemptLimiter, async (req, res) => {
+      const providedSecret = req.get('x-session-bridge-secret');
+
+      if (!providedSecret || providedSecret !== bridgeSecret) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const parse = welcomeEmailSchema.safeParse(req.body);
+
+      if (!parse.success) {
+        return res.status(400).json({ error: 'Invalid payload', details: parse.error.flatten() });
+      }
+
+      const { userId, email } = parse.data;
+      let user = await store.findById(userId);
+
+      if (!user && email) {
+        user = await store.findByEmail(email);
+      }
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (email && user.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(409).json({ error: 'User email mismatch' });
+      }
+
+      if (!options.welcomeEmailService) {
+        return res.status(202).json({ status: 'skipped' });
+      }
+
+      const welcomeUser = user;
+      const result = await options.welcomeEmailService.sendWelcomeEmail(welcomeUser).catch(error => {
+        console.error('[notifications] Welcome email scheduling failed', {
+          userId: welcomeUser.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        return { status: 'failed' as const };
+      });
+
+      return res.status(202).json(result);
+    });
+
     router.post('/session-bridge', authAttemptLimiter, async (req, res) => {
       const providedSecret = req.get('x-session-bridge-secret');
 

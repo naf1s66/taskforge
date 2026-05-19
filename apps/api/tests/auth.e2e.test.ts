@@ -7,6 +7,7 @@ import { getSessionCookieName } from '@taskforge/shared';
 import { createDevBypassClientToken } from '../src/auth/dev-bypass-client-token';
 import { createTestAgent } from './utils/test-app';
 import { loginTestUser, registerTestUser, extractSessionCookie } from './utils/auth';
+import { createUser } from './utils/factories';
 
 async function waitForNotificationAttempts(
   prisma: import('./utils/prisma').PrismaClient,
@@ -126,6 +127,59 @@ describe('Auth API', () => {
         errorMessage: 'SMTP unavailable',
       }),
     );
+  });
+
+  it('records one welcome email for an OAuth-created user and skips duplicate bridge requests', async () => {
+    const created = await createUser({
+      email: 'oauth-welcome@example.com',
+      passwordHash: null,
+    });
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: created.user.id, email: created.user.email })
+      .expect(202);
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: created.user.id, email: created.user.email })
+      .expect(202);
+
+    const deliveries = await waitForNotificationAttempts(prisma, created.user.id, 1);
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0].attempts).toHaveLength(1);
+    expect(deliveries[0]).toEqual(
+      expect.objectContaining({
+        idempotencyKey: `welcome:${created.user.id}`,
+        recipient: 'oauth-welcome@example.com',
+        type: 'WELCOME',
+      }),
+    );
+    expect(deliveries[0].attempts[0]).toEqual(
+      expect.objectContaining({
+        status: 'SENT',
+        recipient: 'oauth-welcome@example.com',
+      }),
+    );
+  });
+
+  it('protects welcome email scheduling with the session bridge secret', async () => {
+    const created = await createUser({ email: 'oauth-unauthorized@example.com', passwordHash: null });
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', 'not-the-secret')
+      .send({ userId: created.user.id, email: created.user.email })
+      .expect(401);
+
+    const deliveries = await prisma.notificationDelivery.findMany({
+      where: { userId: created.user.id, type: 'WELCOME' },
+    });
+
+    expect(deliveries).toHaveLength(0);
   });
 
   it('rejects invalid registration payloads', async () => {

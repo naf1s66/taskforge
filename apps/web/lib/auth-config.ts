@@ -8,7 +8,7 @@ import GitHub from 'next-auth/providers/github';
 import Google from 'next-auth/providers/google';
 
 import { getPrismaClient } from './prisma';
-import { WelcomeEmailService } from './welcome-email';
+import { scheduleWelcomeEmail } from './welcome-email';
 
 export type AuthProviderSummary = {
   id: string;
@@ -62,7 +62,6 @@ const providers =
     : [developmentFallbackProvider];
 
 const prisma = getPrismaClient();
-const welcomeEmailService = new WelcomeEmailService({ prisma });
 
 function normalizeEmail(value: string | null | undefined): string | null {
   if (!value) {
@@ -207,7 +206,7 @@ const adapter: Adapter = {
 
     const created = await baseAdapter.createUser(payload);
 
-    void welcomeEmailService.sendWelcomeEmail({ id: created.id, email: created.email }).catch(error => {
+    await scheduleWelcomeEmail({ id: created.id, email: created.email }).catch(error => {
       console.error('[notifications] Welcome email scheduling failed', {
         userId: created.id,
         error: error instanceof Error ? error.message : String(error),
