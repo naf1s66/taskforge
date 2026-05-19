@@ -3,7 +3,7 @@
 **Status:** Accepted, adapter implemented
 
 ## Context
-We need basic emails (welcome, daily digest) on free setup for dev/prod. The provider-neutral SMTP adapter is implemented in milestone 5; product flows such as welcome sends and digests remain separate follow-up work.
+We need basic emails (welcome, daily digest) on free setup for dev/prod. The provider-neutral SMTP adapter is implemented in milestone 5; welcome sends and the protected digest scheduler are staged while user-facing digest product flows remain separate follow-up work.
 
 ## Decision
 Use **Nodemailer** behind a small adapter. Dev uses **MailHog** (docker). Production defaults to **Resend SMTP** for milestone 5, with credentials supplied via env.
