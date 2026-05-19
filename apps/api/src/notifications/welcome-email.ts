@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 
 import { getSmtpConfig } from '../config/smtp';
 import { NodemailerEmailAdapter } from '../email/nodemailer-adapter';
@@ -38,6 +38,10 @@ function resolveErrorMessage(error: unknown): string {
 
 function createDefaultEmailAdapter(): EmailAdapter {
   return new NodemailerEmailAdapter(getSmtpConfig());
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
 export class WelcomeEmailService {
@@ -82,16 +86,33 @@ export class WelcomeEmailService {
     }
 
     const attemptNumber = (latestAttempt?.attemptNumber ?? 0) + 1;
-    const attempt = await this.options.prisma.notificationDeliveryAttempt.create({
-      data: {
-        deliveryId: delivery.id,
-        attemptNumber,
-        type: WELCOME_TYPE,
-        recipient,
-        status: 'PENDING',
-        provider: 'smtp',
-      },
-    });
+    const attempt = await this.options.prisma.notificationDeliveryAttempt
+      .create({
+        data: {
+          deliveryId: delivery.id,
+          attemptNumber,
+          type: WELCOME_TYPE,
+          recipient,
+          status: 'PENDING',
+          provider: 'smtp',
+        },
+      })
+      .catch(async error => {
+        if (!isUniqueConstraintError(error)) {
+          throw error;
+        }
+
+        this.logger.info('[notifications] Welcome email attempt already exists; skipping duplicate', {
+          userId: user.id,
+          deliveryId: delivery.id,
+        });
+
+        return null;
+      });
+
+    if (!attempt) {
+      return { deliveryId: delivery.id, status: 'skipped' };
+    }
 
     try {
       const emailAdapter = this.options.emailAdapter ?? createDefaultEmailAdapter();

@@ -169,7 +169,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     await store.create(user);
 
     if (options.welcomeEmailService) {
-      void options.welcomeEmailService.sendWelcomeEmail(user).catch(error => {
+      await options.welcomeEmailService.sendWelcomeEmail(user).catch(error => {
         console.error('[notifications] Welcome email scheduling failed', {
           userId: user.id,
           error: error instanceof Error ? error.message : String(error),
