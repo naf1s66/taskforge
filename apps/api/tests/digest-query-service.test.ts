@@ -114,6 +114,27 @@ describe('DailyDigestQueryService', () => {
     }
   });
 
+  it('uses the stored digest timezone when no override is provided', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const findUnique = jest.fn().mockResolvedValue({ dailyDigestTimezone: 'America/New_York' });
+    const prisma = {
+      task: { findMany },
+      emailPreference: { findUnique },
+    } as unknown as PrismaClient;
+    const service = new DailyDigestQueryService(prisma);
+
+    const digest = await service.queryForUser('user-1', {
+      now: new Date('2026-05-19T12:00:00.000Z'),
+    });
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      select: { dailyDigestTimezone: true },
+    });
+    expect(digest.timezone).toBe('America/New_York');
+    expect(digest.window.startOfTodayUtc).toBe('2026-05-19T04:00:00.000Z');
+  });
+
   it('computes timezone-aware daily boundaries', () => {
     const windows = computeUtcWindowBoundaries(
       new Date('2026-05-19T03:30:00.000Z'),

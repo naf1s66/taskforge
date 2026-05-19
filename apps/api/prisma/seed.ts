@@ -31,12 +31,14 @@ async function main() {
       welcomeEmailEnabled: true,
       dailyDigestEnabled: false,
       dailyDigestHourUtc: null,
+      dailyDigestTimezone: 'UTC',
     },
     create: {
       userId: demoUser.id,
       welcomeEmailEnabled: true,
       dailyDigestEnabled: false,
       dailyDigestHourUtc: null,
+      dailyDigestTimezone: 'UTC',
     },
   });
 }

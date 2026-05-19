@@ -45,7 +45,7 @@ export class DailyDigestQueryService {
 
   async queryForUser(userId: string, options: DailyDigestQueryOptions = {}): Promise<DailyDigestQueryResult> {
     const now = options.now ?? new Date();
-    const timezone = options.timezone ?? 'UTC';
+    const timezone = options.timezone ?? (await this.resolveUserTimezone(userId));
     const dueSoonDays = Math.max(1, options.dueSoonDays ?? 7);
     const recentlyUpdatedDays = Math.max(1, options.recentlyUpdatedDays ?? 2);
     const maxTasksPerGroup = Math.max(1, options.maxTasksPerGroup ?? 10);
@@ -146,6 +146,15 @@ export class DailyDigestQueryService {
         },
       ],
     };
+  }
+
+  private async resolveUserTimezone(userId: string): Promise<string> {
+    const preference = await this.prisma.emailPreference.findUnique({
+      where: { userId },
+      select: { dailyDigestTimezone: true },
+    });
+
+    return preference?.dailyDigestTimezone ?? 'UTC';
   }
 }
 

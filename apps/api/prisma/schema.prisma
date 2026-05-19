@@ -119,6 +119,7 @@ model EmailPreference {
   welcomeEmailEnabled Boolean  @default(true)
   dailyDigestEnabled  Boolean  @default(false)
   dailyDigestHourUtc  Int?
+  dailyDigestTimezone String   @default("UTC")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
