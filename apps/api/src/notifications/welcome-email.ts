@@ -14,6 +14,7 @@ export interface WelcomeEmailServiceOptions {
   prisma: PrismaClient;
   emailAdapter?: EmailAdapter;
   deliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
+  pendingAttemptStaleAfterMs?: number;
   appName?: string;
   logger?: Pick<Console, 'error' | 'info'>;
 }
@@ -26,6 +27,7 @@ export interface WelcomeEmailResult {
 export type WelcomeEmailDeliveryDispatcher = (task: () => Promise<void>) => void | Promise<void>;
 
 const WELCOME_TYPE = 'WELCOME';
+const DEFAULT_PENDING_ATTEMPT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 function getWelcomeIdempotencyKey(userId: string): string {
   return `welcome:${userId}`;
@@ -47,14 +49,21 @@ function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
+function isPendingAttemptStale(attemptedAt: Date, staleAfterMs: number, now: Date): boolean {
+  return now.getTime() - attemptedAt.getTime() >= staleAfterMs;
+}
+
 export class WelcomeEmailService {
   private readonly appName: string;
   private readonly logger: Pick<Console, 'error' | 'info'>;
   private readonly deliveryDispatcher: WelcomeEmailDeliveryDispatcher;
+  private readonly pendingAttemptStaleAfterMs: number;
 
   constructor(private readonly options: WelcomeEmailServiceOptions) {
     this.appName = options.appName ?? 'TaskForge';
     this.logger = options.logger ?? console;
+    this.pendingAttemptStaleAfterMs =
+      options.pendingAttemptStaleAfterMs ?? DEFAULT_PENDING_ATTEMPT_STALE_AFTER_MS;
     this.deliveryDispatcher =
       options.deliveryDispatcher ??
       (task => {
@@ -92,12 +101,39 @@ export class WelcomeEmailService {
     });
 
     const latestAttempt = delivery.attempts[0];
-    if (latestAttempt?.status === 'SENT' || latestAttempt?.status === 'PENDING') {
+    if (latestAttempt?.status === 'SENT') {
       this.logger.info('[notifications] Welcome email already queued or sent; skipping duplicate', {
         userId: user.id,
         deliveryId: delivery.id,
       });
       return { deliveryId: delivery.id, status: 'skipped' };
+    }
+
+    if (latestAttempt?.status === 'PENDING') {
+      const now = new Date();
+
+      if (!isPendingAttemptStale(latestAttempt.attemptedAt, this.pendingAttemptStaleAfterMs, now)) {
+        this.logger.info('[notifications] Welcome email already queued or sent; skipping duplicate', {
+          userId: user.id,
+          deliveryId: delivery.id,
+        });
+        return { deliveryId: delivery.id, status: 'skipped' };
+      }
+
+      await this.options.prisma.notificationDeliveryAttempt.update({
+        where: { id: latestAttempt.id },
+        data: {
+          status: 'FAILED',
+          errorCode: 'StalePendingAttempt',
+          errorMessage: 'Pending welcome email attempt expired before reaching a terminal status.',
+        },
+      });
+
+      this.logger.error('[notifications] Welcome email pending attempt expired before delivery', {
+        userId: user.id,
+        deliveryId: delivery.id,
+        attemptId: latestAttempt.id,
+      });
     }
 
     const preference = await this.options.prisma.emailPreference.findUnique({

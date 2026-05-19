@@ -221,6 +221,55 @@ describe('Auth API', () => {
     );
   });
 
+  it('retries stale pending welcome attempts instead of skipping forever', async () => {
+    const created = await createUser({
+      email: 'oauth-stale-pending@example.com',
+      passwordHash: null,
+    });
+    const staleAttemptedAt = new Date(Date.now() - 10 * 60 * 1000);
+    const delivery = await prisma.notificationDelivery.create({
+      data: {
+        userId: created.user.id,
+        idempotencyKey: `welcome:${created.user.id}`,
+        type: 'WELCOME',
+        recipient: created.user.email,
+        attempts: {
+          create: {
+            attemptNumber: 1,
+            type: 'WELCOME',
+            recipient: created.user.email,
+            status: 'PENDING',
+            provider: 'smtp',
+            attemptedAt: staleAttemptedAt,
+          },
+        },
+      },
+    });
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: created.user.id, email: created.user.email })
+      .expect(202);
+
+    const deliveries = await waitForNotificationAttempts(prisma, created.user.id, 2);
+
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0].id).toBe(delivery.id);
+    expect(deliveries[0].attempts).toEqual([
+      expect.objectContaining({
+        attemptNumber: 1,
+        status: 'FAILED',
+        errorCode: 'StalePendingAttempt',
+      }),
+      expect.objectContaining({
+        attemptNumber: 2,
+        status: 'SENT',
+        recipient: 'oauth-stale-pending@example.com',
+      }),
+    ]);
+  });
+
   it('protects welcome email scheduling with the session bridge secret', async () => {
     const created = await createUser({ email: 'oauth-unauthorized@example.com', passwordHash: null });
 

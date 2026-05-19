@@ -24,6 +24,7 @@ export interface CreateAppOptions {
   taskRepository?: TaskRepository;
   welcomeEmailAdapter?: EmailAdapter;
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
+  welcomeEmailPendingAttemptStaleAfterMs?: number;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -81,6 +82,7 @@ export function createApp(options: CreateAppOptions = {}) {
     prisma: getOrCreatePrisma(),
     emailAdapter: options.welcomeEmailAdapter,
     deliveryDispatcher: options.welcomeEmailDeliveryDispatcher,
+    pendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
   });
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,

@@ -23,6 +23,7 @@ export interface CreateTestAgentOptions {
   taskRepository?: TaskRepository;
   welcomeEmailAdapter?: EmailAdapter;
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
+  welcomeEmailPendingAttemptStaleAfterMs?: number;
 }
 
 export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgentContext {
@@ -38,6 +39,7 @@ export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgent
     taskRepository,
     welcomeEmailAdapter: options.welcomeEmailAdapter ?? { sendMail: async () => undefined },
     welcomeEmailDeliveryDispatcher: options.welcomeEmailDeliveryDispatcher ?? (task => task()),
+    welcomeEmailPendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
   });
 
   return { agent: request(app), prisma, userStore, taskRepository };

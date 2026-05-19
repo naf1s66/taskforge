@@ -19,5 +19,5 @@
 ## Completion Notes
 - Credentials registration records welcome email delivery through the API notification service after user persistence, then dispatches SMTP outside the auth response path.
 - OAuth account creation schedules welcome delivery through a bridge-secret-protected API endpoint so the API remains the single owner of SMTP configuration, templates, and delivery history.
-- Delivery idempotency uses `welcome:{userId}` and skips existing `SENT` or `PENDING` attempts; duplicate bridge calls do not create duplicate attempts.
+- Delivery idempotency uses `welcome:{userId}` and skips existing `SENT` or fresh `PENDING` attempts; stale pending attempts are failed and retried so process restarts do not suppress welcome emails forever.
 - SMTP failures are stored as failed delivery attempts and logged asynchronously without rejecting successful auth.
