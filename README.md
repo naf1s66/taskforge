@@ -86,6 +86,8 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `SMTP_HOST` / `SMTP_PORT` | `apps/api/.env` | `mailhog` / `1025` | Local Docker sends through MailHog. Production uses Resend SMTP; see `infra/env/api.prod.env.example` and `docs/prod/resend-email-setup.md`. |
 | `SMTP_USER` / `SMTP_PASS` | `apps/api/.env` | _(blank)_ | Production Resend SMTP uses `SMTP_USER=resend` and stores the Resend API key in `SMTP_PASS`. Never commit real credentials. |
 | `EMAIL_FROM` | `apps/api/.env` | `TaskForge <noreply@taskforge.local>` | Production must use a sender on the verified Resend domain. |
+| `EMAIL_DAILY_SEND_LIMIT` | `apps/api/.env` | `100` | Daily digest budget guard. Keep at or below the Resend free daily limit unless the account is upgraded. |
+| `DIGEST_JOB_SECRET` | `apps/api/.env` | `dev-digest-job-secret` | Shared secret for the protected digest job endpoint. Rotate and store securely in production. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
@@ -204,5 +206,6 @@ pnpm -C apps/api run lint:http
 - BE: Render or Railway
 - DB: Neon or Supabase
 - Email: Nodemailer SMTP adapter is available. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`). See `docs/prod/resend-email-setup.md`.
+- Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron when available; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.

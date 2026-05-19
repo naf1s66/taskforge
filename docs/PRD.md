@@ -16,7 +16,7 @@
 - Tasks: title, description (MD), status, priority, **tags**, **dueDate**.
 - Kanban: DnD with optimistic UI.
 - Filters/search: tag/status/due range/text.
-- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; welcome emails send after first account creation, while daily digest product flows remain planned.
+- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; welcome emails send after first account creation, while daily digest product flows remain planned. The approved digest invocation path is a protected free-tier scheduler endpoint.
 - UI: Next.js, Tailwind, shadcn/ui, Framer Motion, desktop-first dark theme.
 - Docs: Swagger/OpenAPI + ADRs. `.http` pack.
 - Tests: Jest/Supertest for API coverage and Vitest/React Testing Library for frontend coverage.
@@ -30,7 +30,7 @@
 - BE: Express (TS), Zod validation, Prisma (Postgres), Swagger. Auth router issues JWT access/refresh pairs, maintains
   `tf_session` HttpOnly cookies, and exposes a `session-bridge` endpoint for trusted frontends.
 - DB: Neon/Supabase Postgres; Prisma migrations + seed.
-- Email: Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once pre-launch verification is complete.
+- Email: Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once pre-launch verification is complete. Daily digest scheduling uses a protected API job endpoint invoked by Vercel Cron when available, with GitHub Actions schedule as the free fallback.
 - Infra: Dockerfiles + docker-compose; CI with GitHub Actions.
 
 ## Data Model (Prisma Sketch)
@@ -109,7 +109,7 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - Auth: NextAuth + backend JWT verification with dedicated session bridge and shared Prisma adapter.
 - Backend: Express TS + Zod + Swagger.
 - DB: Postgres (Neon/Supabase) + Prisma.
-- Email: ADR 0003 records the Nodemailer adapter, MailHog dev path, and Resend SMTP production default.
+- Email: ADR 0003 records the Nodemailer adapter, MailHog dev path, and Resend SMTP production default. Production ADR 0006 records the free-tier digest scheduler invocation path.
 - Monorepo rationale: shared types, unified tooling, single CI.
 
 
