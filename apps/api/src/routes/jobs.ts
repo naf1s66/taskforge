@@ -14,7 +14,7 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 }, 'Expected a valid YYYY-MM-DD date.');
 
 const optionalIntegerParam = (schema: z.ZodNumber) =>
-  z.preprocess(value => (value === '' ? Number.NaN : value), schema.optional());
+  z.preprocess(value => (value === '' || value === null ? Number.NaN : value), schema.optional());
 
 const runDigestSchema = z.object({
   digestDate: dateOnlySchema,
@@ -23,7 +23,7 @@ const runDigestSchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform(value => value === true || value === 'true' || value === '1'),
-  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0)),
+  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0).safe()),
 });
 
 function isAuthorized(req: Request, secret: string): boolean {

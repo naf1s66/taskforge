@@ -110,4 +110,43 @@ describe('jobs router', () => {
 
     expect(run).not.toHaveBeenCalled();
   });
+
+  it('rejects null optional digest params instead of coercing them to zero', async () => {
+    const run = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', sendLimit: null })
+      .expect(400);
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', digestHourUtc: null })
+      .expect(400);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe send limits at request validation time', async () => {
+    const run = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .get('/jobs/digest?digestDate=2026-05-19&sendLimit=9007199254740992')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(400);
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', sendLimit: 9007199254740992 })
+      .expect(400);
+
+    expect(run).not.toHaveBeenCalled();
+  });
 });
