@@ -58,6 +58,7 @@ export class DailyDigestRunner {
 
     const sendLimit = normalizeSendLimit(input.sendLimit);
     const dryRun = input.dryRun ?? false;
+    const dryRunConsumedBudget = dryRun ? await countConsumedBudget(this.options.prisma, input.digestDate) : 0;
     const users = await this.options.prisma.user.findMany({
       select: {
         id: true,
@@ -76,6 +77,7 @@ export class DailyDigestRunner {
     let duplicateSkipped = 0;
     let preferenceSkipped = 0;
     let noContentSkipped = 0;
+    let dryRunReserved = 0;
 
     for (const user of users) {
       attempted += 1;
@@ -124,6 +126,13 @@ export class DailyDigestRunner {
       });
 
       if (dryRun) {
+        if (dryRunConsumedBudget + dryRunReserved >= sendLimit) {
+          skipped += 1;
+          budgetSkipped += 1;
+          continue;
+        }
+
+        dryRunReserved += 1;
         sent += 1;
         continue;
       }

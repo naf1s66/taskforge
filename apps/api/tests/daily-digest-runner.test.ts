@@ -71,6 +71,21 @@ describe('DailyDigestRunner', () => {
     expect(sent).toHaveLength(0);
   });
 
+  it('applies send budget during dry runs without persisting deliveries', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'dry-budget-a@taskforge.dev' });
+    await createDigestUser({ email: 'dry-budget-b@taskforge.dev' });
+
+    const runner = new DailyDigestRunner({ prisma, emailAdapter: { sendMail: async msg => { sent.push(msg.to); } } });
+    const result = await runner.run({ digestDate: '2026-05-19', dryRun: true, sendLimit: 1 });
+
+    expect(result.sent).toBe(1);
+    expect(result.budgetSkipped).toBe(1);
+    expect(await prisma.notificationDelivery.count()).toBe(0);
+    expect(await prisma.notificationDeliveryAttempt.count()).toBe(0);
+    expect(sent).toHaveLength(0);
+  });
+
   it('is idempotent for the same digest date and user', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'a@taskforge.dev' });
