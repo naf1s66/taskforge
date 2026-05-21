@@ -13,14 +13,14 @@ The current production topology targets Vercel for the web app, Render or Railwa
 - Railway offers a limited free/trial path and paid Hobby usage, so relying on Railway scheduling for production is not the default free-only choice.
 
 ## Decision
-Implement digest delivery as an explicit API job endpoint backed by the same deterministic runner used by local scripts and CI smoke checks.
+Implement digest delivery as an explicit API job endpoint backed by the same deterministic runner used by local scripts and CI smoke checks. Add a small Vercel-compatible web proxy route so Vercel Cron can invoke the deployed web app and forward to the API.
 
 Production invocation should prefer:
 
-1. Vercel Cron calling the protected API job endpoint when the deployed topology can support it within Hobby limits.
-2. GitHub Actions scheduled workflow calling the same endpoint as the free fallback.
+1. Vercel Cron calling `GET /api/cron/digest` on the web app. Vercel supplies `Authorization: Bearer <CRON_SECRET>`; the web route forwards to the API with `DIGEST_JOB_SECRET`.
+2. GitHub Actions scheduled workflow calling the protected API job endpoint directly as the free fallback.
 
-The endpoint must require a shared job secret, support dry-run mode, accept an explicit digest date window, and pass an `EMAIL_DAILY_SEND_LIMIT` budget guard to the runner. Production defaults should assume Resend's free daily limit unless the account is upgraded.
+The API endpoint must require a shared job secret, support dry-run mode, accept an explicit digest date window, and pass an `EMAIL_DAILY_SEND_LIMIT` budget guard to the runner. Production defaults should stay below Resend's free daily limit unless a paid plan is configured.
 
 Do not use an always-running `node-cron` worker for the production digest schedule.
 
@@ -29,7 +29,7 @@ Do not use an always-running `node-cron` worker for the production digest schedu
 - The runner stays testable without waiting for wall-clock time because date windows and dry-run behavior are explicit inputs.
 - Vercel Cron gives the cleanest free deployment path for one daily digest, but exact timing is not guaranteed on Hobby.
 - GitHub Actions is a workable fallback, but schedule delivery is best-effort and should not be the only source of observability.
-- The protected endpoint adds a security requirement: production must configure a strong `DIGEST_JOB_SECRET` and reject unauthenticated job requests.
+- The protected endpoint adds a security requirement: production must configure strong `CRON_SECRET` and `DIGEST_JOB_SECRET` values and reject unauthenticated job requests.
 - Render-native cron can be reconsidered if TaskForge moves off a strict free-only requirement.
 
 ## References

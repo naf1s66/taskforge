@@ -14,6 +14,8 @@ import { createTaskRouter } from './routes/tasks';
 import { createTaskRepository, type TaskRepository } from './repositories/task-repository';
 import { WelcomeEmailService, type WelcomeEmailDeliveryDispatcher } from './notifications/welcome-email';
 import type { EmailAdapter } from './email/types';
+import { DailyDigestRunner } from './notifications/daily-digest-runner';
+import { createJobsRouter } from './routes/jobs';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
@@ -25,6 +27,9 @@ export interface CreateAppOptions {
   welcomeEmailAdapter?: EmailAdapter;
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   welcomeEmailPendingAttemptStaleAfterMs?: number;
+  digestEmailAdapter?: EmailAdapter;
+  digestJobSecret?: string;
+  digestDailySendLimit?: number;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -93,6 +98,27 @@ export function createApp(options: CreateAppOptions = {}) {
     welcomeEmailService,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
+
+  const digestJobSecret = options.digestJobSecret ?? process.env.DIGEST_JOB_SECRET;
+  if (digestJobSecret) {
+    const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
+    if (!digestEmailAdapter) {
+      throw new Error('digestEmailAdapter or welcomeEmailAdapter must be configured before enabling digest jobs.');
+    }
+
+    const digestRunner = new DailyDigestRunner({
+      prisma: getOrCreatePrisma(),
+      emailAdapter: digestEmailAdapter,
+    });
+
+    app.use(
+      '/api/taskforge/v1/jobs',
+      createJobsRouter(digestRunner, {
+        defaultSendLimit: options.digestDailySendLimit ?? 90,
+        secret: digestJobSecret,
+      }),
+    );
+  }
 
   app.use(authRouterFactory.authMiddleware);
   app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));

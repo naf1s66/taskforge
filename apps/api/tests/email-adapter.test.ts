@@ -1,5 +1,5 @@
 import { NodemailerEmailAdapter } from '../src/email/nodemailer-adapter';
-import { renderWelcomeTemplate } from '../src/email/templates';
+import { renderDailyDigestTemplate, renderWelcomeTemplate } from '../src/email/templates';
 
 describe('NodemailerEmailAdapter', () => {
   it('creates an SMTP transport and sends typed mail input', async () => {
@@ -83,5 +83,48 @@ describe('renderWelcomeTemplate', () => {
     ).toBe(
       '<p>Welcome to <strong>Task&lt;Forge&gt;</strong>, person+&lt;script&gt;@example.test.</p><p>Your account is ready.</p>',
     );
+  });
+});
+
+describe('renderDailyDigestTemplate', () => {
+  it('renders escaped digest task summaries', () => {
+    const template = renderDailyDigestTemplate({
+      recipientEmail: 'person@example.test',
+      digestDate: '2026-05-19',
+      digest: {
+        generatedAt: '2026-05-19T12:00:00.000Z',
+        timezone: 'UTC',
+        totalTasksConsidered: 1,
+        window: {
+          startOfTodayUtc: '2026-05-19T00:00:00.000Z',
+          startOfTomorrowUtc: '2026-05-20T00:00:00.000Z',
+          dueSoonUntilUtc: '2026-05-27T00:00:00.000Z',
+          recentlyUpdatedSinceUtc: '2026-05-17T12:00:00.000Z',
+        },
+        groups: [
+          {
+            key: 'dueToday',
+            label: 'Due <today>',
+            total: 1,
+            tasks: [
+              {
+                id: 'task-1',
+                title: 'Ship <digest>',
+                status: 'TODO',
+                priority: 'HIGH',
+                dueDate: '2026-05-19T12:00:00.000Z',
+                updatedAt: '2026-05-19T10:00:00.000Z',
+                tags: ['email'],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(template.subject).toBe('Your TaskForge daily digest for 2026-05-19');
+    expect(template.text).toContain('- Ship <digest> (TODO, HIGH) due 2026-05-19 [email]');
+    expect(template.html).toContain('Due &lt;today&gt;');
+    expect(template.html).toContain('Ship &lt;digest&gt;');
   });
 });
