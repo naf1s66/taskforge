@@ -91,4 +91,23 @@ describe('jobs router', () => {
 
     expect(run).not.toHaveBeenCalled();
   });
+
+  it('rejects empty string send limits instead of coercing them to zero', async () => {
+    const run = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .get('/jobs/digest?digestDate=2026-05-19&sendLimit=')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(400);
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', sendLimit: '' })
+      .expect(400);
+
+    expect(run).not.toHaveBeenCalled();
+  });
 });

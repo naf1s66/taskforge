@@ -13,14 +13,17 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, 'Expected a valid YYYY-MM-DD date.');
 
+const optionalIntegerParam = (schema: z.ZodNumber) =>
+  z.preprocess(value => (value === '' ? Number.NaN : value), schema.optional());
+
 const runDigestSchema = z.object({
   digestDate: dateOnlySchema,
-  digestHourUtc: z.coerce.number().int().min(0).max(23).optional(),
+  digestHourUtc: optionalIntegerParam(z.coerce.number().int().min(0).max(23)),
   dryRun: z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform(value => value === true || value === 'true' || value === '1'),
-  sendLimit: z.coerce.number().int().min(0).optional(),
+  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0)),
 });
 
 function isAuthorized(req: Request, secret: string): boolean {
