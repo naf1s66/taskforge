@@ -237,4 +237,22 @@ describe('DailyDigestRunner', () => {
     expect(sentMessages[0]?.text).toContain('Due today: 1');
     expect(sentMessages[0]?.text).not.toContain('Overdue: 1');
   });
+
+  it('skips users with invalid timezones without aborting the digest run', async () => {
+    const prisma = getTestPrisma();
+    const invalidTimezoneUser = await createDigestUser({ email: 'invalid-zone@taskforge.dev' });
+    await createDigestUser({ email: 'valid-zone@taskforge.dev' });
+    await prisma.emailPreference.update({
+      where: { userId: invalidTimezoneUser.id },
+      data: { dailyDigestTimezone: 'Not/A_Timezone' },
+    });
+
+    const runner = new DailyDigestRunner({ prisma, emailAdapter: { sendMail: async msg => { sent.push(msg.to); } } });
+    const result = await runner.run({ digestDate: '2026-05-19' });
+
+    expect(result.sent).toBe(1);
+    expect(result.skipped).toBe(1);
+    expect(result.preferenceSkipped).toBe(1);
+    expect(sent).toEqual(['valid-zone@taskforge.dev']);
+  });
 });

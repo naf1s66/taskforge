@@ -82,7 +82,13 @@ export class DailyDigestRunner {
     for (const user of users) {
       attempted += 1;
       const timezone = user.emailPreference?.dailyDigestTimezone ?? 'UTC';
-      const now = input.now ?? digestDateNoonInTimezone(input.digestDate, timezone);
+      const now = resolveDigestDateNoon(input.digestDate, timezone, input.now);
+      if (!now) {
+        skipped += 1;
+        preferenceSkipped += 1;
+        continue;
+      }
+
       const isDigestEnabled = user.emailPreference?.dailyDigestEnabled ?? false;
       const recipient = normalizeDeliverableEmail(user.email);
       const digestHourMatches =
@@ -212,6 +218,26 @@ function assertDigestDate(digestDate: string): void {
 function digestDateNoonInTimezone(digestDate: string, timezone: string): Date {
   const [year, month, day] = digestDate.split('-').map(Number);
   return localDateTimeToUtc(year, month, day, 12, timezone);
+}
+
+function resolveDigestDateNoon(digestDate: string, timezone: string, now: Date | undefined): Date | null {
+  if (now) {
+    return now;
+  }
+
+  try {
+    return digestDateNoonInTimezone(digestDate, timezone);
+  } catch (error) {
+    if (isInvalidTimezoneError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isInvalidTimezoneError(error: unknown): boolean {
+  return error instanceof RangeError;
 }
 
 function assertDigestHour(digestHourUtc: number | undefined): void {
