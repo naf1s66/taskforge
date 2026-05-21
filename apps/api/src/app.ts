@@ -89,11 +89,6 @@ export function createApp(options: CreateAppOptions = {}) {
     deliveryDispatcher: options.welcomeEmailDeliveryDispatcher,
     pendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
   });
-  const digestRunner = new DailyDigestRunner({
-    prisma: getOrCreatePrisma(),
-    emailAdapter: options.digestEmailAdapter ?? options.welcomeEmailAdapter ?? { sendMail: () => Promise.resolve() },
-  });
-
   const authRouterFactory = createAuthRouter({
     jwtSecret: options.jwtSecret,
     userStore,
@@ -106,6 +101,16 @@ export function createApp(options: CreateAppOptions = {}) {
 
   const digestJobSecret = options.digestJobSecret ?? process.env.DIGEST_JOB_SECRET;
   if (digestJobSecret) {
+    const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
+    if (!digestEmailAdapter) {
+      throw new Error('digestEmailAdapter or welcomeEmailAdapter must be configured before enabling digest jobs.');
+    }
+
+    const digestRunner = new DailyDigestRunner({
+      prisma: getOrCreatePrisma(),
+      emailAdapter: digestEmailAdapter,
+    });
+
     app.use(
       '/api/taskforge/v1/jobs',
       createJobsRouter(digestRunner, {
