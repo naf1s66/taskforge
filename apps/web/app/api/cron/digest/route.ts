@@ -6,14 +6,9 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getOptionalInteger(searchParams: URLSearchParams, key: string): number | undefined {
+function getOptionalQueryValue(searchParams: URLSearchParams, key: string): string | undefined {
   const value = searchParams.get(key);
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return value === null ? undefined : value;
 }
 
 export async function GET(request: Request) {
@@ -34,9 +29,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const payload = {
     digestDate: url.searchParams.get('digestDate') ?? todayUtc(),
-    digestHourUtc: getOptionalInteger(url.searchParams, 'digestHourUtc'),
+    digestHourUtc: getOptionalQueryValue(url.searchParams, 'digestHourUtc'),
     dryRun: url.searchParams.get('dryRun') === 'true' || url.searchParams.get('dryRun') === '1',
-    sendLimit: getOptionalInteger(url.searchParams, 'sendLimit'),
+    sendLimit: getOptionalQueryValue(url.searchParams, 'sendLimit'),
   };
 
   const apiResponse = await fetch(getApiUrl('v1/jobs/digest'), {

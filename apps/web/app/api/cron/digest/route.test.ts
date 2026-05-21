@@ -29,7 +29,7 @@ describe('/api/cron/digest', () => {
     const { GET } = await import('./route');
 
     const response = await GET(
-      new Request('https://app.test/api/cron/digest?digestDate=2026-05-19&dryRun=true&sendLimit=5', {
+      new Request('https://app.test/api/cron/digest?digestDate=2026-05-19&dryRun=true&sendLimit=5&digestHourUtc=8', {
         headers: { authorization: 'Bearer cron-secret' },
       }),
     );
@@ -43,9 +43,35 @@ describe('/api/cron/digest', () => {
       },
       body: JSON.stringify({
         digestDate: '2026-05-19',
-        digestHourUtc: undefined,
+        digestHourUtc: '8',
         dryRun: true,
-        sendLimit: 5,
+        sendLimit: '5',
+      }),
+      cache: 'no-store',
+    });
+  });
+
+  it('forwards numeric query values without truncating them', async () => {
+    const { GET } = await import('./route');
+
+    const response = await GET(
+      new Request('https://app.test/api/cron/digest?digestDate=2026-05-19&sendLimit=1e2&digestHourUtc=8.5', {
+        headers: { authorization: 'Bearer cron-secret' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith('https://api.test/api/taskforge/v1/jobs/digest', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-job-secret': 'job-secret',
+      },
+      body: JSON.stringify({
+        digestDate: '2026-05-19',
+        digestHourUtc: '8.5',
+        dryRun: false,
+        sendLimit: '1e2',
       }),
       cache: 'no-store',
     });
