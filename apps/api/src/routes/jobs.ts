@@ -14,7 +14,10 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 }, 'Expected a valid YYYY-MM-DD date.');
 
 const optionalIntegerParam = (schema: z.ZodNumber) =>
-  z.preprocess(value => (value === '' || value === null ? Number.NaN : value), schema.optional());
+  z.preprocess(
+    value => (typeof value === 'string' && value.trim() === '') || value === null ? Number.NaN : value,
+    schema.optional(),
+  );
 
 const runDigestSchema = z.object({
   digestDate: dateOnlySchema,
