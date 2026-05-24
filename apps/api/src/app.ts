@@ -16,6 +16,7 @@ import { WelcomeEmailService, type WelcomeEmailDeliveryDispatcher } from './noti
 import type { EmailAdapter } from './email/types';
 import { DailyDigestRunner } from './notifications/daily-digest-runner';
 import { createJobsRouter } from './routes/jobs';
+import { createEmailDigestRouter } from './routes/email-digest';
 
 export interface CreateAppOptions {
   jwtSecret?: string;
@@ -123,6 +124,14 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use(authRouterFactory.authMiddleware);
   app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
   app.use('/api/taskforge/v1/tags', tagRoutes);
+  const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
+  if (digestEmailAdapter) {
+    const digestRunner = new DailyDigestRunner({
+      prisma: getOrCreatePrisma(),
+      emailAdapter: digestEmailAdapter,
+    });
+    app.use('/api/taskforge/v1/email/digest', createEmailDigestRouter(getOrCreatePrisma(), digestRunner));
+  }
   app.get('/api/taskforge/v1/me', (_req, res) => {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }

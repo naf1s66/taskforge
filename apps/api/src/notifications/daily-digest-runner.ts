@@ -22,6 +22,7 @@ export interface DailyDigestRunInput {
   now?: Date;
   dryRun?: boolean;
   sendLimit?: number;
+  userIds?: string[];
 }
 
 export interface DailyDigestRunResult {
@@ -60,6 +61,7 @@ export class DailyDigestRunner {
     const dryRun = input.dryRun ?? false;
     const dryRunConsumedBudget = dryRun ? await countConsumedBudget(this.options.prisma, input.digestDate) : 0;
     const users = await this.options.prisma.user.findMany({
+      where: input.userIds?.length ? { id: { in: input.userIds } } : undefined,
       select: {
         id: true,
         email: true,

@@ -781,6 +781,68 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+
+    '/api/taskforge/v1/email/digest/preview': {
+      get: {
+        tags: ['Email'],
+        summary: 'Preview digest payload for the authenticated user',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          { name: 'timezone', in: 'query', schema: { type: 'string' } },
+          { name: 'dueSoonDays', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30 } },
+          { name: 'recentlyUpdatedDays', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 30 } },
+          { name: 'maxTasksPerGroup', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50 } },
+        ],
+        responses: {
+          '200': { description: 'Digest preview payload returned.' },
+          '400': {
+            description: 'Invalid query parameters',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' }, examples: { unauthorized: unauthorizedExample } } },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/email/digest/send': {
+      post: {
+        tags: ['Email'],
+        summary: 'Send or dry-run digest delivery for the authenticated user',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  digestDate: { type: 'string', format: 'date' },
+                  digestHourUtc: { type: 'integer', minimum: 0, maximum: 23 },
+                  dryRun: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Digest run completed.' },
+          '400': {
+            description: 'Invalid payload',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' }, examples: { unauthorized: unauthorizedExample } } },
+          },
+          '409': {
+            description: 'Digest preference disabled',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+        },
+      },
+    },
     '/api/taskforge/v1/tasks': {
       get: {
         tags: ['Tasks'],
