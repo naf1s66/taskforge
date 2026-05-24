@@ -14,7 +14,13 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 
 const optionalIntegerParam = (schema: z.ZodNumber) =>
   z.preprocess(
-    value => (typeof value === 'string' && value.trim() === '') || value === null ? Number.NaN : value,
+    value => {
+      if (typeof value === 'string' && value.trim() === '') {
+        return undefined;
+      }
+
+      return value === null ? Number.NaN : value;
+    },
     schema.optional(),
   );
 

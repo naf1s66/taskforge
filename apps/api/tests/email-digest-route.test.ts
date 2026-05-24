@@ -51,8 +51,27 @@ describe('email digest routes', () => {
     await request(app).get('/email/digest/preview?timezone=Not/A_Timezone').expect(400);
     await request(app).post('/email/digest/send').send({ digestHourUtc: 99 }).expect(400);
     await request(app).post('/email/digest/send').send({ digestHourUtc: null }).expect(400);
-    await request(app).post('/email/digest/send').send({ digestHourUtc: '' }).expect(400);
-    await request(app).post('/email/digest/send').send({ digestHourUtc: ' ' }).expect(400);
+  });
+
+  it('treats blank digest hour values as omitted', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true, dailyDigestTimezone: 'UTC' }) },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }));
+
+    await request(app)
+      .post('/email/digest/send')
+      .send({ digestDate: '2026-05-21', digestHourUtc: '', dryRun: true })
+      .expect(200);
+    await request(app)
+      .post('/email/digest/send')
+      .send({ digestDate: '2026-05-21', digestHourUtc: ' ', dryRun: true })
+      .expect(200);
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[0]?.[0]).toHaveProperty('digestHourUtc', undefined);
+    expect(run.mock.calls[1]?.[0]).toHaveProperty('digestHourUtc', undefined);
   });
 
   it('returns a client error for an invalid stored digest timezone', async () => {
