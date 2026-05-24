@@ -43,6 +43,8 @@ const sendPayloadSchema = z.object({
 
 interface AuthUser { id: string }
 
+const rateLimitErrorResponse = { error: 'Too many requests, please try again later.' };
+
 export interface EmailDigestRouterOptions {
   defaultSendLimit?: number;
   digestRunner: DailyDigestRunner;
@@ -55,7 +57,11 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
   const defaultSendLimit = options.defaultSendLimit ?? 90;
   const sendConfigured = options.sendConfigured ?? true;
 
-  router.use(rateLimit({ windowMs: 60_000, max: 10 }));
+  router.use(rateLimit({
+    windowMs: 60_000,
+    max: 10,
+    handler: (_req, res) => res.status(429).json(rateLimitErrorResponse),
+  }));
 
   router.get('/preview', async (req, res, next) => {
     const user = res.locals.user as AuthUser | undefined;
@@ -91,33 +97,25 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
       return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     }
 
-    const preference = await prisma.emailPreference.findUnique({
-      where: { userId: user.id },
-      select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
-    });
-
-    if (!preference?.dailyDigestEnabled) {
-      return res.status(409).json({ error: 'Daily digest is disabled for this user.' });
-    }
-
-    if (!sendConfigured && !parsed.data.dryRun) {
-      return res.status(503).json({ error: 'Digest email delivery is not configured.' });
-    }
-
-    let digestDate = parsed.data.digestDate;
-    if (!digestDate) {
-      try {
-        digestDate = formatLocalDate(new Date(), preference.dailyDigestTimezone ?? 'UTC');
-      } catch (error) {
-        if (isInvalidTimezoneError(error)) {
-          return res.status(400).json({ error: 'Invalid digest timezone preference.' });
-        }
-
-        return next(error);
-      }
-    }
-
     try {
+      const preference = await prisma.emailPreference.findUnique({
+        where: { userId: user.id },
+        select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
+      });
+
+      if (!preference?.dailyDigestEnabled) {
+        return res.status(409).json({ error: 'Daily digest is disabled for this user.' });
+      }
+
+      if (!sendConfigured && !parsed.data.dryRun) {
+        return res.status(503).json({ error: 'Digest email delivery is not configured.' });
+      }
+
+      let digestDate = parsed.data.digestDate;
+      if (!digestDate) {
+        digestDate = formatLocalDate(new Date(), preference.dailyDigestTimezone ?? 'UTC');
+      }
+
       const result = await options.digestRunner.run({
         digestDate,
         digestHourUtc: parsed.data.digestHourUtc,
@@ -127,6 +125,10 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
       });
       return res.json(result);
     } catch (error) {
+      if (isInvalidTimezoneError(error)) {
+        return res.status(400).json({ error: 'Invalid digest timezone preference.' });
+      }
+
       return next(error);
     }
   });

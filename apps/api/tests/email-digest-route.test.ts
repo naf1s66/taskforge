@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type ErrorRequestHandler } from 'express';
 import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 
@@ -72,6 +72,40 @@ describe('email digest routes', () => {
     expect(run).toHaveBeenCalledTimes(2);
     expect(run.mock.calls[0]?.[0]).toHaveProperty('digestHourUtc', undefined);
     expect(run.mock.calls[1]?.[0]).toHaveProperty('digestHourUtc', undefined);
+  });
+
+  it('forwards preference lookup failures from manual send', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockRejectedValue(new Error('database unavailable')) },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma);
+    const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+      res.status(503).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    };
+    app.use(errorHandler);
+
+    const response = await request(app).post('/email/digest/send').send({ dryRun: true }).expect(503);
+
+    expect(response.body).toEqual({ error: 'database unavailable' });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('returns JSON when the digest endpoint rate limit is exceeded', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestTimezone: 'UTC' }) },
+    } as unknown as PrismaClient;
+    const { app } = appWithUser(prisma);
+
+    for (let requestNumber = 0; requestNumber < 10; requestNumber += 1) {
+      await request(app).get('/email/digest/preview').expect(200);
+    }
+
+    const response = await request(app).get('/email/digest/preview').expect(429);
+
+    expect(response.type).toBe('application/json');
+    expect(response.body).toEqual({ error: 'Too many requests, please try again later.' });
   });
 
   it('returns a client error for an invalid stored digest timezone', async () => {
