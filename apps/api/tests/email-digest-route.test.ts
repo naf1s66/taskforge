@@ -1,17 +1,19 @@
 import express from 'express';
+import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 
+import type { DailyDigestRunner } from '../src/notifications/daily-digest-runner';
 import { createEmailDigestRouter } from '../src/routes/email-digest';
 
 describe('email digest routes', () => {
-  function appWithUser(prisma: any, run = jest.fn().mockResolvedValue({ sent: 0 })) {
+  function appWithUser(prisma: PrismaClient, run = jest.fn().mockResolvedValue({ sent: 0 })) {
     const app = express();
     app.use(express.json());
     app.use((_req, res, next) => {
       res.locals.user = { id: 'user-1', email: 'user@example.com', createdAt: new Date().toISOString() };
       next();
     });
-    app.use('/email/digest', createEmailDigestRouter(prisma, { run } as any));
+    app.use('/email/digest', createEmailDigestRouter(prisma, { run } as unknown as DailyDigestRunner));
     return { app, run };
   }
 
@@ -19,7 +21,7 @@ describe('email digest routes', () => {
     const prisma = {
       task: { findMany: jest.fn().mockResolvedValue([]) },
       emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestTimezone: 'UTC' }) },
-    };
+    } as unknown as PrismaClient;
     const { app } = appWithUser(prisma);
 
     const response = await request(app).get('/email/digest/preview?dueSoonDays=3').expect(200);
@@ -31,25 +33,39 @@ describe('email digest routes', () => {
     const prisma = {
       task: { findMany: jest.fn().mockResolvedValue([]) },
       emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true, dailyDigestTimezone: 'UTC' }) },
-    };
+    } as unknown as PrismaClient;
     const { app } = appWithUser(prisma);
 
     await request(app).get('/email/digest/preview?dueSoonDays=0').expect(400);
+    await request(app).get('/email/digest/preview?timezone=Not/A_Timezone').expect(400);
     await request(app).post('/email/digest/send').send({ digestHourUtc: 99 }).expect(400);
+    await request(app).post('/email/digest/send').send({ digestHourUtc: null }).expect(400);
+    await request(app).post('/email/digest/send').send({ digestHourUtc: '' }).expect(400);
+    await request(app).post('/email/digest/send').send({ digestHourUtc: ' ' }).expect(400);
+  });
+
+  it('returns a client error for an invalid stored digest timezone', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestTimezone: 'Not/A_Timezone' }) },
+    } as unknown as PrismaClient;
+    const { app } = appWithUser(prisma);
+
+    await request(app).get('/email/digest/preview').expect(400);
   });
 
   it('blocks send when digest preference is disabled and supports dry run', async () => {
     const disabledPrisma = {
       task: { findMany: jest.fn().mockResolvedValue([]) },
       emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: false }) },
-    };
+    } as unknown as PrismaClient;
     const { app: blockedApp } = appWithUser(disabledPrisma);
     await request(blockedApp).post('/email/digest/send').send({ dryRun: true }).expect(409);
 
     const enabledPrisma = {
       task: { findMany: jest.fn().mockResolvedValue([]) },
       emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true }) },
-    };
+    } as unknown as PrismaClient;
     const { app, run } = appWithUser(enabledPrisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }));
 
     await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(200);

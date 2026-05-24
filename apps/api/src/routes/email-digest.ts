@@ -12,16 +12,26 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, 'Expected a valid YYYY-MM-DD date.');
 
+const optionalIntegerParam = (schema: z.ZodNumber) =>
+  z.preprocess(
+    value => (typeof value === 'string' && value.trim() === '') || value === null ? Number.NaN : value,
+    schema.optional(),
+  );
+
+const timezoneSchema = z.string().trim().min(1).max(100).refine(value => isValidTimezone(value), {
+  message: 'Expected a valid IANA timezone.',
+});
+
 const previewQuerySchema = z.object({
-  timezone: z.string().min(1).max(100).optional(),
-  dueSoonDays: z.coerce.number().int().min(1).max(30).optional(),
-  recentlyUpdatedDays: z.coerce.number().int().min(1).max(30).optional(),
-  maxTasksPerGroup: z.coerce.number().int().min(1).max(50).optional(),
+  timezone: timezoneSchema.optional(),
+  dueSoonDays: optionalIntegerParam(z.coerce.number().int().min(1).max(30)),
+  recentlyUpdatedDays: optionalIntegerParam(z.coerce.number().int().min(1).max(30)),
+  maxTasksPerGroup: optionalIntegerParam(z.coerce.number().int().min(1).max(50)),
 });
 
 const sendPayloadSchema = z.object({
   digestDate: dateOnlySchema.optional(),
-  digestHourUtc: z.coerce.number().int().min(0).max(23).optional(),
+  digestHourUtc: optionalIntegerParam(z.coerce.number().int().min(0).max(23)),
   dryRun: z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]).optional().transform(value => value === true || value === 'true' || value === '1'),
 });
 
@@ -48,6 +58,10 @@ export function createEmailDigestRouter(prisma: PrismaClient, digestRunner: Dail
       const digest = await queryService.queryForUser(user.id, parsed.data);
       return res.json(digest);
     } catch (error) {
+      if (isInvalidTimezoneError(error)) {
+        return res.status(400).json({ error: 'Invalid digest timezone preference.' });
+      }
+
       return next(error);
     }
   });
@@ -89,4 +103,21 @@ export function createEmailDigestRouter(prisma: PrismaClient, digestRunner: Dail
   });
 
   return router;
+}
+
+function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date(0));
+    return true;
+  } catch (error) {
+    if (isInvalidTimezoneError(error)) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function isInvalidTimezoneError(error: unknown): boolean {
+  return error instanceof RangeError;
 }
