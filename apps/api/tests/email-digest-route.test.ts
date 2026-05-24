@@ -3,17 +3,28 @@ import type { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 
 import type { DailyDigestRunner } from '../src/notifications/daily-digest-runner';
-import { createEmailDigestRouter } from '../src/routes/email-digest';
+import { createEmailDigestRouter, type EmailDigestRouterOptions } from '../src/routes/email-digest';
 
 describe('email digest routes', () => {
-  function appWithUser(prisma: PrismaClient, run = jest.fn().mockResolvedValue({ sent: 0 })) {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  function appWithUser(
+    prisma: PrismaClient,
+    run = jest.fn().mockResolvedValue({ sent: 0 }),
+    routerOptions: Partial<Omit<EmailDigestRouterOptions, 'digestRunner'>> = {},
+  ) {
     const app = express();
     app.use(express.json());
     app.use((_req, res, next) => {
       res.locals.user = { id: 'user-1', email: 'user@example.com', createdAt: new Date().toISOString() };
       next();
     });
-    app.use('/email/digest', createEmailDigestRouter(prisma, { run } as unknown as DailyDigestRunner));
+    app.use(
+      '/email/digest',
+      createEmailDigestRouter(prisma, { ...routerOptions, digestRunner: { run } as unknown as DailyDigestRunner }),
+    );
     return { app, run };
   }
 
@@ -66,10 +77,46 @@ describe('email digest routes', () => {
       task: { findMany: jest.fn().mockResolvedValue([]) },
       emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true }) },
     } as unknown as PrismaClient;
-    const { app, run } = appWithUser(enabledPrisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }));
+    const { app, run } = appWithUser(
+      enabledPrisma,
+      jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }),
+      { defaultSendLimit: 50 },
+    );
 
     await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(200);
 
-    expect(run).toHaveBeenCalledWith(expect.objectContaining({ digestDate: '2026-05-21', dryRun: true, sendLimit: 1 }));
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ digestDate: '2026-05-21', dryRun: true, sendLimit: 50 }));
+  });
+
+  it('derives the default send date from the user digest timezone', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-18T11:30:00.000Z'));
+
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: {
+        findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true, dailyDigestTimezone: 'Pacific/Kiritimati' }),
+      },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-19', attempted: 1 }));
+
+    await request(app).post('/email/digest/send').send({ dryRun: true }).expect(200);
+
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ digestDate: '2026-05-19' }));
+  });
+
+  it('keeps dry run available when email delivery is not configured', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true }) },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21' }), {
+      sendConfigured: false,
+    });
+
+    await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21' }).expect(503);
+    expect(run).not.toHaveBeenCalled();
+
+    await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(200);
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ dryRun: true }));
   });
 });

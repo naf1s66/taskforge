@@ -125,13 +125,18 @@ export function createApp(options: CreateAppOptions = {}) {
   app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
   app.use('/api/taskforge/v1/tags', tagRoutes);
   const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
-  if (digestEmailAdapter) {
-    const digestRunner = new DailyDigestRunner({
-      prisma: getOrCreatePrisma(),
-      emailAdapter: digestEmailAdapter,
-    });
-    app.use('/api/taskforge/v1/email/digest', createEmailDigestRouter(getOrCreatePrisma(), digestRunner));
-  }
+  const emailDigestRunner = new DailyDigestRunner({
+    prisma: getOrCreatePrisma(),
+    emailAdapter: digestEmailAdapter ?? { sendMail: () => Promise.resolve() },
+  });
+  app.use(
+    '/api/taskforge/v1/email/digest',
+    createEmailDigestRouter(getOrCreatePrisma(), {
+      defaultSendLimit: options.digestDailySendLimit ?? 90,
+      digestRunner: emailDigestRunner,
+      sendConfigured: Boolean(digestEmailAdapter),
+    }),
+  );
   app.get('/api/taskforge/v1/me', (_req, res) => {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }

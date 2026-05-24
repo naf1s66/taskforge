@@ -37,9 +37,17 @@ const sendPayloadSchema = z.object({
 
 interface AuthUser { id: string }
 
-export function createEmailDigestRouter(prisma: PrismaClient, digestRunner: DailyDigestRunner) {
+export interface EmailDigestRouterOptions {
+  defaultSendLimit?: number;
+  digestRunner: DailyDigestRunner;
+  sendConfigured?: boolean;
+}
+
+export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDigestRouterOptions) {
   const router = Router();
   const queryService = new DailyDigestQueryService(prisma);
+  const defaultSendLimit = options.defaultSendLimit ?? 90;
+  const sendConfigured = options.sendConfigured ?? true;
 
   router.use(rateLimit({ windowMs: 60_000, max: 10 }));
 
@@ -79,21 +87,36 @@ export function createEmailDigestRouter(prisma: PrismaClient, digestRunner: Dail
 
     const preference = await prisma.emailPreference.findUnique({
       where: { userId: user.id },
-      select: { dailyDigestEnabled: true },
+      select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
     });
 
     if (!preference?.dailyDigestEnabled) {
       return res.status(409).json({ error: 'Daily digest is disabled for this user.' });
     }
 
-    const digestDate = parsed.data.digestDate ?? new Date().toISOString().slice(0, 10);
+    if (!sendConfigured && !parsed.data.dryRun) {
+      return res.status(503).json({ error: 'Digest email delivery is not configured.' });
+    }
+
+    let digestDate = parsed.data.digestDate;
+    if (!digestDate) {
+      try {
+        digestDate = formatLocalDate(new Date(), preference.dailyDigestTimezone ?? 'UTC');
+      } catch (error) {
+        if (isInvalidTimezoneError(error)) {
+          return res.status(400).json({ error: 'Invalid digest timezone preference.' });
+        }
+
+        return next(error);
+      }
+    }
 
     try {
-      const result = await digestRunner.run({
+      const result = await options.digestRunner.run({
         digestDate,
         digestHourUtc: parsed.data.digestHourUtc,
         dryRun: parsed.data.dryRun,
-        sendLimit: 1,
+        sendLimit: defaultSendLimit,
         userIds: [user.id],
       });
       return res.json(result);
@@ -120,4 +143,23 @@ function isValidTimezone(timezone: string): boolean {
 
 function isInvalidTimezoneError(error: unknown): boolean {
   return error instanceof RangeError;
+}
+
+function formatLocalDate(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find(part => part.type === 'year')?.value;
+  const month = parts.find(part => part.type === 'month')?.value;
+  const day = parts.find(part => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error(`Unable to compute local date for timezone ${timezone}`);
+  }
+
+  return `${year}-${month}-${day}`;
 }
