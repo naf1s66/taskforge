@@ -689,6 +689,19 @@ async function requestJson<T>(
   return parseJson(response, init.schema);
 }
 
+export function requestTaskforgeJson<T>(
+  path: string,
+  init: {
+    method: string;
+    body?: unknown;
+    query?: Record<string, string | string[]>;
+    schema: z.ZodSchema<T>;
+  },
+  options?: TaskClientRequestOptions,
+): Promise<T> {
+  return requestJson(path, init, options);
+}
+
 export async function listTasks(
   params?: TaskListQuery,
   options?: TaskClientRequestOptions,

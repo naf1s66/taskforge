@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { getApiUrl } from './env';
+import { requestTaskforgeJson } from './tasks-client';
 
 const EmailPreferenceSchema = z.object({
   dailyDigestEnabled: z.boolean(),
@@ -19,31 +19,18 @@ const UpdateResponseSchema = z.object({
 export type EmailPreference = z.infer<typeof EmailPreferenceSchema>;
 
 export async function getEmailPreference(): Promise<EmailPreference> {
-  const response = await fetch(getApiUrl('v1/me'), {
+  const payload = await requestTaskforgeJson('v1/me', {
     method: 'GET',
-    credentials: 'include',
-    cache: 'no-store',
+    schema: MeResponseSchema,
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch email preferences.');
-  }
-
-  const payload = MeResponseSchema.parse(await response.json());
   return payload.emailPreference ?? { dailyDigestEnabled: false, dailyDigestTimezone: 'UTC' };
 }
 
 export async function updateEmailPreference(input: Pick<EmailPreference, 'dailyDigestEnabled'>): Promise<EmailPreference> {
-  const response = await fetch(getApiUrl('v1/me/email-preferences'), {
+  const response = await requestTaskforgeJson('v1/me/email-preferences', {
     method: 'PATCH',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
+    body: input,
+    schema: UpdateResponseSchema,
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to update email preferences.');
-  }
-
-  return UpdateResponseSchema.parse(await response.json()).emailPreference;
+  return response.emailPreference;
 }
