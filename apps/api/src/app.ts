@@ -40,6 +40,9 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
 
   app.use(express.json());
   app.use(cookieParser());

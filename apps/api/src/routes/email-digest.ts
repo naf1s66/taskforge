@@ -65,6 +65,10 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
   const manualSendRateLimit = rateLimit({
     windowMs: 60_000,
     max: 3,
+    keyGenerator: (req, res) => {
+      const user = res.locals.user as AuthUser | undefined;
+      return user?.id ? `manual-digest-send:${user.id}` : req.ip ?? req.socket.remoteAddress ?? 'unknown';
+    },
     handler: (_req, res) => res.status(429).json(rateLimitErrorResponse),
   });
 
