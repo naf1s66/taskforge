@@ -78,6 +78,10 @@ import {
   useTasksQuery,
   type TaskListItem,
 } from "@/lib/tasks-hooks";
+import {
+  useEmailPreferenceQuery,
+  useUpdateEmailPreferenceMutation,
+} from "@/lib/email-preferences-hooks";
 import { cn } from "@/lib/utils";
 import { sanitizeTags } from "@/lib/task-tags";
 import { TaskTagSelector } from "@/components/tasks/task-tag-selector";
@@ -856,6 +860,8 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const workspaceBoardQuery = useTaskBoardQuery(undefined, {
     enabled: hasHydratedFilters,
   });
+  const emailPreferenceQuery = useEmailPreferenceQuery();
+  const updateEmailPreference = useUpdateEmailPreferenceMutation();
   const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
@@ -1718,6 +1724,37 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   create it.
                 </p>
               ) : null}
+              <div className="rounded-lg border border-border/70 bg-background/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Daily digest emails</p>
+                    <p className="text-xs text-muted-foreground">
+                      Receive a summary each day around your local morning.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      emailPreferenceQuery.data?.dailyDigestEnabled ? "default" : "secondary"
+                    }
+                    disabled={emailPreferenceQuery.isLoading || updateEmailPreference.isPending}
+                    onClick={() =>
+                      updateEmailPreference.mutate(
+                        !(emailPreferenceQuery.data?.dailyDigestEnabled ?? false),
+                      )
+                    }
+                  >
+                    {updateEmailPreference.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : emailPreferenceQuery.data?.dailyDigestEnabled ? (
+                      "Enabled"
+                    ) : (
+                      "Disabled"
+                    )}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

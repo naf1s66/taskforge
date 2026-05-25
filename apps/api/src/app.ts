@@ -141,7 +141,50 @@ export function createApp(options: CreateAppOptions = {}) {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }
       | undefined;
-    res.json({ user: user ?? null });
+    if (!user) {
+      return res.json({ user: null });
+    }
+
+    void getOrCreatePrisma()
+      .emailPreference.findUnique({
+        where: { userId: user.id },
+        select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
+      })
+      .then((preference) =>
+        res.json({
+          user,
+          emailPreference: {
+            dailyDigestEnabled: preference?.dailyDigestEnabled ?? false,
+            dailyDigestTimezone: preference?.dailyDigestTimezone ?? 'UTC',
+          },
+        }),
+      )
+      .catch(() =>
+        res.status(500).json({ error: 'Failed to resolve account preferences.' }),
+      );
+  });
+  app.patch('/api/taskforge/v1/me/email-preferences', async (req, res) => {
+    const user = res.locals.user as { id: string } | undefined;
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const enabled = req.body?.dailyDigestEnabled;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'dailyDigestEnabled must be a boolean.' });
+    }
+
+    const preference = await getOrCreatePrisma().emailPreference.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        dailyDigestEnabled: enabled,
+      },
+      update: { dailyDigestEnabled: enabled },
+      select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
+    });
+
+    return res.json({ emailPreference: preference });
   });
 
   return app;
