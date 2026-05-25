@@ -179,6 +179,63 @@ describe('DailyDigestRunner', () => {
     expect(attempts[1]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_RATE_LIMITED' });
   });
 
+  it('records template rendering failures without sending provider mail', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'template-failure@taskforge.dev' });
+    const sendMail = jest.fn();
+
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: { sendMail },
+      renderDailyDigestTemplate: () => {
+        throw new Error('template render failed before provider send');
+      },
+    });
+
+    const result = await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const attempt = await prisma.notificationDeliveryAttempt.findFirstOrThrow();
+
+    expect(result.failed).toBe(1);
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(attempt.status).toBe(NotificationDeliveryStatus.FAILED);
+    expect(attempt.errorCode).toBe('TEMPLATE_RENDER_FAILED');
+    expect(attempt.providerMetadata).toMatchObject({
+      providerClassifiedCode: 'TEMPLATE_RENDER_FAILED',
+      messageSnippet: 'template render failed before provider send',
+    });
+  });
+
+  it('classifies provider auth and recipient failures separately', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'auth-classification@taskforge.dev' });
+    await createDigestUser({ email: 'recipient-classification@taskforge.dev' });
+
+    let sendCount = 0;
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async () => {
+          sendCount += 1;
+          if (sendCount === 1) {
+            throw new Error('SMTP unauthorized credentials');
+          }
+          throw new Error('550 invalid recipient');
+        },
+      },
+    });
+
+    await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const attempts = await prisma.notificationDeliveryAttempt.findMany({
+      orderBy: { attemptedAt: 'asc' },
+      select: { errorCode: true, providerMetadata: true },
+    });
+
+    expect(attempts[0]?.errorCode).toBe('PROVIDER_AUTH_FAILED');
+    expect(attempts[1]?.errorCode).toBe('RECIPIENT_REJECTED');
+    expect(attempts[0]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_AUTH_FAILED' });
+    expect(attempts[1]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'RECIPIENT_REJECTED' });
+  });
+
   it('enforces send budget across repeated runs for the same digest date', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'repeat-budget-a@taskforge.dev' });

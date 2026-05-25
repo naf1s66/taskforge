@@ -7,14 +7,21 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 
-import type { EmailAdapter, EmailSendResult } from '../email/types';
-import { renderDailyDigestTemplate } from '../email/templates';
+import type { EmailAdapter } from '../email/types';
+import { renderDailyDigestTemplate as defaultRenderDailyDigestTemplate } from '../email/templates';
+import {
+  classifyDeliveryFailure,
+  logDeliveryFinished,
+  sanitizeProviderResponse,
+  type NotificationLogger,
+} from './delivery-observability';
 import { DailyDigestQueryService, localDateTimeToUtc } from './digest-query-service';
 
 export interface DailyDigestRunnerOptions {
   prisma: PrismaClient;
   emailAdapter: EmailAdapter;
-  logger?: Pick<Console, 'error' | 'info' | 'warn'>;
+  logger?: NotificationLogger;
+  renderDailyDigestTemplate?: typeof defaultRenderDailyDigestTemplate;
 }
 
 export interface DailyDigestRunInput {
@@ -49,7 +56,7 @@ type ReserveAttemptResult =
 
 export class DailyDigestRunner {
   private readonly queryService: DailyDigestQueryService;
-  private readonly logger: Pick<Console, 'error' | 'info' | 'warn'>;
+  private readonly logger: NotificationLogger;
 
   constructor(private readonly options: DailyDigestRunnerOptions) {
     this.queryService = new DailyDigestQueryService(options.prisma);
@@ -130,12 +137,6 @@ export class DailyDigestRunner {
         continue;
       }
 
-      const template = renderDailyDigestTemplate({
-        recipientEmail: recipient,
-        digestDate: input.digestDate,
-        digest,
-      });
-
       if (dryRun) {
         if (dryRunConsumedBudget + dryRunReserved >= sendLimit) {
           skipped += 1;
@@ -143,6 +144,15 @@ export class DailyDigestRunner {
           continue;
         }
 
+        this.options.renderDailyDigestTemplate?.({
+          recipientEmail: recipient,
+          digestDate: input.digestDate,
+          digest,
+        }) ?? defaultRenderDailyDigestTemplate({
+          recipientEmail: recipient,
+          digestDate: input.digestDate,
+          digest,
+        });
         dryRunReserved += 1;
         sent += 1;
         continue;
@@ -169,45 +179,39 @@ export class DailyDigestRunner {
         continue;
       }
 
+      const template = await this.renderTemplateForAttempt({
+        attemptId: reservation.attempt.id,
+        userId: user.id,
+        provider: reservation.attempt.provider,
+        recipient,
+        digestDate: input.digestDate,
+        digest,
+      });
+      if (!template) {
+        failed += 1;
+        continue;
+      }
+
+      let providerResponse: Awaited<ReturnType<EmailAdapter['sendMail']>>;
       try {
-        const providerResponse = await this.options.emailAdapter.sendMail({
+        providerResponse = await this.options.emailAdapter.sendMail({
           to: recipient,
           subject: template.subject,
           text: template.text,
           html: template.html,
         });
-        const providerMetadata = sanitizeProviderResponse(providerResponse);
-
-        await this.options.prisma.notificationDeliveryAttempt.update({
-          where: { id: reservation.attempt.id },
-          data: {
-            status: NotificationDeliveryStatus.SENT,
-            deliveredAt: new Date(),
-            providerMessageId: providerResponse?.providerMessageId ?? null,
-            ...(providerMetadata ? { providerMetadata } : {}),
-          },
-        });
-        this.logger.info('[notifications] Delivery attempt finished', {
-          notificationType: NotificationDeliveryType.DAILY_DIGEST,
-          userId: user.id,
-          deliveryStatus: NotificationDeliveryStatus.SENT,
-          provider: reservation.attempt.provider,
-          providerMessageId: providerResponse?.providerMessageId ?? null,
-          providerResponse: providerMetadata,
-        });
-        sent += 1;
       } catch (error) {
-        const failure = classifyProviderFailure(error);
+        const failure = classifyDeliveryFailure(error);
         await this.options.prisma.notificationDeliveryAttempt.update({
           where: { id: reservation.attempt.id },
           data: {
             status: NotificationDeliveryStatus.FAILED,
             errorCode: failure.code,
             errorMessage: failure.message,
-            providerMetadata: failure.providerMetadata as Prisma.JsonObject,
+            providerMetadata: failure.providerMetadata,
           },
         });
-        this.logger.error('[notifications] Delivery attempt finished', {
+        logDeliveryFinished(this.logger, {
           notificationType: NotificationDeliveryType.DAILY_DIGEST,
           userId: user.id,
           deliveryStatus: NotificationDeliveryStatus.FAILED,
@@ -217,7 +221,28 @@ export class DailyDigestRunner {
           providerResponse: failure.providerMetadata,
         });
         failed += 1;
+        continue;
       }
+
+      const providerMetadata = sanitizeProviderResponse(providerResponse);
+      await this.options.prisma.notificationDeliveryAttempt.update({
+        where: { id: reservation.attempt.id },
+        data: {
+          status: NotificationDeliveryStatus.SENT,
+          deliveredAt: new Date(),
+          providerMessageId: providerResponse?.providerMessageId ?? null,
+          ...(providerMetadata ? { providerMetadata } : {}),
+        },
+      });
+      logDeliveryFinished(this.logger, {
+        notificationType: NotificationDeliveryType.DAILY_DIGEST,
+        userId: user.id,
+        deliveryStatus: NotificationDeliveryStatus.SENT,
+        provider: reservation.attempt.provider,
+        providerMessageId: providerResponse?.providerMessageId ?? null,
+        providerResponse: providerMetadata,
+      });
+      sent += 1;
     }
 
     return {
@@ -232,53 +257,44 @@ export class DailyDigestRunner {
       noContentSkipped,
     };
   }
-}
 
-function sanitizeProviderResponse(value: EmailSendResult | void): Prisma.JsonObject | null {
-  if (!value?.providerMetadata || typeof value.providerMetadata !== 'object') {
-    return null;
+  private async renderTemplateForAttempt(input: {
+    attemptId: string;
+    userId: string;
+    provider: string;
+    recipient: string;
+    digestDate: string;
+    digest: Parameters<typeof defaultRenderDailyDigestTemplate>[0]['digest'];
+  }): Promise<ReturnType<typeof defaultRenderDailyDigestTemplate> | null> {
+    try {
+      return (this.options.renderDailyDigestTemplate ?? defaultRenderDailyDigestTemplate)({
+        recipientEmail: input.recipient,
+        digestDate: input.digestDate,
+        digest: input.digest,
+      });
+    } catch (error) {
+      const failure = classifyDeliveryFailure(error, { code: 'TEMPLATE_RENDER_FAILED', retryable: false });
+      await this.options.prisma.notificationDeliveryAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: NotificationDeliveryStatus.FAILED,
+          errorCode: failure.code,
+          errorMessage: failure.message,
+          providerMetadata: failure.providerMetadata,
+        },
+      });
+      logDeliveryFinished(this.logger, {
+        notificationType: NotificationDeliveryType.DAILY_DIGEST,
+        userId: input.userId,
+        deliveryStatus: NotificationDeliveryStatus.FAILED,
+        provider: input.provider,
+        providerErrorCode: failure.code,
+        retryable: failure.retryable,
+        providerResponse: failure.providerMetadata,
+      });
+      return null;
+    }
   }
-  return Object.fromEntries(
-    Object.entries(value.providerMetadata).filter(([, metadataValue]) => metadataValue !== undefined),
-  ) as Prisma.JsonObject;
-}
-
-function classifyProviderFailure(error: unknown): {
-  code: string;
-  message: string;
-  retryable: boolean;
-  providerMetadata: Prisma.JsonObject;
-} {
-  const message = error instanceof Error ? error.message : String(error);
-  const name = error instanceof Error ? error.name : 'Error';
-  const lower = message.toLowerCase();
-  const isQuota = /\bquota\b|daily limit|exceeded your sending limit/.test(lower);
-  const isRateLimit = /\b429\b|rate limit|too many requests|throttl/.test(lower);
-  const isAuth = /\bauth\b|invalid login|credential|unauthorized|forbidden/.test(lower);
-  const isTemplate = /\btemplate\b|render|compile|invalid html|invalid content/.test(lower);
-  const isRecipient = /\brecipient\b|mailbox unavailable|invalid recipient|550 /.test(lower);
-  const code = isQuota
-    ? 'PROVIDER_QUOTA_EXHAUSTED'
-    : isRateLimit
-      ? 'PROVIDER_RATE_LIMITED'
-      : isAuth
-        ? 'PROVIDER_AUTH_FAILED'
-        : isTemplate
-          ? 'TEMPLATE_RENDER_FAILED'
-          : isRecipient
-            ? 'RECIPIENT_REJECTED'
-            : 'PROVIDER_TRANSIENT_FAILURE';
-
-  return {
-    code,
-    message: message.slice(0, 500),
-    retryable: code === 'PROVIDER_TRANSIENT_FAILURE' || code === 'PROVIDER_RATE_LIMITED',
-    providerMetadata: {
-      errorName: name,
-      providerClassifiedCode: code,
-      messageSnippet: message.slice(0, 200),
-    },
-  };
 }
 
 function assertDigestDate(digestDate: string): void {
