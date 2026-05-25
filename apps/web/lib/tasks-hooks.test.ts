@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { TaskBoardResponse } from './tasks-client';
 import type { TaskListData, TaskListItem } from './tasks-hooks';
@@ -76,6 +76,17 @@ const board: TaskBoardResponse = {
 };
 
 describe('tasks-hooks board cache helpers', () => {
+  it('invalidates the digest preview cache for task-derived read model changes', () => {
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+
+    __testing.invalidateDigestPreview(queryClient, 'user-1');
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['email-digest-preview', 'user-1'],
+    });
+  });
+
   it('applies task edits to the board cache and recomputes lane metadata', () => {
     const now = new Date('2024-06-15T00:00:00.000Z');
 
