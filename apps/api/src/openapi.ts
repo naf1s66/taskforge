@@ -70,6 +70,52 @@ const authTokens: OpenAPIV3.SchemaObject = {
   },
 };
 
+const emailPreference: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    dailyDigestEnabled: {
+      type: 'boolean',
+      description: 'Whether the authenticated user receives daily digest emails.',
+    },
+    dailyDigestTimezone: {
+      type: 'string',
+      description: 'IANA timezone used to resolve digest date windows.',
+      example: 'UTC',
+    },
+  },
+  required: ['dailyDigestEnabled', 'dailyDigestTimezone'],
+  example: {
+    dailyDigestEnabled: false,
+    dailyDigestTimezone: 'UTC',
+  },
+};
+
+const emailPreferenceUpdateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    dailyDigestEnabled: {
+      type: 'boolean',
+      description: 'Enable or disable daily digest emails for the authenticated user.',
+    },
+  },
+  required: ['dailyDigestEnabled'],
+  additionalProperties: false,
+  example: {
+    dailyDigestEnabled: true,
+  },
+};
+
+const emailPreferenceResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    emailPreference: { $ref: '#/components/schemas/EmailPreference' },
+  },
+  required: ['emailPreference'],
+  example: {
+    emailPreference: emailPreference.example as Record<string, unknown>,
+  },
+};
+
 const authSuccessExample = {
   user: authUser.example as Record<string, unknown>,
   tokens: authTokens.example as Record<string, unknown>,
@@ -97,7 +143,22 @@ const authMeSuccessExample = {
   value: { user: authUser.example as Record<string, unknown> },
 } satisfies OpenAPIV3.ExampleObject;
 
+const accountMeSuccessExample = {
+  value: {
+    user: authUser.example as Record<string, unknown>,
+    emailPreference: emailPreference.example as Record<string, unknown>,
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
 const authMeAnonymousExample = { value: { user: null } } satisfies OpenAPIV3.ExampleObject;
+
+const emailPreferenceUpdateExample = {
+  value: emailPreferenceUpdateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const emailPreferenceResponseExample = {
+  value: emailPreferenceResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
 
 const authCredentialsExample = {
   value: authCredentials.example as Record<string, unknown>,
@@ -700,6 +761,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             nullable: true,
             description: 'Authenticated user when available; `null` if unauthenticated.',
           },
+          emailPreference: {
+            allOf: [{ $ref: '#/components/schemas/EmailPreference' }],
+            description: 'Email preferences for the authenticated user. Present on `/api/taskforge/v1/me`.',
+          },
         },
         required: ['user'],
         example: authMeSuccessExample.value,
@@ -727,6 +792,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
       TaskDeleteResponse: taskDeletedResponse,
+      EmailPreference: emailPreference,
+      EmailPreferenceUpdateInput: emailPreferenceUpdateInput,
+      EmailPreferenceResponse: emailPreferenceResponse,
       DailyDigestTaskSummary: dailyDigestTaskSummary,
       DailyDigestGroup: dailyDigestGroup,
       DailyDigestPreviewResponse: dailyDigestPreviewResponse,
@@ -928,19 +996,74 @@ export const openApiDocument: OpenAPIV3.Document = {
     '/api/taskforge/v1/me': {
       get: {
         tags: ['Auth'],
-        summary: 'Alias for the authenticated user endpoint',
+        summary: 'Retrieve the authenticated user and account preferences',
         description:
-          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie. Includes daily digest email preferences for signed-in users.',
         security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
-            description: 'Current user or null when not authenticated',
+            description: 'Current user and email preferences',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/AuthMeResponse' },
                 examples: {
-                  authenticated: authMeSuccessExample,
+                  authenticated: accountMeSuccessExample,
                   unauthenticated: authMeAnonymousExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/me/email-preferences': {
+      patch: {
+        tags: ['Auth'],
+        summary: 'Update email preferences for the authenticated user',
+        description:
+          'Enables or disables daily digest emails for the signed-in user. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/EmailPreferenceUpdateInput' },
+              examples: {
+                default: emailPreferenceUpdateExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Email preferences updated',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailPreferenceResponse' },
+                examples: {
+                  default: emailPreferenceResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
                 },
               },
             },
