@@ -1,10 +1,12 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type SendMailOptions } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 import type { EmailAdapter, EmailSendResult, SendMailInput } from './types';
 import type { SmtpConfig } from '../config/smtp';
 
-type MailTransporter = Pick<nodemailer.Transporter, 'sendMail'>;
+type MailTransporter = {
+  sendMail(mailOptions: SendMailOptions): Promise<unknown>;
+};
 type TransportFactory = (options: SMTPTransport.Options) => MailTransporter;
 
 export class NodemailerEmailAdapter implements EmailAdapter {
