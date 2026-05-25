@@ -41,7 +41,7 @@ The web and API `DIGEST_JOB_SECRET` values must match. Keep `EMAIL_DAILY_SEND_LI
 - `sendLimit`: optional non-negative integer; defaults to `EMAIL_DAILY_SEND_LIMIT`.
 - `digestHourUtc`: optional integer `0` through `23`; when set, users with a different configured digest hour are skipped.
 
-The response includes `attempted`, `sent`, `skipped`, `failed`, and skip reason counts.
+The response includes `attempted`, `sent`, `skipped`, `failed`, `budgetSkipped`, `providerQuotaSkipped`, and other skip reason counts.
 
 ## Local Verification
 
@@ -78,8 +78,9 @@ curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
 - The API runner treats existing `SENT` or `PENDING` attempts for the same user/date as duplicates.
 - Failed provider attempts count against the daily send budget because they may still consume provider quota.
 - Provider failures are classified as `PROVIDER_QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMITED`, `PROVIDER_AUTH_FAILED`, `TEMPLATE_RENDER_FAILED`, `RECIPIENT_REJECTED`, or `PROVIDER_TRANSIENT_FAILURE`.
-- Retry behavior: do not retry quota failures in the same run; record and let the next scheduled/manual run decide. Rate-limit and transient failures are retryable in future runs once provider conditions recover.
-- If the budget is exhausted, remaining eligible sends are skipped and reported as `budgetSkipped`.
+- Retry behavior: do not retry quota failures in the same run; remaining eligible sends are recorded as `SKIPPED` and reported as `providerQuotaSkipped`. Rate-limit and transient failures are retryable in future runs once provider conditions recover.
+- If the configured TaskForge budget is exhausted, remaining eligible sends are recorded as `SKIPPED` with `BUDGET_SKIPPED` and reported as `budgetSkipped`.
 - Vercel Cron may invoke jobs more than once or overlap slow jobs; the database delivery keys and pending-attempt checks are the primary duplicate-send guard.
 - Vercel Cron does not retry failed invocations, so check API/web logs after first enablement and after any schedule changes.
+- Use `docs/prod/email-observability-runbook.md` during first-rollout review.
 - Production email monitoring, budget exhaustion, and scheduled-send enablement decisions are recorded in `docs/prod/adr/0007-email-observability-rollout-decisions.md`.
