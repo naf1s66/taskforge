@@ -53,7 +53,7 @@ type DeliveryWithLatestAttempt = NotificationDelivery & {
 
 type ReserveAttemptResult =
   | { status: 'reserved'; attempt: NotificationDeliveryAttempt }
-  | { status: 'budget_exhausted' }
+  | { status: 'budget_exhausted'; attempt: NotificationDeliveryAttempt | null }
   | { status: 'duplicate' };
 
 export class DailyDigestRunner {
@@ -163,6 +163,10 @@ export class DailyDigestRunner {
       }
 
       if (providerQuotaHalt) {
+        const providerMetadata: Prisma.JsonObject = {
+          ...providerQuotaHalt.providerMetadata,
+          skipReason: 'provider_quota_exhausted',
+        };
         const reservation = await reserveSkippedDeliveryAttempt({
           prisma: this.options.prisma,
           digestDate: input.digestDate,
@@ -171,10 +175,7 @@ export class DailyDigestRunner {
           idempotencyKey,
           errorCode: providerQuotaHalt.code,
           errorMessage: 'Provider quota exhausted earlier in this digest run.',
-          providerMetadata: {
-            ...providerQuotaHalt.providerMetadata,
-            skipReason: 'provider_quota_exhausted',
-          },
+          providerMetadata,
           provider: 'smtp',
         });
 
@@ -183,6 +184,15 @@ export class DailyDigestRunner {
         } else {
           providerQuotaSkipped += 1;
         }
+        logDeliveryFinished(this.logger, {
+          notificationType: NotificationDeliveryType.DAILY_DIGEST,
+          userId: user.id,
+          deliveryStatus: NotificationDeliveryStatus.SKIPPED,
+          provider: 'smtp',
+          providerErrorCode: providerQuotaHalt.code,
+          retryable: false,
+          providerResponse: providerMetadata,
+        });
         skipped += 1;
         continue;
       }
@@ -197,6 +207,19 @@ export class DailyDigestRunner {
       });
 
       if (reservation.status === 'budget_exhausted') {
+        logDeliveryFinished(this.logger, {
+          notificationType: NotificationDeliveryType.DAILY_DIGEST,
+          userId: user.id,
+          deliveryStatus: NotificationDeliveryStatus.SKIPPED,
+          provider: reservation.attempt?.provider ?? 'system',
+          providerErrorCode: 'BUDGET_SKIPPED',
+          retryable: false,
+          providerResponse: {
+            skipReason: 'budget_exhausted',
+            digestDate: input.digestDate,
+            sendLimit,
+          },
+        });
         skipped += 1;
         budgetSkipped += 1;
         continue;
@@ -435,7 +458,7 @@ async function reserveDeliveryAttempt(input: {
 
     const consumedBudget = await countConsumedBudget(tx, input.digestDate);
     if (consumedBudget >= input.sendLimit) {
-      await createSkippedAttempt(tx, delivery, {
+      const attempt = await createSkippedAttempt(tx, delivery, {
         errorCode: 'BUDGET_SKIPPED',
         errorMessage: 'Configured daily email send budget exhausted before this digest could be sent.',
         provider: 'system',
@@ -445,7 +468,7 @@ async function reserveDeliveryAttempt(input: {
           sendLimit: input.sendLimit,
         },
       });
-      return { status: 'budget_exhausted' };
+      return { status: 'budget_exhausted', attempt };
     }
 
     const nextAttempt = (delivery.attempts[0]?.attemptNumber ?? 0) + 1;

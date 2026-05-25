@@ -132,6 +132,7 @@ describe('DailyDigestRunner', () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'budget-a@taskforge.dev' });
     await createDigestUser({ email: 'budget-b@taskforge.dev' });
+    const logger = { error: jest.fn(), info: jest.fn() };
 
     const runner = new DailyDigestRunner({
       prisma,
@@ -140,6 +141,7 @@ describe('DailyDigestRunner', () => {
           throw new Error('SMTP unavailable');
         },
       },
+      logger,
     });
     const result = await runner.run({ digestDate: '2026-05-19', sendLimit: 1 });
 
@@ -151,6 +153,13 @@ describe('DailyDigestRunner', () => {
       status: NotificationDeliveryStatus.SKIPPED,
       errorCode: 'BUDGET_SKIPPED',
     }));
+    expect(logger.info).toHaveBeenCalledWith(
+      '[notifications] Delivery attempt finished',
+      expect.objectContaining({
+        deliveryStatus: NotificationDeliveryStatus.SKIPPED,
+        providerErrorCode: 'BUDGET_SKIPPED',
+      }),
+    );
   });
 
   it('halts remaining sends after provider quota exhaustion and records skipped attempts', async () => {
