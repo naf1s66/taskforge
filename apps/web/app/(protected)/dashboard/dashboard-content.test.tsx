@@ -24,6 +24,19 @@ let emailPreferenceQueryState = {
 let updateEmailPreferenceMutationState = {
   isPending: false,
 };
+let digestPreviewQueryState = {
+  data: {
+    totalTasksConsidered: 2,
+    groups: [
+      { key: 'overdue', label: 'Overdue', total: 1, tasks: [] },
+      { key: 'dueToday', label: 'Due today', total: 1, tasks: [] },
+    ],
+  },
+  isLoading: false,
+  isFetching: false,
+  isError: false,
+  refetch: vi.fn(),
+};
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
@@ -396,6 +409,9 @@ vi.mock('@/lib/email-preferences-hooks', () => ({
     ...updateEmailPreferenceMutationState,
   }),
 }));
+vi.mock('@/lib/digest-preview-hooks', () => ({
+  useDigestPreviewQuery: () => digestPreviewQueryState,
+}));
 
 function renderDashboard() {
   return render(
@@ -438,6 +454,19 @@ describe('DashboardContent board drag behavior', () => {
     };
     updateEmailPreferenceMutationState = {
       isPending: false,
+    };
+    digestPreviewQueryState = {
+      data: {
+        totalTasksConsidered: 2,
+        groups: [
+          { key: 'overdue', label: 'Overdue', total: 1, tasks: [] },
+          { key: 'dueToday', label: 'Due today', total: 1, tasks: [] },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
     };
     window.localStorage.clear();
   });
@@ -559,5 +588,18 @@ describe('DashboardContent board drag behavior', () => {
     await user.click(toggle);
 
     expect(updateEmailPreferenceMutate).toHaveBeenCalledWith(false);
+  });
+
+  it('shows disabled digest preview message when preference is off', () => {
+    renderDashboard();
+    expect(screen.getByText(/Digest is currently disabled\./)).toBeInTheDocument();
+  });
+
+  it('shows digest preview groups and counts from read model', () => {
+    emailPreferenceQueryState.data.dailyDigestEnabled = true;
+    renderDashboard();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getAllByText('Due today').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0);
   });
 });
