@@ -170,6 +170,14 @@
             ],
             "nullable": true,
             "description": "Authenticated user when available; `null` if unauthenticated."
+          },
+          "emailPreference": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EmailPreference"
+              }
+            ],
+            "description": "Email preferences for the authenticated user. Present on `/api/taskforge/v1/me`."
           }
         },
         "required": [
@@ -910,6 +918,61 @@
           "status": "deleted"
         }
       },
+      "EmailPreference": {
+        "type": "object",
+        "properties": {
+          "dailyDigestEnabled": {
+            "type": "boolean",
+            "description": "Whether the authenticated user receives daily digest emails."
+          },
+          "dailyDigestTimezone": {
+            "type": "string",
+            "description": "IANA timezone used to resolve digest date windows.",
+            "example": "UTC"
+          }
+        },
+        "required": [
+          "dailyDigestEnabled",
+          "dailyDigestTimezone"
+        ],
+        "example": {
+          "dailyDigestEnabled": false,
+          "dailyDigestTimezone": "UTC"
+        }
+      },
+      "EmailPreferenceUpdateInput": {
+        "type": "object",
+        "properties": {
+          "dailyDigestEnabled": {
+            "type": "boolean",
+            "description": "Enable or disable daily digest emails for the authenticated user."
+          }
+        },
+        "required": [
+          "dailyDigestEnabled"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "dailyDigestEnabled": true
+        }
+      },
+      "EmailPreferenceResponse": {
+        "type": "object",
+        "properties": {
+          "emailPreference": {
+            "$ref": "#/components/schemas/EmailPreference"
+          }
+        },
+        "required": [
+          "emailPreference"
+        ],
+        "example": {
+          "emailPreference": {
+            "dailyDigestEnabled": false,
+            "dailyDigestTimezone": "UTC"
+          }
+        }
+      },
       "DailyDigestTaskSummary": {
         "type": "object",
         "properties": {
@@ -1552,8 +1615,8 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Alias for the authenticated user endpoint",
-        "description": "Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
+        "summary": "Retrieve the authenticated user and account preferences",
+        "description": "Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie. Includes daily digest email preferences for signed-in users.",
         "security": [
           {
             "bearerAuth": []
@@ -1564,7 +1627,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Current user or null when not authenticated",
+            "description": "Current user and email preferences",
             "content": {
               "application/json": {
                 "schema": {
@@ -1577,12 +1640,114 @@
                         "id": "26f26639-05ad-40b6-8248-379644dcdf18",
                         "email": "user@example.com",
                         "createdAt": "2024-06-01T12:00:00.000Z"
+                      },
+                      "emailPreference": {
+                        "dailyDigestEnabled": false,
+                        "dailyDigestTimezone": "UTC"
                       }
                     }
                   },
                   "unauthenticated": {
                     "value": {
                       "user": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/me/email-preferences": {
+      "patch": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Update email preferences for the authenticated user",
+        "description": "Enables or disables daily digest emails for the signed-in user. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailPreferenceUpdateInput"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "dailyDigestEnabled": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email preferences updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailPreferenceResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "emailPreference": {
+                        "dailyDigestEnabled": false,
+                        "dailyDigestTimezone": "UTC"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
                     }
                   }
                 }

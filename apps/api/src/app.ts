@@ -4,6 +4,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
+import { z } from 'zod';
 
 import { PrismaUserStore, UserStore } from './auth/user-store';
 import { openApiDocument } from './openapi';
@@ -17,6 +18,10 @@ import type { EmailAdapter } from './email/types';
 import { DailyDigestRunner } from './notifications/daily-digest-runner';
 import { createJobsRouter } from './routes/jobs';
 import { createEmailDigestRouter } from './routes/email-digest';
+
+const EmailPreferenceUpdateSchema = z.object({
+  dailyDigestEnabled: z.boolean(),
+}).strict();
 
 export interface CreateAppOptions {
   jwtSecret?: string;
@@ -137,11 +142,57 @@ export function createApp(options: CreateAppOptions = {}) {
       sendConfigured: Boolean(digestEmailAdapter),
     }),
   );
-  app.get('/api/taskforge/v1/me', (_req, res) => {
+  app.get('/api/taskforge/v1/me', async (_req, res, next) => {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }
       | undefined;
-    res.json({ user: user ?? null });
+    if (!user) {
+      return res.json({ user: null });
+    }
+
+    try {
+      const preference = await getOrCreatePrisma().emailPreference.findUnique({
+        where: { userId: user.id },
+        select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
+      });
+
+      return res.json({
+        user,
+        emailPreference: {
+          dailyDigestEnabled: preference?.dailyDigestEnabled ?? false,
+          dailyDigestTimezone: preference?.dailyDigestTimezone ?? 'UTC',
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.patch('/api/taskforge/v1/me/email-preferences', async (req, res, next) => {
+    const user = res.locals.user as { id: string } | undefined;
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const parsed = EmailPreferenceUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
+    }
+
+    try {
+      const preference = await getOrCreatePrisma().emailPreference.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          dailyDigestEnabled: parsed.data.dailyDigestEnabled,
+        },
+        update: { dailyDigestEnabled: parsed.data.dailyDigestEnabled },
+        select: { dailyDigestEnabled: true, dailyDigestTimezone: true },
+      });
+
+      return res.json({ emailPreference: preference });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   return app;
