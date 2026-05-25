@@ -27,6 +27,11 @@ The production API env example lives at `infra/env/api.prod.env.example`.
 7. Set `EMAIL_DAILY_SEND_LIMIT` at or below the active Resend daily limit. Use `90` on the free plan by default to leave room for other transactional mail and provider-side counting differences.
 8. Set `DIGEST_JOB_SECRET` to a strong random value before enabling the protected digest job endpoint.
 9. Configure the free digest scheduler from ADR 0006 and `docs/prod/digest-scheduler.md`: prefer Vercel Cron calling the web proxy route, with GitHub Actions schedule as the fallback.
-10. Run a production-like dry run against the verified sender and digest date window before enabling scheduled or user-triggered real sends.
+10. Configure automated alerts for Resend delivery failures, provider quota exhaustion, and provider rate-limit exhaustion.
+11. Assign a daily human reviewer for the first production rollout.
+12. Confirm the reviewer can access TaskForge logs, delivery history, Resend logs, alert delivery, and quota state.
+13. Run production-like dry runs and manual-only sends against the verified sender before enabling scheduled sends.
+
+The email rollout decisions are documented in `docs/prod/adr/0007-email-observability-rollout-decisions.md`.
 
 > Do not commit SMTP secrets to the repository.

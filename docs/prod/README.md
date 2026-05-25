@@ -8,3 +8,4 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 - `dev-auth-bypass.md` - development bypass behavior and the production expectation that it stays disabled.
 - `adr/0004-hosting-vercel-render-neon.md` - accepted hosting topology decision.
 - `adr/0006-digest-scheduler-invocation.md` - accepted free-tier digest scheduler invocation decision.
+- `adr/0007-email-observability-rollout-decisions.md` - accepted monitoring, budget exhaustion, and scheduled-send enablement decisions for production email rollout.

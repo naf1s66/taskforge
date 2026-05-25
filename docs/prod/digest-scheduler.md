@@ -67,9 +67,10 @@ curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
 3. Set web `CRON_SECRET` and matching `DIGEST_JOB_SECRET`.
 4. Deploy API and web.
 5. Run a production dry run for the intended `digestDate`.
-6. Confirm output counts and logs.
-7. Enable Vercel Cron for the web route `GET /api/cron/digest`.
-8. Keep GitHub Actions schedule disabled unless it is the chosen fallback.
+6. Confirm output counts, TaskForge logs, delivery history, Resend logs, alert delivery, and quota visibility.
+7. Run manual-only sends first; keep scheduled sends disabled until observability checks pass.
+8. Enable Vercel Cron for the web route `GET /api/cron/digest`.
+9. Keep GitHub Actions schedule disabled unless it is the chosen fallback.
 
 ## Operational Notes
 
@@ -79,3 +80,4 @@ curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
 - If the budget is exhausted, remaining eligible sends are skipped and reported as `budgetSkipped`.
 - Vercel Cron may invoke jobs more than once or overlap slow jobs; the database delivery keys and pending-attempt checks are the primary duplicate-send guard.
 - Vercel Cron does not retry failed invocations, so check API/web logs after first enablement and after any schedule changes.
+- Production email monitoring, budget exhaustion, and scheduled-send enablement decisions are recorded in `docs/prod/adr/0007-email-observability-rollout-decisions.md`.
