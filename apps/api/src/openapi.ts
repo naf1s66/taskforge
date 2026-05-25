@@ -1163,6 +1163,12 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           '200': {
             description: 'Digest run completed.',
+            headers: {
+              'x-taskforge-idempotency-key': {
+                description: 'Logical delivery idempotency key used to deduplicate the authenticated user and digest date.',
+                schema: { type: 'string', example: 'digest:2026-05-21:4cbb6f43-6c94-4f76-a36a-8f9f45770b8f' },
+              },
+            },
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
