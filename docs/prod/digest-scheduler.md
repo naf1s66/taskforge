@@ -77,6 +77,8 @@ curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
 - Do not run both Vercel Cron and GitHub Actions on the same schedule unless one is dry-run only.
 - The API runner treats existing `SENT` or `PENDING` attempts for the same user/date as duplicates.
 - Failed provider attempts count against the daily send budget because they may still consume provider quota.
+- Provider failures are classified as `PROVIDER_QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMITED`, `PROVIDER_AUTH_FAILED`, `TEMPLATE_RENDER_FAILED`, `RECIPIENT_REJECTED`, or `PROVIDER_TRANSIENT_FAILURE`.
+- Retry behavior: do not retry quota failures in the same run; record and let the next scheduled/manual run decide. Rate-limit and transient failures are retryable in future runs once provider conditions recover.
 - If the budget is exhausted, remaining eligible sends are skipped and reported as `budgetSkipped`.
 - Vercel Cron may invoke jobs more than once or overlap slow jobs; the database delivery keys and pending-attempt checks are the primary duplicate-send guard.
 - Vercel Cron does not retry failed invocations, so check API/web logs after first enablement and after any schedule changes.

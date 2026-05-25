@@ -119,6 +119,37 @@ describe('DailyDigestRunner', () => {
     expect(await prisma.notificationDeliveryAttempt.count()).toBe(1);
   });
 
+  it('classifies provider quota and rate-limit failures separately', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'quota-classification@taskforge.dev' });
+    await createDigestUser({ email: 'rate-classification@taskforge.dev' });
+
+    let sendCount = 0;
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async () => {
+          sendCount += 1;
+          if (sendCount === 1) {
+            throw new Error('Resend quota exceeded for this account');
+          }
+          throw new Error('429 rate limit exceeded');
+        },
+      },
+    });
+
+    await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const attempts = await prisma.notificationDeliveryAttempt.findMany({
+      orderBy: { attemptedAt: 'asc' },
+      select: { errorCode: true, providerMetadata: true },
+    });
+
+    expect(attempts[0]?.errorCode).toBe('PROVIDER_QUOTA_EXHAUSTED');
+    expect(attempts[1]?.errorCode).toBe('PROVIDER_RATE_LIMITED');
+    expect(attempts[0]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_QUOTA_EXHAUSTED' });
+    expect(attempts[1]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_RATE_LIMITED' });
+  });
+
   it('enforces send budget across repeated runs for the same digest date', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'repeat-budget-a@taskforge.dev' });

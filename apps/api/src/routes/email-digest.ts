@@ -38,6 +38,7 @@ const previewQuerySchema = z.object({
 const sendPayloadSchema = z.object({
   digestDate: dateOnlySchema.optional(),
   digestHourUtc: optionalIntegerParam(z.coerce.number().int().min(0).max(23)),
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
   dryRun: z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]).optional().transform(value => value === true || value === 'true' || value === '1'),
 });
 
@@ -62,6 +63,11 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
     max: 10,
     handler: (_req, res) => res.status(429).json(rateLimitErrorResponse),
   }));
+  const manualSendRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 3,
+    handler: (_req, res) => res.status(429).json(rateLimitErrorResponse),
+  });
 
   router.get('/preview', async (req, res, next) => {
     const user = res.locals.user as AuthUser | undefined;
@@ -86,7 +92,7 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
     }
   });
 
-  router.post('/send', async (req, res, next) => {
+  router.post('/send', manualSendRateLimit, async (req, res, next) => {
     const user = res.locals.user as AuthUser | undefined;
     if (!user?.id) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -123,6 +129,9 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
         sendLimit: defaultSendLimit,
         userIds: [user.id],
       });
+      if (parsed.data.idempotencyKey) {
+        res.setHeader('x-taskforge-idempotency-key', parsed.data.idempotencyKey);
+      }
       return res.json(result);
     } catch (error) {
       if (isInvalidTimezoneError(error)) {
