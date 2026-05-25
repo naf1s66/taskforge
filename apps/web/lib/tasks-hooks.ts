@@ -25,6 +25,7 @@ import {
   updateTask,
   TaskClientError,
 } from './tasks-client';
+import { digestPreviewQueryKeys } from './digest-preview-hooks';
 import type {
   BoardMoveInput,
   CreateTaskInput,
@@ -963,6 +964,10 @@ function scopedQueryKey(userId?: string | null): string {
   return userId ?? FALLBACK_USER_KEY;
 }
 
+function invalidateDigestPreview(queryClient: QueryClient, userScope: string): void {
+  queryClient.invalidateQueries({ queryKey: digestPreviewQueryKeys.all(userScope) });
+}
+
 function deserializeNormalizedFilters(serialized: string): NormalizedTaskListFilters | undefined {
   if (!serialized || serialized === 'undefined' || serialized === 'null') {
     return undefined;
@@ -1437,6 +1442,7 @@ export function useCreateTask(
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+      invalidateDigestPreview(queryClient, userScope);
     },
     ...restOptions,
   });
@@ -1605,6 +1611,7 @@ export function useUpdateTask(
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+      invalidateDigestPreview(queryClient, userScope);
     },
     ...restOptions,
   });
@@ -1750,6 +1757,7 @@ export function useMoveTaskOnBoard<TContext extends object = Record<string, neve
         type: 'active',
       });
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+      invalidateDigestPreview(queryClient, userScope);
     },
     ...restOptions,
   });
@@ -1816,6 +1824,7 @@ export function useDeleteTask(
     onSettled: (result, error, variables, context, mutationContext) => {
       onSettled?.(result, error, variables, context, mutationContext);
       queryClient.invalidateQueries({ queryKey: taskQueryKeys.all(userScope) });
+      invalidateDigestPreview(queryClient, userScope);
     },
     ...restOptions,
   });
@@ -1858,5 +1867,6 @@ export const __testing = {
   removeTaskFromBoard,
   collectBoardQueries,
   restoreBoardSnapshots,
+  invalidateDigestPreview,
   taskQueryKeys,
 };

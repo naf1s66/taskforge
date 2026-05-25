@@ -25,6 +25,31 @@ let updateEmailPreferenceMutationState = {
   isPending: false,
 };
 
+type DigestPreviewQueryState = {
+  data?: {
+    totalTasksConsidered: number;
+    groups: Array<{ key: string; label: string; total: number; tasks: unknown[] }>;
+  };
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  refetch: ReturnType<typeof vi.fn>;
+};
+
+let digestPreviewQueryState: DigestPreviewQueryState = {
+  data: {
+    totalTasksConsidered: 2,
+    groups: [
+      { key: 'overdue', label: 'Overdue', total: 1, tasks: [] },
+      { key: 'dueToday', label: 'Due today', total: 1, tasks: [] },
+    ],
+  },
+  isLoading: false,
+  isFetching: false,
+  isError: false,
+  refetch: vi.fn(),
+};
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ replace: routerReplace }),
@@ -396,6 +421,9 @@ vi.mock('@/lib/email-preferences-hooks', () => ({
     ...updateEmailPreferenceMutationState,
   }),
 }));
+vi.mock('@/lib/digest-preview-hooks', () => ({
+  useDigestPreviewQuery: () => digestPreviewQueryState,
+}));
 
 function renderDashboard() {
   return render(
@@ -438,6 +466,19 @@ describe('DashboardContent board drag behavior', () => {
     };
     updateEmailPreferenceMutationState = {
       isPending: false,
+    };
+    digestPreviewQueryState = {
+      data: {
+        totalTasksConsidered: 2,
+        groups: [
+          { key: 'overdue', label: 'Overdue', total: 1, tasks: [] },
+          { key: 'dueToday', label: 'Due today', total: 1, tasks: [] },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
     };
     window.localStorage.clear();
   });
@@ -559,5 +600,75 @@ describe('DashboardContent board drag behavior', () => {
     await user.click(toggle);
 
     expect(updateEmailPreferenceMutate).toHaveBeenCalledWith(false);
+  });
+
+  it('shows disabled digest preview message when preference is off', () => {
+    renderDashboard();
+    expect(screen.getByText(/Digest is currently disabled\./)).toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+  });
+
+  it('shows digest preview groups and counts from read model', () => {
+    emailPreferenceQueryState.data.dailyDigestEnabled = true;
+    renderDashboard();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getAllByText('Due today').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0);
+  });
+
+  it('shows a loading state while digest preview data is loading', () => {
+    emailPreferenceQueryState.data.dailyDigestEnabled = true;
+    digestPreviewQueryState = {
+      data: undefined,
+      isLoading: true,
+      isFetching: true,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderDashboard();
+
+    expect(screen.getByRole('status', { name: 'Loading digest preview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh digest preview' })).toBeDisabled();
+  });
+
+  it('shows an error state when digest preview data cannot load', () => {
+    emailPreferenceQueryState.data.dailyDigestEnabled = true;
+    digestPreviewQueryState = {
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: true,
+      refetch: vi.fn(),
+    };
+
+    renderDashboard();
+
+    expect(screen.getByText('Digest preview is unavailable right now.')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when digest preview has no matching tasks', () => {
+    emailPreferenceQueryState.data.dailyDigestEnabled = true;
+    digestPreviewQueryState = {
+      data: {
+        totalTasksConsidered: 0,
+        groups: [
+          { key: 'overdue', label: 'Overdue', total: 0, tasks: [] },
+          { key: 'dueToday', label: 'Due today', total: 0, tasks: [] },
+          { key: 'dueSoon', label: 'Due soon', total: 0, tasks: [] },
+          { key: 'recentlyUpdated', label: 'Recently updated', total: 0, tasks: [] },
+          { key: 'blockedByStatus', label: 'Still todo', total: 0, tasks: [] },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderDashboard();
+
+    expect(screen.getByText('No digest-worthy tasks right now.')).toBeInTheDocument();
+    expect(screen.getByText('Still todo')).toBeInTheDocument();
   });
 });
