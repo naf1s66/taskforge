@@ -13,6 +13,7 @@ import {
   classifyDeliveryFailure,
   logDeliveryFinished,
   sanitizeProviderResponse,
+  type ClassifiedDeliveryFailure,
   type NotificationLogger,
 } from './delivery-observability';
 import { DailyDigestQueryService, localDateTimeToUtc } from './digest-query-service';
@@ -40,6 +41,7 @@ export interface DailyDigestRunResult {
   skipped: number;
   failed: number;
   budgetSkipped: number;
+  providerQuotaSkipped: number;
   duplicateSkipped: number;
   preferenceSkipped: number;
   noContentSkipped: number;
@@ -86,10 +88,12 @@ export class DailyDigestRunner {
     let skipped = 0;
     let failed = 0;
     let budgetSkipped = 0;
+    let providerQuotaSkipped = 0;
     let duplicateSkipped = 0;
     let preferenceSkipped = 0;
     let noContentSkipped = 0;
     let dryRunReserved = 0;
+    let providerQuotaHalt: ClassifiedDeliveryFailure | null = null;
 
     for (const user of users) {
       attempted += 1;
@@ -158,6 +162,31 @@ export class DailyDigestRunner {
         continue;
       }
 
+      if (providerQuotaHalt) {
+        const reservation = await reserveSkippedDeliveryAttempt({
+          prisma: this.options.prisma,
+          digestDate: input.digestDate,
+          userId: user.id,
+          recipient,
+          idempotencyKey,
+          errorCode: providerQuotaHalt.code,
+          errorMessage: 'Provider quota exhausted earlier in this digest run.',
+          providerMetadata: {
+            ...providerQuotaHalt.providerMetadata,
+            skipReason: 'provider_quota_exhausted',
+          },
+          provider: 'smtp',
+        });
+
+        if (reservation.status === 'duplicate') {
+          duplicateSkipped += 1;
+        } else {
+          providerQuotaSkipped += 1;
+        }
+        skipped += 1;
+        continue;
+      }
+
       const reservation = await reserveDeliveryAttempt({
         prisma: this.options.prisma,
         digestDate: input.digestDate,
@@ -221,6 +250,9 @@ export class DailyDigestRunner {
           providerResponse: failure.providerMetadata,
         });
         failed += 1;
+        if (failure.code === 'PROVIDER_QUOTA_EXHAUSTED') {
+          providerQuotaHalt = failure;
+        }
         continue;
       }
 
@@ -252,6 +284,7 @@ export class DailyDigestRunner {
       skipped,
       failed,
       budgetSkipped,
+      providerQuotaSkipped,
       duplicateSkipped,
       preferenceSkipped,
       noContentSkipped,
@@ -402,6 +435,16 @@ async function reserveDeliveryAttempt(input: {
 
     const consumedBudget = await countConsumedBudget(tx, input.digestDate);
     if (consumedBudget >= input.sendLimit) {
+      await createSkippedAttempt(tx, delivery, {
+        errorCode: 'BUDGET_SKIPPED',
+        errorMessage: 'Configured daily email send budget exhausted before this digest could be sent.',
+        provider: 'system',
+        providerMetadata: {
+          skipReason: 'budget_exhausted',
+          digestDate: input.digestDate,
+          sendLimit: input.sendLimit,
+        },
+      });
       return { status: 'budget_exhausted' };
     }
 
@@ -418,6 +461,77 @@ async function reserveDeliveryAttempt(input: {
     });
 
     return { status: 'reserved', attempt };
+  });
+}
+
+async function reserveSkippedDeliveryAttempt(input: {
+  prisma: PrismaClient;
+  digestDate: string;
+  userId: string;
+  recipient: string;
+  idempotencyKey: string;
+  errorCode: string;
+  errorMessage: string;
+  providerMetadata: Prisma.JsonObject;
+  provider: string;
+}): Promise<ReserveAttemptResult> {
+  return input.prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`digest-budget:${input.digestDate}`}))`;
+
+    const delivery = await tx.notificationDelivery.upsert({
+      where: { idempotencyKey: input.idempotencyKey },
+      create: {
+        userId: input.userId,
+        type: NotificationDeliveryType.DAILY_DIGEST,
+        recipient: input.recipient,
+        idempotencyKey: input.idempotencyKey,
+      },
+      update: { recipient: input.recipient },
+      include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
+    });
+
+    if (isTerminalOrInFlightDuplicate(delivery)) {
+      return { status: 'duplicate' };
+    }
+
+    const attempt = await createSkippedAttempt(tx, delivery, {
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      provider: input.provider,
+      providerMetadata: input.providerMetadata,
+    });
+
+    return attempt ? { status: 'reserved', attempt } : { status: 'duplicate' };
+  });
+}
+
+async function createSkippedAttempt(
+  tx: Prisma.TransactionClient,
+  delivery: DeliveryWithLatestAttempt,
+  input: {
+    errorCode: string;
+    errorMessage: string;
+    provider: string;
+    providerMetadata: Prisma.JsonObject;
+  },
+): Promise<NotificationDeliveryAttempt | null> {
+  const latestAttempt = delivery.attempts[0];
+  if (latestAttempt?.status === NotificationDeliveryStatus.SKIPPED && latestAttempt.errorCode === input.errorCode) {
+    return null;
+  }
+
+  return tx.notificationDeliveryAttempt.create({
+    data: {
+      deliveryId: delivery.id,
+      attemptNumber: (latestAttempt?.attemptNumber ?? 0) + 1,
+      type: NotificationDeliveryType.DAILY_DIGEST,
+      recipient: delivery.recipient,
+      provider: input.provider,
+      status: NotificationDeliveryStatus.SKIPPED,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      providerMetadata: input.providerMetadata,
+    },
   });
 }
 

@@ -145,13 +145,19 @@ describe('DailyDigestRunner', () => {
 
     expect(result.failed).toBe(1);
     expect(result.budgetSkipped).toBe(1);
-    expect(await prisma.notificationDeliveryAttempt.count()).toBe(1);
+    const attempts = await prisma.notificationDeliveryAttempt.findMany();
+    expect(attempts).toHaveLength(2);
+    expect(attempts).toContainEqual(expect.objectContaining({
+      status: NotificationDeliveryStatus.SKIPPED,
+      errorCode: 'BUDGET_SKIPPED',
+    }));
   });
 
-  it('classifies provider quota and rate-limit failures separately', async () => {
+  it('halts remaining sends after provider quota exhaustion and records skipped attempts', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'quota-classification@taskforge.dev' });
-    await createDigestUser({ email: 'rate-classification@taskforge.dev' });
+    await createDigestUser({ email: 'quota-skipped-a@taskforge.dev' });
+    await createDigestUser({ email: 'quota-skipped-b@taskforge.dev' });
 
     let sendCount = 0;
     const runner = new DailyDigestRunner({
@@ -159,24 +165,53 @@ describe('DailyDigestRunner', () => {
       emailAdapter: {
         sendMail: async () => {
           sendCount += 1;
-          if (sendCount === 1) {
-            throw new Error('Resend quota exceeded for this account');
-          }
+          throw new Error('Resend quota exceeded for this account');
+        },
+      },
+    });
+
+    const result = await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const attempts = await prisma.notificationDeliveryAttempt.findMany({
+      orderBy: { attemptedAt: 'asc' },
+      select: { errorCode: true, providerMetadata: true, status: true },
+    });
+
+    expect(sendCount).toBe(1);
+    expect(result.failed).toBe(1);
+    expect(result.providerQuotaSkipped).toBe(2);
+    const failedAttempt = attempts.find(attempt => attempt.status === NotificationDeliveryStatus.FAILED);
+    const skippedAttempts = attempts.filter(attempt => attempt.status === NotificationDeliveryStatus.SKIPPED);
+    expect(failedAttempt?.errorCode).toBe('PROVIDER_QUOTA_EXHAUSTED');
+    expect(failedAttempt?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_QUOTA_EXHAUSTED' });
+    expect(skippedAttempts).toHaveLength(2);
+    expect(skippedAttempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        errorCode: 'PROVIDER_QUOTA_EXHAUSTED',
+        providerMetadata: expect.objectContaining({ skipReason: 'provider_quota_exhausted' }),
+      }),
+    ]));
+  });
+
+  it('classifies provider rate-limit failures separately from quota failures', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'rate-classification@taskforge.dev' });
+
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async () => {
           throw new Error('429 rate limit exceeded');
         },
       },
     });
 
     await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
-    const attempts = await prisma.notificationDeliveryAttempt.findMany({
-      orderBy: { attemptedAt: 'asc' },
+    const attempt = await prisma.notificationDeliveryAttempt.findFirstOrThrow({
       select: { errorCode: true, providerMetadata: true },
     });
 
-    expect(attempts[0]?.errorCode).toBe('PROVIDER_QUOTA_EXHAUSTED');
-    expect(attempts[1]?.errorCode).toBe('PROVIDER_RATE_LIMITED');
-    expect(attempts[0]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_QUOTA_EXHAUSTED' });
-    expect(attempts[1]?.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_RATE_LIMITED' });
+    expect(attempt.errorCode).toBe('PROVIDER_RATE_LIMITED');
+    expect(attempt.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_RATE_LIMITED' });
   });
 
   it('records template rendering failures without sending provider mail', async () => {
@@ -251,7 +286,7 @@ describe('DailyDigestRunner', () => {
     expect(second.sent).toBe(0);
     expect(second.duplicateSkipped).toBe(2);
     expect(second.budgetSkipped).toBe(1);
-    expect(await prisma.notificationDeliveryAttempt.count()).toBe(2);
+    expect(await prisma.notificationDeliveryAttempt.count()).toBe(3);
   });
 
   it('enforces send budget across concurrent runs for the same digest date', async () => {
@@ -277,7 +312,7 @@ describe('DailyDigestRunner', () => {
     expect(first.sent + second.sent).toBe(1);
     expect(first.budgetSkipped + second.budgetSkipped).toBeGreaterThanOrEqual(1);
     expect(sent).toHaveLength(1);
-    expect(await prisma.notificationDeliveryAttempt.count()).toBe(1);
+    expect(await prisma.notificationDeliveryAttempt.count()).toBe(2);
   });
 
   it('skips users that are disabled, unverified, off-hour, undeliverable, or empty', async () => {
