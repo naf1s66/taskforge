@@ -19,9 +19,17 @@ const DigestGroupSchema = z.object({
   tasks: z.array(DigestTaskSchema),
 });
 
+const DigestPreviewWindowSchema = z.object({
+  startOfTodayUtc: z.string(),
+  startOfTomorrowUtc: z.string(),
+  dueSoonUntilUtc: z.string(),
+  recentlyUpdatedSinceUtc: z.string(),
+});
+
 const DigestPreviewSchema = z.object({
   generatedAt: z.string(),
   timezone: z.string(),
+  window: DigestPreviewWindowSchema,
   totalTasksConsidered: z.number().int().nonnegative(),
   groups: z.array(DigestGroupSchema),
 });
