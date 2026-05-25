@@ -214,6 +214,47 @@ describe('DailyDigestRunner', () => {
     expect(attempt.providerMetadata).toMatchObject({ providerClassifiedCode: 'PROVIDER_RATE_LIMITED' });
   });
 
+  it('retries transient provider failures on a later run', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'transient-retry@taskforge.dev' });
+
+    let sendCount = 0;
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async () => {
+          sendCount += 1;
+          if (sendCount === 1) {
+            throw new Error('SMTP connection reset');
+          }
+        },
+      },
+    });
+
+    const first = await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const second = await runner.run({ digestDate: '2026-05-19', sendLimit: 10 });
+    const attempts = await prisma.notificationDeliveryAttempt.findMany({
+      orderBy: { attemptNumber: 'asc' },
+      select: { attemptNumber: true, status: true, errorCode: true },
+    });
+
+    expect(first.failed).toBe(1);
+    expect(second.sent).toBe(1);
+    expect(sendCount).toBe(2);
+    expect(attempts).toEqual([
+      expect.objectContaining({
+        attemptNumber: 1,
+        status: NotificationDeliveryStatus.FAILED,
+        errorCode: 'PROVIDER_TRANSIENT_FAILURE',
+      }),
+      expect.objectContaining({
+        attemptNumber: 2,
+        status: NotificationDeliveryStatus.SENT,
+        errorCode: null,
+      }),
+    ]);
+  });
+
   it('records template rendering failures without sending provider mail', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'template-failure@taskforge.dev' });
