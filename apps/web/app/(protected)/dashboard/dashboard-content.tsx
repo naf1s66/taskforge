@@ -1207,6 +1207,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     !boardQuery.isError &&
     visibleTaskCount === 0;
   const dragActive = Boolean(activeId);
+  const isDigestPreferenceDisabled =
+    !emailPreferenceQuery.isLoading &&
+    !emailPreferenceQuery.isError &&
+    !emailPreferenceQuery.data?.dailyDigestEnabled;
 
   const renderedTaskMap = useMemo(() => {
     const map = new Map<string, TaskListItem>();
@@ -1786,6 +1790,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                       type="button"
                       size="sm"
                       variant="ghost"
+                      aria-label="Refresh digest preview"
                       className="h-7 px-2 text-xs"
                       disabled={digestPreviewQuery.isLoading || digestPreviewQuery.isFetching}
                       onClick={() => void digestPreviewQuery.refetch()}
@@ -1794,12 +1799,13 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                       Refresh
                     </Button>
                   </div>
-                  {!emailPreferenceQuery.isLoading && !emailPreferenceQuery.isError && !emailPreferenceQuery.data?.dailyDigestEnabled ? (
+                  {isDigestPreferenceDisabled ? (
                     <p className="text-xs text-muted-foreground">
                       Digest is currently disabled. Enable it to keep this preview aligned with your next scheduled send.
                     </p>
-                  ) : digestPreviewQuery.isLoading ? (
-                    <div className="space-y-2">
+                  ) : null}
+                  {digestPreviewQuery.isLoading ? (
+                    <div className="space-y-2" role="status" aria-label="Loading digest preview">
                       <Skeleton className="h-4 w-full" />
                       <Skeleton className="h-4 w-5/6" />
                     </div>
