@@ -11,7 +11,19 @@ import { DashboardContent } from './dashboard-content';
 const routerReplace = vi.fn();
 const toast = vi.fn();
 const moveTaskMutateAsync = vi.fn();
+const updateEmailPreferenceMutate = vi.fn();
 const searchParams = new URLSearchParams();
+let emailPreferenceQueryState = {
+  data: {
+    dailyDigestEnabled: false,
+    dailyDigestTimezone: 'UTC',
+  },
+  isLoading: false,
+  isError: false,
+};
+let updateEmailPreferenceMutationState = {
+  isPending: false,
+};
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
@@ -377,6 +389,14 @@ vi.mock('@/lib/tasks-hooks', () => ({
   }),
 }));
 
+vi.mock('@/lib/email-preferences-hooks', () => ({
+  useEmailPreferenceQuery: () => emailPreferenceQueryState,
+  useUpdateEmailPreferenceMutation: () => ({
+    mutate: updateEmailPreferenceMutate,
+    ...updateEmailPreferenceMutationState,
+  }),
+}));
+
 function renderDashboard() {
   return render(
     <DashboardContent
@@ -407,6 +427,18 @@ describe('DashboardContent board drag behavior', () => {
     toast.mockClear();
     moveTaskMutateAsync.mockReset();
     moveTaskMutateAsync.mockResolvedValue(board);
+    updateEmailPreferenceMutate.mockReset();
+    emailPreferenceQueryState = {
+      data: {
+        dailyDigestEnabled: false,
+        dailyDigestTimezone: 'UTC',
+      },
+      isLoading: false,
+      isError: false,
+    };
+    updateEmailPreferenceMutationState = {
+      isPending: false,
+    };
     window.localStorage.clear();
   });
 
@@ -490,5 +522,42 @@ describe('DashboardContent board drag behavior', () => {
     })));
     await waitFor(() => expectBefore('Todo A', 'Todo B', todoLane));
     expectBefore('Todo B', 'Todo C', todoLane);
+  });
+
+  it('shows disabled digest state and submits an enable mutation', async () => {
+    const user = userEvent.setup();
+    renderDashboard();
+
+    expect(screen.getByText(/Status:\s*Disabled/)).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'Turn daily digest emails on' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(toggle);
+
+    expect(updateEmailPreferenceMutate).toHaveBeenCalledWith(true);
+  });
+
+  it('shows enabled digest state and submits a disable mutation', async () => {
+    const user = userEvent.setup();
+    emailPreferenceQueryState = {
+      data: {
+        dailyDigestEnabled: true,
+        dailyDigestTimezone: 'UTC',
+      },
+      isLoading: false,
+      isError: false,
+    };
+
+    renderDashboard();
+
+    expect(screen.getByText(/Status:\s*Enabled/)).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: 'Turn daily digest emails off' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(toggle);
+
+    expect(updateEmailPreferenceMutate).toHaveBeenCalledWith(false);
   });
 });

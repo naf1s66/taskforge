@@ -1729,7 +1729,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-foreground">Daily digest emails</p>
                     <p className="text-xs text-muted-foreground">
-                      Receive a summary each day around your local morning.
+                      Receive a daily task summary during the configured delivery window.
+                    </p>
+                    <p className="text-xs font-medium text-foreground">
+                      Status:{" "}
+                      {emailPreferenceQuery.isLoading
+                        ? "Loading"
+                        : emailPreferenceQuery.isError
+                          ? "Unavailable"
+                          : emailPreferenceQuery.data?.dailyDigestEnabled
+                            ? "Enabled"
+                            : "Disabled"}
                     </p>
                   </div>
                   <Button
@@ -1738,7 +1748,17 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                     variant={
                       emailPreferenceQuery.data?.dailyDigestEnabled ? "default" : "secondary"
                     }
-                    disabled={emailPreferenceQuery.isLoading || updateEmailPreference.isPending}
+                    aria-label={
+                      emailPreferenceQuery.data?.dailyDigestEnabled
+                        ? "Turn daily digest emails off"
+                        : "Turn daily digest emails on"
+                    }
+                    aria-pressed={Boolean(emailPreferenceQuery.data?.dailyDigestEnabled)}
+                    disabled={
+                      emailPreferenceQuery.isLoading ||
+                      emailPreferenceQuery.isError ||
+                      updateEmailPreference.isPending
+                    }
                     onClick={() =>
                       updateEmailPreference.mutate(
                         !(emailPreferenceQuery.data?.dailyDigestEnabled ?? false),
@@ -1746,11 +1766,14 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                     }
                   >
                     {updateEmailPreference.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving
+                      </>
                     ) : emailPreferenceQuery.data?.dailyDigestEnabled ? (
-                      "Enabled"
+                      "Turn off"
                     ) : (
-                      "Disabled"
+                      "Turn on"
                     )}
                   </Button>
                 </div>
