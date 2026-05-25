@@ -99,6 +99,35 @@ describe('DailyDigestRunner', () => {
     expect(attempts.filter(attempt => attempt.status === NotificationDeliveryStatus.SENT)).toHaveLength(1);
   });
 
+  it('stores sanitized provider metadata for successful sends', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'metadata@taskforge.dev' });
+
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: {
+        sendMail: async () => ({
+          providerMessageId: '<digest-message-id>',
+          providerMetadata: {
+            acceptedCount: 1,
+            rejectedCount: 0,
+            response: '250 queued',
+          },
+        }),
+      },
+    });
+
+    await runner.run({ digestDate: '2026-05-19' });
+    const attempt = await prisma.notificationDeliveryAttempt.findFirstOrThrow();
+
+    expect(attempt.providerMessageId).toBe('<digest-message-id>');
+    expect(attempt.providerMetadata).toMatchObject({
+      acceptedCount: 1,
+      rejectedCount: 0,
+      response: '250 queued',
+    });
+  });
+
   it('counts failed provider attempts against the send budget', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'budget-a@taskforge.dev' });

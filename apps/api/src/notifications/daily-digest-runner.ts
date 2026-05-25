@@ -7,7 +7,7 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 
-import type { EmailAdapter } from '../email/types';
+import type { EmailAdapter, EmailSendResult } from '../email/types';
 import { renderDailyDigestTemplate } from '../email/templates';
 import { DailyDigestQueryService, localDateTimeToUtc } from './digest-query-service';
 
@@ -170,24 +170,30 @@ export class DailyDigestRunner {
       }
 
       try {
-        const providerResponse = (await this.options.emailAdapter.sendMail({
+        const providerResponse = await this.options.emailAdapter.sendMail({
           to: recipient,
           subject: template.subject,
           text: template.text,
           html: template.html,
-        })) as { messageId?: string; accepted?: unknown[]; rejected?: unknown[]; response?: string } | void;
+        });
+        const providerMetadata = sanitizeProviderResponse(providerResponse);
 
         await this.options.prisma.notificationDeliveryAttempt.update({
           where: { id: reservation.attempt.id },
-          data: { status: NotificationDeliveryStatus.SENT, deliveredAt: new Date() },
+          data: {
+            status: NotificationDeliveryStatus.SENT,
+            deliveredAt: new Date(),
+            providerMessageId: providerResponse?.providerMessageId ?? null,
+            ...(providerMetadata ? { providerMetadata } : {}),
+          },
         });
         this.logger.info('[notifications] Delivery attempt finished', {
           notificationType: NotificationDeliveryType.DAILY_DIGEST,
           userId: user.id,
           deliveryStatus: NotificationDeliveryStatus.SENT,
           provider: reservation.attempt.provider,
-          providerMessageId: providerResponse?.messageId ?? null,
-          providerResponse: sanitizeProviderResponse(providerResponse),
+          providerMessageId: providerResponse?.providerMessageId ?? null,
+          providerResponse: providerMetadata,
         });
         sent += 1;
       } catch (error) {
@@ -228,16 +234,13 @@ export class DailyDigestRunner {
   }
 }
 
-function sanitizeProviderResponse(value: unknown): Prisma.JsonObject | null {
-  if (!value || typeof value !== 'object') {
+function sanitizeProviderResponse(value: EmailSendResult | void): Prisma.JsonObject | null {
+  if (!value?.providerMetadata || typeof value.providerMetadata !== 'object') {
     return null;
   }
-  const record = value as Record<string, unknown>;
-  return {
-    acceptedCount: Array.isArray(record.accepted) ? record.accepted.length : undefined,
-    rejectedCount: Array.isArray(record.rejected) ? record.rejected.length : undefined,
-    response: typeof record.response === 'string' ? record.response.slice(0, 512) : undefined,
-  };
+  return Object.fromEntries(
+    Object.entries(value.providerMetadata).filter(([, metadataValue]) => metadataValue !== undefined),
+  ) as Prisma.JsonObject;
 }
 
 function classifyProviderFailure(error: unknown): {
