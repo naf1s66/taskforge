@@ -609,6 +609,7 @@ const dailyDigestPreviewResponse: OpenAPIV3.SchemaObject = {
 
 const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
   type: 'object',
+  additionalProperties: false,
   properties: {
     digestDate: {
       type: 'string',
