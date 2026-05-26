@@ -6,6 +6,7 @@ Use these checks while implementing email notification tasks.
 
 ```bash
 pnpm -C apps/api lint
+pnpm -C apps/api run lint:http
 pnpm -C apps/api typecheck
 pnpm -C apps/api test
 pnpm -C apps/web lint

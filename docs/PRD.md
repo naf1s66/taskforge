@@ -8,7 +8,7 @@
 - Primary: single user (personal). Future: org workspaces.
 
 ## Success
-- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, Swagger at `/api/taskforge/docs`, API and frontend automated tests, `.http` suite, Docker + CI, README + ADRs. Email delivery infrastructure, welcome emails, and the protected digest scheduler are staged; digest user-facing product flows remain planned future scope.
+- Deployed FE/BE/DB on free tiers. OAuth login, CRUD tasks (tags + due dates), Kanban, filters/search, Swagger at `/api/taskforge/docs`, API and frontend automated tests, `.http` suite, Docker + CI, README + ADRs. Email delivery infrastructure, welcome emails, digest preferences, digest preview/manual-send flows, and the protected digest scheduler are staged; production scheduled sends remain gated on Resend verification and rollout checks.
 
 ## Scope
 - Auth: NextAuth (GitHub/Google) backed by Prisma, credential login against the API, and a session bridge that exchanges
@@ -16,7 +16,7 @@
 - Tasks: title, description (MD), status, priority, **tags**, **dueDate**.
 - Kanban: DnD with optimistic UI.
 - Filters/search: tag/status/due range/text.
-- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; welcome emails send after first account creation, while daily digest product flows remain planned. The digest scheduler runs through a protected API job endpoint with a Vercel Cron web proxy and GitHub Actions fallback.
+- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; welcome emails send after first account creation, and users can manage digest preferences, preview digest payloads, and trigger guarded manual digest sends. The digest scheduler runs through a protected API job endpoint with a Vercel Cron web proxy and GitHub Actions fallback.
 - UI: Next.js, Tailwind, shadcn/ui, Framer Motion, desktop-first dark theme.
 - Docs: Swagger/OpenAPI + ADRs. `.http` pack.
 - Tests: Jest/Supertest for API coverage and Vitest/React Testing Library for frontend coverage.

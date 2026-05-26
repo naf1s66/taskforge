@@ -9,6 +9,6 @@
 7. **07-email-settings-ui.md** - Let users opt in/out of digest emails and choose digest timing from the web app.
 8. **08-digest-preview-ui.md** - Add a dashboard preview surface so users can inspect the digest before enabling it.
 9. **09-email-observability-and-safety.md** - Add structured logging, idempotency, rate limits, and failure handling.
-10. **10-email-http-pack.md** - Extend HTTP collections with email preference, preview, and send flows.
+10. **10-email-http-pack.md** - Completed: HTTP collections now cover seeded email auth, preference reads/updates, digest preview, safe dry-run, and guarded MailHog manual-send verification.
 11. **11-email-docs.md** - Update PRD, README, ADR notes, env docs, testing docs, and Resend setup/runbook notes for email behavior.
 12. **12-email-tests.md** - Cover adapter, scheduler, API, and frontend email flows in automated tests and CI.
