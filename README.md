@@ -206,7 +206,68 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: Nodemailer SMTP adapter is available. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`). See `docs/prod/resend-email-setup.md`.
+- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md`.
 - Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
+
+## Email setup and local verification (Milestone 5)
+
+### Local development (MailHog)
+- Docker compose includes MailHog for SMTP capture (`mailhog:1025`) and inbox preview (`http://localhost:8025`).
+- Use env defaults from `infra/env/api.env.example`:
+  - `SMTP_HOST=mailhog`
+  - `SMTP_PORT=1025`
+  - `SMTP_USER=` / `SMTP_PASS=` (blank locally)
+  - `EMAIL_FROM=TaskForge <noreply@taskforge.local>`
+  - `EMAIL_DAILY_SEND_LIMIT=90`
+- Keep `DIGEST_JOB_SECRET` configured in both `apps/api/.env` and `apps/web/.env` so local protected digest routes can be exercised.
+
+### Production default (Resend SMTP)
+- `SMTP_HOST=smtp.resend.com`
+- `SMTP_PORT=587`
+- `SMTP_USER=resend`
+- `SMTP_PASS=<RESEND_API_KEY>`
+- `EMAIL_FROM=<verified sender on the Resend-verified domain>`
+- `EMAIL_DAILY_SEND_LIMIT=90` on Resend free tier (conservative buffer below the nominal daily cap)
+
+Also configure:
+- API: `DIGEST_JOB_SECRET`
+- Web: `CRON_SECRET`
+- Web: `DIGEST_JOB_SECRET` (must match API value)
+
+### Digest behavior summary
+- Daily digest execution is explicit (`/api/taskforge/v1/jobs/digest`) and can run as dry run or real send.
+- Digests are idempotent for the same user/date and skip users with disabled preferences, unverified/placeholder addresses, or non-matching digest hour.
+- Budget controls include `EMAIL_DAILY_SEND_LIMIT` and per-run `sendLimit`; budget/provider-quota skips are tracked in run results.
+
+### Local verification steps
+1. Start infra and seed data:
+   ```bash
+   make up
+   make seed
+   ```
+2. Run API and web checks:
+   ```bash
+   pnpm -C apps/api run lint:http
+   pnpm -C apps/api test -- daily-digest-runner.test.ts email-digest-route.test.ts auth.e2e.test.ts jobs-route.test.ts
+   pnpm -C apps/web test -- app/api/cron/digest/route.test.ts
+   ```
+3. Trigger a digest dry run locally:
+   ```bash
+   pnpm -C apps/api digest:run 2026-05-19 --dry-run
+   ```
+4. Exercise protected digest endpoint:
+   ```bash
+   curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
+     -H "content-type: application/json" \
+     -H "x-job-secret: $DIGEST_JOB_SECRET" \
+     -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
+   ```
+5. Verify captured emails in MailHog UI: `http://localhost:8025`.
+
+References:
+- Manual checklist: `docs/testing/milestone5-manual-checklist.md`
+- Automated checks: `docs/testing/milestone5-automated.md`
+- Production setup: `docs/prod/resend-email-setup.md`
+- Scheduler runbook: `docs/prod/digest-scheduler.md`

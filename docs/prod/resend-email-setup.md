@@ -20,6 +20,7 @@ The production API env example lives at `infra/env/api.prod.env.example`.
 
 1. Create/select the Resend account for TaskForge production email ownership.
 2. Add a sending domain/subdomain (recommended: `mail.<your-domain>`).
+   - Record the exact chosen production domain in this file before enabling real sends.
 3. Complete SPF + DKIM verification in Resend.
 4. Add DMARC before enabling production sends.
 5. Create a Resend SMTP API key and set it as `SMTP_PASS`.
@@ -34,5 +35,24 @@ The production API env example lives at `infra/env/api.prod.env.example`.
 14. If `apps/api/tests/email.http` is used for a production-like smoke, keep the Resend request commented until the verified domain, deployed secrets, target recipient, and `dryRun=false` intent are confirmed in the local operator environment.
 
 The email rollout decisions are documented in `docs/prod/adr/0007-email-observability-rollout-decisions.md`.
+
+## Deployment secret placement (document per target)
+
+Document where `SMTP_PASS` (Resend API key) is stored for each deployment target without committing the secret value.
+
+- API host (Render/Railway/etc): `<document secret manager location>`
+- Web host (if needed for proxy/job secret coordination): `<document secret manager location>`
+- CI or scheduler fallback (GitHub Actions): `<document secret manager location>`
+
+Update these placeholders once the production stack is finalized.
+
+## Free-plan operational guardrails
+
+- Keep `EMAIL_DAILY_SEND_LIMIT=90` unless the Resend plan changes.
+- Record the production digest schedule (UTC hour), expected daily send budget, and escalation path for delivery failures before enabling unattended schedules.
+- If the Resend account is upgraded from free to paid, re-evaluate and update:
+  - `EMAIL_DAILY_SEND_LIMIT`
+  - scheduler cadence/concurrency assumptions
+  - rollback and escalation instructions in runbooks.
 
 > Do not commit SMTP secrets to the repository.
