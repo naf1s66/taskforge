@@ -52,7 +52,18 @@ pnpm -C apps/api test
 
 ### Environment variables
 
-All packs support variable-based hosts/tokens (for example `@apiBaseUrl` and `{{accessToken}}`) so you can replay requests without editing hard-coded URLs. The email pack also keeps SMTP examples placeholder-only (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`) so real Resend credentials stay in local environment variables.
+All packs support variable-based hosts/tokens (for example `@apiBaseUrl` and `{{accessToken}}`) so you can replay requests without editing hard-coded URLs.
+
+For `email.http`, start the Docker stack and seed the database first:
+
+```bash
+make up
+make seed
+```
+
+The seed creates a verified `demo@taskforge.dev` user and one deterministic digest task for MailHog verification. Dockerized local SMTP uses `SMTP_HOST=mailhog` and `SMTP_PORT=1025`; if you run the API directly on the host machine while MailHog runs in Docker, use `SMTP_HOST=localhost`.
+
+The email pack keeps production SMTP examples placeholder-only (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`) so real Resend credentials stay in local environment variables.
 
 ### Import tips
 
