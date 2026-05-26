@@ -31,6 +31,7 @@ The production API env example lives at `infra/env/api.prod.env.example`.
 11. Assign a daily human reviewer for the first production rollout.
 12. Confirm the reviewer can access TaskForge logs, delivery history, Resend logs, alert delivery, and quota state.
 13. Run production-like dry runs and manual-only sends against the verified sender before enabling scheduled sends.
+14. If `apps/api/tests/email.http` is used for a production-like smoke, keep the Resend request commented until the verified domain, deployed secrets, target recipient, and `dryRun=false` intent are confirmed in the local operator environment.
 
 The email rollout decisions are documented in `docs/prod/adr/0007-email-observability-rollout-decisions.md`.
 
