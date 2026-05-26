@@ -1,13 +1,36 @@
 @apiBaseUrl = http://localhost:4000/api/taskforge/v1
-@accessToken = REPLACE_WITH_TF_SESSION_COOKIE_VALUE
+@authEmail = demo@taskforge.dev
+@authPassword = Demo1234!
 @digestDate = 2026-05-26
 @previewTimezone = America/New_York
+@mailhogDeliveryDryRun = true
 
 # Email HTTP pack (safe by default)
-# 1) Run requests in apps/api/tests/auth.http first and copy tf_session into @accessToken.
-# 2) Local default SMTP should point to MailHog (SMTP_HOST=mailhog, SMTP_PORT=1025).
-# 3) Real Resend sends are opt-in only; keep dryRun=true unless you explicitly load production-like secrets.
-# 4) Verify outbound messages in MailHog UI: http://localhost:8025.
+# 1) Start local services with `make up`, then run `make seed`.
+# 2) The seed creates a verified demo user plus one deterministic digest task for @digestDate.
+# 3) If SEED_USER_PASSWORD is overridden, update @authPassword before logging in.
+# 4) Dockerized local SMTP uses MailHog (SMTP_HOST=mailhog, SMTP_PORT=1025).
+# 5) If the API runs on the host machine instead of Docker, point SMTP_HOST at localhost.
+# 6) Verify local outbound messages in MailHog UI: http://localhost:8025.
+# 7) Keep @mailhogDeliveryDryRun=true unless you have confirmed this API is local and using MailHog.
+
+### Auth setup - login seeded verified digest user
+# @name emailLogin
+POST {{apiBaseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{authEmail}}",
+  "password": "{{authPassword}}"
+}
+
+> {%
+client.test('login returns an access token for email HTTP pack', () => {
+  client.assert(response.status === 200, 'expected 200 OK');
+  client.assert(response.body.tokens.accessToken, 'access token is present');
+  client.global.set('accessToken', response.body.tokens.accessToken);
+});
+%}
 
 ### Me snapshot (auth + current email preference)
 GET {{apiBaseUrl}}/me
@@ -30,11 +53,11 @@ Authorization: Bearer {{accessToken}}
 GET {{apiBaseUrl}}/email/digest/preview
 Authorization: Bearer {{accessToken}}
 
-### Manual digest send (safe local dry run)
+### Manual digest send (safe dry run)
 # Expected:
-# - HTTP 200 with skipped/sent attempt details for this user.
+# - HTTP 200 with attempted/sent/skipped counters for this user.
 # - x-taskforge-idempotency-key response header: digest:<digestDate>:<userId>.
-# - No SMTP delivery attempt because dryRun=true.
+# - No SMTP delivery attempt and no delivery history row because dryRun=true.
 POST {{apiBaseUrl}}/email/digest/send
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
@@ -44,36 +67,38 @@ Authorization: Bearer {{accessToken}}
   "dryRun": true
 }
 
-### Manual digest send (MailHog delivery; still local-safe)
-# Preconditions:
-# - dailyDigestEnabled=true
+### Manual digest send (MailHog delivery opt-in)
+# Keep @mailhogDeliveryDryRun=true for shared demos, CI, staging, or any Resend-backed API.
+# Set @mailhogDeliveryDryRun=false only after confirming:
+# - dailyDigestEnabled=true.
+# - This request targets your local API.
 # - Local SMTP is configured for MailHog.
-# Expected MailHog result:
-# - One digest email appears in MailHog inbox for the authenticated user.
-# Idempotency behavior:
-# - Re-running with the same digestDate + user will keep header key stable.
-# - The API should not create duplicate terminal delivery rows for the same digest:user key.
+# Expected MailHog result when @mailhogDeliveryDryRun=false:
+# - One digest email appears in MailHog inbox for {{authEmail}}.
+# Idempotency behavior after one successful real send:
+# - Re-running with the same digestDate + user keeps the header key stable.
+# - The API reports the duplicate skip and does not send a second MailHog email.
 POST {{apiBaseUrl}}/email/digest/send
 Content-Type: application/json
 Authorization: Bearer {{accessToken}}
 
 {
   "digestDate": "{{digestDate}}",
-  "dryRun": false
+  "dryRun": "{{mailhogDeliveryDryRun}}"
 }
 
 ### Optional production-like Resend example (DO NOT RUN by default)
 # Opt-in checklist before sending:
 # - Verified Resend domain exists.
-# - Local env exports production-like secrets.
+# - Production-like secrets are loaded from the local environment, not this file.
 # - You intentionally set dryRun=false.
-# Placeholder variable names (no real credentials):
+# Placeholder variable names only:
 #   SMTP_HOST=smtp.resend.com
 #   SMTP_PORT=587
 #   SMTP_USER=resend
 #   SMTP_PASS=<RESEND_API_KEY_FROM_ENV>
 #   EMAIL_FROM=TaskForge Notifications <notifications@YOUR_VERIFIED_DOMAIN>
-# Keep this request disabled/commented in shared demos to avoid accidental CI execution.
+# Keep this request disabled/commented in shared demos to avoid accidental CI or staging execution.
 # POST {{apiBaseUrl}}/email/digest/send
 # Content-Type: application/json
 # Authorization: Bearer {{accessToken}}
