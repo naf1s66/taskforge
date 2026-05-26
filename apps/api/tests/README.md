@@ -48,10 +48,11 @@ pnpm -C apps/api test
 - `auth.http`: register/login/logout/me auth smoke flow.
 - `tasks.http`: task CRUD + filters + board fetch/move requests.
 - `kanban.http`: focused board + tag list/create demo flows for QA and staging walkthroughs.
+- `email.http`: email preference, digest preview, and manual send (MailHog-first) verification flows.
 
 ### Environment variables
 
-All packs support variable-based hosts/tokens (for example `@apiBaseUrl` and `{{accessToken}}`) so you can replay requests without editing hard-coded URLs.
+All packs support variable-based hosts/tokens (for example `@apiBaseUrl` and `{{accessToken}}`) so you can replay requests without editing hard-coded URLs. The email pack also keeps SMTP examples placeholder-only (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`) so real Resend credentials stay in local environment variables.
 
 ### Import tips
 
