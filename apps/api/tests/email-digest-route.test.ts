@@ -108,6 +108,40 @@ describe('email digest routes', () => {
     expect(response.body).toEqual({ error: 'Too many requests, please try again later.' });
   });
 
+  it('enforces a stricter rate limit for manual sends and returns the delivery idempotency key', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true, dailyDigestTimezone: 'UTC' }) },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }));
+
+    const first = await request(app)
+      .post('/email/digest/send')
+      .send({ digestDate: '2026-05-21', dryRun: true })
+      .expect(200);
+    expect(first.headers['x-taskforge-idempotency-key']).toBe('digest:2026-05-21:user-1');
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ digestDate: '2026-05-21', userIds: ['user-1'] }));
+
+    await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(200);
+    await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(200);
+    await request(app).post('/email/digest/send').send({ digestDate: '2026-05-21', dryRun: true }).expect(429);
+  });
+
+  it('rejects unsupported manual send idempotency payload fields', async () => {
+    const prisma = {
+      task: { findMany: jest.fn().mockResolvedValue([]) },
+      emailPreference: { findUnique: jest.fn().mockResolvedValue({ dailyDigestEnabled: true, dailyDigestTimezone: 'UTC' }) },
+    } as unknown as PrismaClient;
+    const { app, run } = appWithUser(prisma, jest.fn().mockResolvedValue({ digestDate: '2026-05-21', attempted: 1 }));
+
+    await request(app)
+      .post('/email/digest/send')
+      .send({ digestDate: '2026-05-21', dryRun: true, idempotencyKey: 'manual-send-2026-05-21' })
+      .expect(400);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('returns a client error for an invalid stored digest timezone', async () => {
     const prisma = {
       task: { findMany: jest.fn().mockResolvedValue([]) },

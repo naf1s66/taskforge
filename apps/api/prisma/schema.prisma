@@ -170,4 +170,5 @@ enum NotificationDeliveryStatus {
   PENDING
   SENT
   FAILED
+  SKIPPED
 }

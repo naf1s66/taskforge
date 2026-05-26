@@ -8,12 +8,21 @@ import {
 } from '@prisma/client';
 
 import type { EmailAdapter } from '../email/types';
-import { renderDailyDigestTemplate } from '../email/templates';
+import { renderDailyDigestTemplate as defaultRenderDailyDigestTemplate } from '../email/templates';
+import {
+  classifyDeliveryFailure,
+  logDeliveryFinished,
+  sanitizeProviderResponse,
+  type ClassifiedDeliveryFailure,
+  type NotificationLogger,
+} from './delivery-observability';
 import { DailyDigestQueryService, localDateTimeToUtc } from './digest-query-service';
 
 export interface DailyDigestRunnerOptions {
   prisma: PrismaClient;
   emailAdapter: EmailAdapter;
+  logger?: NotificationLogger;
+  renderDailyDigestTemplate?: typeof defaultRenderDailyDigestTemplate;
 }
 
 export interface DailyDigestRunInput {
@@ -32,6 +41,7 @@ export interface DailyDigestRunResult {
   skipped: number;
   failed: number;
   budgetSkipped: number;
+  providerQuotaSkipped: number;
   duplicateSkipped: number;
   preferenceSkipped: number;
   noContentSkipped: number;
@@ -43,14 +53,18 @@ type DeliveryWithLatestAttempt = NotificationDelivery & {
 
 type ReserveAttemptResult =
   | { status: 'reserved'; attempt: NotificationDeliveryAttempt }
-  | { status: 'budget_exhausted' }
+  | { status: 'budget_exhausted'; attempt: NotificationDeliveryAttempt | null }
   | { status: 'duplicate' };
+
+const TEMPLATE_RENDER_FAILURE_CODE = 'TEMPLATE_RENDER_FAILED';
 
 export class DailyDigestRunner {
   private readonly queryService: DailyDigestQueryService;
+  private readonly logger: NotificationLogger;
 
   constructor(private readonly options: DailyDigestRunnerOptions) {
     this.queryService = new DailyDigestQueryService(options.prisma);
+    this.logger = options.logger ?? console;
   }
 
   async run(input: DailyDigestRunInput): Promise<DailyDigestRunResult> {
@@ -76,10 +90,12 @@ export class DailyDigestRunner {
     let skipped = 0;
     let failed = 0;
     let budgetSkipped = 0;
+    let providerQuotaSkipped = 0;
     let duplicateSkipped = 0;
     let preferenceSkipped = 0;
     let noContentSkipped = 0;
     let dryRunReserved = 0;
+    let providerQuotaHalt: ClassifiedDeliveryFailure | null = null;
 
     for (const user of users) {
       attempted += 1;
@@ -127,12 +143,6 @@ export class DailyDigestRunner {
         continue;
       }
 
-      const template = renderDailyDigestTemplate({
-        recipientEmail: recipient,
-        digestDate: input.digestDate,
-        digest,
-      });
-
       if (dryRun) {
         if (dryRunConsumedBudget + dryRunReserved >= sendLimit) {
           skipped += 1;
@@ -140,8 +150,52 @@ export class DailyDigestRunner {
           continue;
         }
 
+        this.options.renderDailyDigestTemplate?.({
+          recipientEmail: recipient,
+          digestDate: input.digestDate,
+          digest,
+        }) ?? defaultRenderDailyDigestTemplate({
+          recipientEmail: recipient,
+          digestDate: input.digestDate,
+          digest,
+        });
         dryRunReserved += 1;
         sent += 1;
+        continue;
+      }
+
+      if (providerQuotaHalt) {
+        const providerMetadata: Prisma.JsonObject = {
+          ...providerQuotaHalt.providerMetadata,
+          skipReason: 'provider_quota_exhausted',
+        };
+        const reservation = await reserveSkippedDeliveryAttempt({
+          prisma: this.options.prisma,
+          digestDate: input.digestDate,
+          userId: user.id,
+          recipient,
+          idempotencyKey,
+          errorCode: providerQuotaHalt.code,
+          errorMessage: 'Provider quota exhausted earlier in this digest run.',
+          providerMetadata,
+          provider: 'smtp',
+        });
+
+        if (reservation.status === 'duplicate') {
+          duplicateSkipped += 1;
+        } else {
+          providerQuotaSkipped += 1;
+        }
+        logDeliveryFinished(this.logger, {
+          notificationType: NotificationDeliveryType.DAILY_DIGEST,
+          userId: user.id,
+          deliveryStatus: NotificationDeliveryStatus.SKIPPED,
+          provider: 'smtp',
+          providerErrorCode: providerQuotaHalt.code,
+          retryable: false,
+          providerResponse: providerMetadata,
+        });
+        skipped += 1;
         continue;
       }
 
@@ -155,6 +209,19 @@ export class DailyDigestRunner {
       });
 
       if (reservation.status === 'budget_exhausted') {
+        logDeliveryFinished(this.logger, {
+          notificationType: NotificationDeliveryType.DAILY_DIGEST,
+          userId: user.id,
+          deliveryStatus: NotificationDeliveryStatus.SKIPPED,
+          provider: reservation.attempt?.provider ?? 'system',
+          providerErrorCode: 'BUDGET_SKIPPED',
+          retryable: false,
+          providerResponse: {
+            skipReason: 'budget_exhausted',
+            digestDate: input.digestDate,
+            sendLimit,
+          },
+        });
         skipped += 1;
         budgetSkipped += 1;
         continue;
@@ -166,30 +233,73 @@ export class DailyDigestRunner {
         continue;
       }
 
+      const template = await this.renderTemplateForAttempt({
+        attemptId: reservation.attempt.id,
+        userId: user.id,
+        provider: reservation.attempt.provider,
+        recipient,
+        digestDate: input.digestDate,
+        digest,
+      });
+      if (!template) {
+        failed += 1;
+        continue;
+      }
+
+      let providerResponse: Awaited<ReturnType<EmailAdapter['sendMail']>>;
       try {
-        await this.options.emailAdapter.sendMail({
+        providerResponse = await this.options.emailAdapter.sendMail({
           to: recipient,
           subject: template.subject,
           text: template.text,
           html: template.html,
         });
-
-        await this.options.prisma.notificationDeliveryAttempt.update({
-          where: { id: reservation.attempt.id },
-          data: { status: NotificationDeliveryStatus.SENT, deliveredAt: new Date() },
-        });
-        sent += 1;
       } catch (error) {
+        const failure = classifyDeliveryFailure(error);
         await this.options.prisma.notificationDeliveryAttempt.update({
           where: { id: reservation.attempt.id },
           data: {
             status: NotificationDeliveryStatus.FAILED,
-            errorCode: 'SMTP_SEND_FAILED',
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorCode: failure.code,
+            errorMessage: failure.message,
+            providerMetadata: failure.providerMetadata,
           },
         });
+        logDeliveryFinished(this.logger, {
+          notificationType: NotificationDeliveryType.DAILY_DIGEST,
+          userId: user.id,
+          deliveryStatus: NotificationDeliveryStatus.FAILED,
+          provider: reservation.attempt.provider,
+          providerErrorCode: failure.code,
+          retryable: failure.retryable,
+          providerResponse: failure.providerMetadata,
+        });
         failed += 1;
+        if (failure.code === 'PROVIDER_QUOTA_EXHAUSTED') {
+          providerQuotaHalt = failure;
+        }
+        continue;
       }
+
+      const providerMetadata = sanitizeProviderResponse(providerResponse);
+      await this.options.prisma.notificationDeliveryAttempt.update({
+        where: { id: reservation.attempt.id },
+        data: {
+          status: NotificationDeliveryStatus.SENT,
+          deliveredAt: new Date(),
+          providerMessageId: providerResponse?.providerMessageId ?? null,
+          ...(providerMetadata ? { providerMetadata } : {}),
+        },
+      });
+      logDeliveryFinished(this.logger, {
+        notificationType: NotificationDeliveryType.DAILY_DIGEST,
+        userId: user.id,
+        deliveryStatus: NotificationDeliveryStatus.SENT,
+        provider: reservation.attempt.provider,
+        providerMessageId: providerResponse?.providerMessageId ?? null,
+        providerResponse: providerMetadata,
+      });
+      sent += 1;
     }
 
     return {
@@ -199,10 +309,49 @@ export class DailyDigestRunner {
       skipped,
       failed,
       budgetSkipped,
+      providerQuotaSkipped,
       duplicateSkipped,
       preferenceSkipped,
       noContentSkipped,
     };
+  }
+
+  private async renderTemplateForAttempt(input: {
+    attemptId: string;
+    userId: string;
+    provider: string;
+    recipient: string;
+    digestDate: string;
+    digest: Parameters<typeof defaultRenderDailyDigestTemplate>[0]['digest'];
+  }): Promise<ReturnType<typeof defaultRenderDailyDigestTemplate> | null> {
+    try {
+      return (this.options.renderDailyDigestTemplate ?? defaultRenderDailyDigestTemplate)({
+        recipientEmail: input.recipient,
+        digestDate: input.digestDate,
+        digest: input.digest,
+      });
+    } catch (error) {
+      const failure = classifyDeliveryFailure(error, { code: TEMPLATE_RENDER_FAILURE_CODE, retryable: false });
+      await this.options.prisma.notificationDeliveryAttempt.update({
+        where: { id: input.attemptId },
+        data: {
+          status: NotificationDeliveryStatus.FAILED,
+          errorCode: failure.code,
+          errorMessage: failure.message,
+          providerMetadata: failure.providerMetadata,
+        },
+      });
+      logDeliveryFinished(this.logger, {
+        notificationType: NotificationDeliveryType.DAILY_DIGEST,
+        userId: input.userId,
+        deliveryStatus: NotificationDeliveryStatus.FAILED,
+        provider: input.provider,
+        providerErrorCode: failure.code,
+        retryable: failure.retryable,
+        providerResponse: failure.providerMetadata,
+      });
+      return null;
+    }
   }
 }
 
@@ -267,13 +416,23 @@ function normalizeSendLimit(sendLimit: number | undefined): number {
 async function countConsumedBudget(prisma: PrismaClient | Prisma.TransactionClient, digestDate: string): Promise<number> {
   return prisma.notificationDeliveryAttempt.count({
     where: {
-      status: {
-        in: [
-          NotificationDeliveryStatus.PENDING,
-          NotificationDeliveryStatus.SENT,
-          NotificationDeliveryStatus.FAILED,
-        ],
-      },
+      OR: [
+        {
+          status: {
+            in: [
+              NotificationDeliveryStatus.PENDING,
+              NotificationDeliveryStatus.SENT,
+            ],
+          },
+        },
+        {
+          status: NotificationDeliveryStatus.FAILED,
+          OR: [
+            { errorCode: null },
+            { errorCode: { not: TEMPLATE_RENDER_FAILURE_CODE } },
+          ],
+        },
+      ],
       delivery: {
         type: NotificationDeliveryType.DAILY_DIGEST,
         idempotencyKey: { startsWith: `digest:${digestDate}:` },
@@ -311,7 +470,17 @@ async function reserveDeliveryAttempt(input: {
 
     const consumedBudget = await countConsumedBudget(tx, input.digestDate);
     if (consumedBudget >= input.sendLimit) {
-      return { status: 'budget_exhausted' };
+      const attempt = await createSkippedAttempt(tx, delivery, {
+        errorCode: 'BUDGET_SKIPPED',
+        errorMessage: 'Configured daily email send budget exhausted before this digest could be sent.',
+        provider: 'system',
+        providerMetadata: {
+          skipReason: 'budget_exhausted',
+          digestDate: input.digestDate,
+          sendLimit: input.sendLimit,
+        },
+      });
+      return { status: 'budget_exhausted', attempt };
     }
 
     const nextAttempt = (delivery.attempts[0]?.attemptNumber ?? 0) + 1;
@@ -327,6 +496,77 @@ async function reserveDeliveryAttempt(input: {
     });
 
     return { status: 'reserved', attempt };
+  });
+}
+
+async function reserveSkippedDeliveryAttempt(input: {
+  prisma: PrismaClient;
+  digestDate: string;
+  userId: string;
+  recipient: string;
+  idempotencyKey: string;
+  errorCode: string;
+  errorMessage: string;
+  providerMetadata: Prisma.JsonObject;
+  provider: string;
+}): Promise<ReserveAttemptResult> {
+  return input.prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`digest-budget:${input.digestDate}`}))`;
+
+    const delivery = await tx.notificationDelivery.upsert({
+      where: { idempotencyKey: input.idempotencyKey },
+      create: {
+        userId: input.userId,
+        type: NotificationDeliveryType.DAILY_DIGEST,
+        recipient: input.recipient,
+        idempotencyKey: input.idempotencyKey,
+      },
+      update: { recipient: input.recipient },
+      include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
+    });
+
+    if (isTerminalOrInFlightDuplicate(delivery)) {
+      return { status: 'duplicate' };
+    }
+
+    const attempt = await createSkippedAttempt(tx, delivery, {
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      provider: input.provider,
+      providerMetadata: input.providerMetadata,
+    });
+
+    return attempt ? { status: 'reserved', attempt } : { status: 'duplicate' };
+  });
+}
+
+async function createSkippedAttempt(
+  tx: Prisma.TransactionClient,
+  delivery: DeliveryWithLatestAttempt,
+  input: {
+    errorCode: string;
+    errorMessage: string;
+    provider: string;
+    providerMetadata: Prisma.JsonObject;
+  },
+): Promise<NotificationDeliveryAttempt | null> {
+  const latestAttempt = delivery.attempts[0];
+  if (latestAttempt?.status === NotificationDeliveryStatus.SKIPPED && latestAttempt.errorCode === input.errorCode) {
+    return null;
+  }
+
+  return tx.notificationDeliveryAttempt.create({
+    data: {
+      deliveryId: delivery.id,
+      attemptNumber: (latestAttempt?.attemptNumber ?? 0) + 1,
+      type: NotificationDeliveryType.DAILY_DIGEST,
+      recipient: delivery.recipient,
+      provider: input.provider,
+      status: NotificationDeliveryStatus.SKIPPED,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      providerMetadata: input.providerMetadata,
+    },
   });
 }
 

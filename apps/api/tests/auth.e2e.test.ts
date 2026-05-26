@@ -126,8 +126,12 @@ describe('Auth API', () => {
     expect(deliveries[0].attempts[0]).toEqual(
       expect.objectContaining({
         status: 'FAILED',
-        errorCode: 'Error',
+        errorCode: 'PROVIDER_TRANSIENT_FAILURE',
         errorMessage: 'SMTP unavailable',
+        providerMetadata: expect.objectContaining({
+          providerClassifiedCode: 'PROVIDER_TRANSIENT_FAILURE',
+          messageSnippet: 'SMTP unavailable',
+        }),
       }),
     );
   });

@@ -35,7 +35,7 @@ When the configured production send budget is exhausted, skip remaining eligible
 Operational requirements:
 
 - Treat budget exhaustion as a controlled skip outcome, not as an unbounded retry condition.
-- Record skipped delivery attempts with an explicit budget-skipped status or reason.
+- Record skipped delivery attempts with the explicit `SKIPPED` status and a budget-skipped reason.
 - Include budget-skipped counts in job responses, logs, and rollout review notes.
 - Do not aggressively retry quota or budget failures in the same run; let the next scheduled run decide whether delivery should resume.
 - Keep `EMAIL_DAILY_SEND_LIMIT` below the provider limit on the free plan unless a paid plan or higher quota has been intentionally configured.

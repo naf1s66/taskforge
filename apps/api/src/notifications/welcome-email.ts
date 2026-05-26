@@ -1,9 +1,15 @@
-import { Prisma, type PrismaClient } from '@prisma/client';
+import { NotificationDeliveryStatus, NotificationDeliveryType, Prisma, type PrismaClient } from '@prisma/client';
 
 import { getSmtpConfig } from '../config/smtp';
 import { NodemailerEmailAdapter } from '../email/nodemailer-adapter';
 import { renderWelcomeTemplate } from '../email/templates';
 import type { EmailAdapter } from '../email/types';
+import {
+  classifyDeliveryFailure,
+  logDeliveryFinished,
+  sanitizeProviderResponse,
+  type NotificationLogger,
+} from './delivery-observability';
 
 export interface WelcomeEmailUser {
   id: string;
@@ -16,7 +22,7 @@ export interface WelcomeEmailServiceOptions {
   deliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   pendingAttemptStaleAfterMs?: number;
   appName?: string;
-  logger?: Pick<Console, 'error' | 'info'>;
+  logger?: NotificationLogger;
 }
 
 export interface WelcomeEmailResult {
@@ -26,7 +32,7 @@ export interface WelcomeEmailResult {
 
 export type WelcomeEmailDeliveryDispatcher = (task: () => Promise<void>) => void | Promise<void>;
 
-const WELCOME_TYPE = 'WELCOME';
+const WELCOME_TYPE = NotificationDeliveryType.WELCOME;
 const DEFAULT_PENDING_ATTEMPT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 function getWelcomeIdempotencyKey(userId: string): string {
@@ -55,7 +61,7 @@ function isPendingAttemptStale(attemptedAt: Date, staleAfterMs: number, now: Dat
 
 export class WelcomeEmailService {
   private readonly appName: string;
-  private readonly logger: Pick<Console, 'error' | 'info'>;
+  private readonly logger: NotificationLogger;
   private readonly deliveryDispatcher: WelcomeEmailDeliveryDispatcher;
   private readonly pendingAttemptStaleAfterMs: number;
 
@@ -123,7 +129,7 @@ export class WelcomeEmailService {
       await this.options.prisma.notificationDeliveryAttempt.update({
         where: { id: latestAttempt.id },
         data: {
-          status: 'FAILED',
+          status: NotificationDeliveryStatus.FAILED,
           errorCode: 'StalePendingAttempt',
           errorMessage: 'Pending welcome email attempt expired before reaching a terminal status.',
         },
@@ -157,7 +163,7 @@ export class WelcomeEmailService {
           attemptNumber,
           type: WELCOME_TYPE,
           recipient,
-          status: 'PENDING',
+          status: NotificationDeliveryStatus.PENDING,
           provider: 'smtp',
         },
       })
@@ -179,7 +185,7 @@ export class WelcomeEmailService {
     }
 
     await this.deliveryDispatcher(async () => {
-      await this.deliverWelcomeEmailAttempt(user, recipient, delivery.id, attempt.id);
+      await this.deliverWelcomeEmailAttempt(user, recipient, attempt.id);
     });
 
     return { deliveryId: delivery.id, status: 'queued' };
@@ -188,49 +194,85 @@ export class WelcomeEmailService {
   private async deliverWelcomeEmailAttempt(
     user: WelcomeEmailUser,
     recipient: string,
-    deliveryId: string,
     attemptId: string,
   ): Promise<void> {
+    const emailAdapter = this.options.emailAdapter ?? createDefaultEmailAdapter();
+    let message;
     try {
-      const emailAdapter = this.options.emailAdapter ?? createDefaultEmailAdapter();
-      const message = renderWelcomeTemplate({ appName: this.appName, recipientEmail: recipient });
+      message = renderWelcomeTemplate({ appName: this.appName, recipientEmail: recipient });
+    } catch (error) {
+      await this.recordFailedWelcomeAttempt({
+        userId: user.id,
+        attemptId,
+        provider: 'smtp',
+        failure: classifyDeliveryFailure(error, { code: 'TEMPLATE_RENDER_FAILED', retryable: false }),
+      });
+      return;
+    }
 
-      await emailAdapter.sendMail({
+    let providerResponse: Awaited<ReturnType<EmailAdapter['sendMail']>>;
+    try {
+      providerResponse = await emailAdapter.sendMail({
         to: recipient,
         subject: message.subject,
         text: message.text,
         html: message.html,
       });
-
-      await this.options.prisma.notificationDeliveryAttempt.update({
-        where: { id: attemptId },
-        data: {
-          status: 'SENT',
-          deliveredAt: new Date(),
-        },
-      });
-
-      this.logger.info('[notifications] Welcome email sent', {
-        userId: user.id,
-        deliveryId,
-      });
     } catch (error) {
-      const errorMessage = resolveErrorMessage(error);
-
-      await this.options.prisma.notificationDeliveryAttempt.update({
-        where: { id: attemptId },
-        data: {
-          status: 'FAILED',
-          errorCode: error instanceof Error ? error.name : 'Error',
-          errorMessage,
-        },
-      });
-
-      this.logger.error('[notifications] Welcome email failed', {
+      await this.recordFailedWelcomeAttempt({
         userId: user.id,
-        deliveryId,
-        error: errorMessage,
+        attemptId,
+        provider: 'smtp',
+        failure: classifyDeliveryFailure(error),
       });
+      return;
     }
+
+    const providerMetadata = sanitizeProviderResponse(providerResponse);
+    await this.options.prisma.notificationDeliveryAttempt.update({
+      where: { id: attemptId },
+      data: {
+        status: NotificationDeliveryStatus.SENT,
+        deliveredAt: new Date(),
+        providerMessageId: providerResponse?.providerMessageId ?? null,
+        ...(providerMetadata ? { providerMetadata } : {}),
+      },
+    });
+
+    logDeliveryFinished(this.logger, {
+      notificationType: NotificationDeliveryType.WELCOME,
+      userId: user.id,
+      deliveryStatus: NotificationDeliveryStatus.SENT,
+      provider: 'smtp',
+      providerMessageId: providerResponse?.providerMessageId ?? null,
+      providerResponse: providerMetadata,
+    });
+  }
+
+  private async recordFailedWelcomeAttempt(input: {
+    userId: string;
+    attemptId: string;
+    provider: string;
+    failure: ReturnType<typeof classifyDeliveryFailure>;
+  }): Promise<void> {
+    await this.options.prisma.notificationDeliveryAttempt.update({
+      where: { id: input.attemptId },
+      data: {
+        status: NotificationDeliveryStatus.FAILED,
+        errorCode: input.failure.code,
+        errorMessage: input.failure.message,
+        providerMetadata: input.failure.providerMetadata,
+      },
+    });
+
+    logDeliveryFinished(this.logger, {
+      notificationType: NotificationDeliveryType.WELCOME,
+      userId: input.userId,
+      deliveryStatus: NotificationDeliveryStatus.FAILED,
+      provider: input.provider,
+      providerErrorCode: input.failure.code,
+      retryable: input.failure.retryable,
+      providerResponse: input.failure.providerMetadata,
+    });
   }
 }

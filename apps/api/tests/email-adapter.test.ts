@@ -2,8 +2,13 @@ import { NodemailerEmailAdapter } from '../src/email/nodemailer-adapter';
 import { renderDailyDigestTemplate, renderWelcomeTemplate } from '../src/email/templates';
 
 describe('NodemailerEmailAdapter', () => {
-  it('creates an SMTP transport and sends typed mail input', async () => {
-    const sendMail = jest.fn().mockResolvedValue(undefined);
+  it('creates an SMTP transport and returns sanitized provider metadata', async () => {
+    const sendMail = jest.fn().mockResolvedValue({
+      messageId: '<provider-message-id>',
+      accepted: ['user@example.test'],
+      rejected: [],
+      response: '250 queued',
+    });
     const createTransport = jest.fn(() => ({ sendMail }));
     const adapter = new NodemailerEmailAdapter(
       {
@@ -14,7 +19,7 @@ describe('NodemailerEmailAdapter', () => {
       createTransport,
     );
 
-    await adapter.sendMail({
+    const result = await adapter.sendMail({
       to: 'user@example.test',
       subject: 'Subject',
       text: 'Plain text',
@@ -33,6 +38,14 @@ describe('NodemailerEmailAdapter', () => {
       subject: 'Subject',
       text: 'Plain text',
       html: '<p>HTML</p>',
+    });
+    expect(result).toEqual({
+      providerMessageId: '<provider-message-id>',
+      providerMetadata: {
+        acceptedCount: 1,
+        rejectedCount: 0,
+        response: '250 queued',
+      },
     });
   });
 

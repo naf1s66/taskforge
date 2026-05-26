@@ -1,10 +1,12 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type SendMailOptions } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
-import type { EmailAdapter, SendMailInput } from './types';
+import type { EmailAdapter, EmailSendResult, SendMailInput } from './types';
 import type { SmtpConfig } from '../config/smtp';
 
-type MailTransporter = Pick<nodemailer.Transporter, 'sendMail'>;
+type MailTransporter = {
+  sendMail(mailOptions: SendMailOptions): Promise<unknown>;
+};
 type TransportFactory = (options: SMTPTransport.Options) => MailTransporter;
 
 export class NodemailerEmailAdapter implements EmailAdapter {
@@ -22,13 +24,37 @@ export class NodemailerEmailAdapter implements EmailAdapter {
     });
   }
 
-  async sendMail(message: SendMailInput): Promise<void> {
-    await this.transporter.sendMail({
+  async sendMail(message: SendMailInput): Promise<EmailSendResult> {
+    const result = await this.transporter.sendMail({
       from: message.from ?? this.smtpConfig.from,
       to: message.to,
       subject: message.subject,
       text: message.text,
       html: message.html,
     });
+    return sanitizeSendResult(result);
   }
+}
+
+function sanitizeSendResult(value: unknown): EmailSendResult {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  const providerMetadata: Record<string, unknown> = {};
+  if (Array.isArray(record.accepted)) {
+    providerMetadata.acceptedCount = record.accepted.length;
+  }
+  if (Array.isArray(record.rejected)) {
+    providerMetadata.rejectedCount = record.rejected.length;
+  }
+  if (typeof record.response === 'string') {
+    providerMetadata.response = record.response.slice(0, 512);
+  }
+
+  return {
+    providerMessageId: typeof record.messageId === 'string' ? record.messageId : null,
+    providerMetadata: Object.keys(providerMetadata).length > 0 ? providerMetadata : null,
+  };
 }

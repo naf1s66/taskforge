@@ -4,14 +4,14 @@
 - Make email delivery diagnosable without leaking sensitive content.
 - Add safeguards around repeated sends, provider failures, and manual trigger abuse.
 
-**Status:** New.
+**Status:** Completed.
 
 ## Acceptance Criteria
-- [ ] Email sends emit structured logs with notification type, user id, delivery status, and provider response metadata.
-- [ ] Delivery history stores failure details safely without full rendered email bodies.
-- [ ] Manual send endpoints enforce rate limits and idempotency.
-- [ ] Provider quota and rate-limit failures are classified separately from template, auth, and recipient failures.
-- [ ] Retry behavior is documented and tested for transient provider failures.
+- [x] Email sends emit structured logs with notification type, user id, delivery status, and provider response metadata.
+- [x] Delivery history stores failure details safely without full rendered email bodies.
+- [x] Manual send endpoints enforce rate limits and idempotency.
+- [x] Provider quota and rate-limit failures are classified separately from template, auth, and recipient failures.
+- [x] Retry behavior is documented and tested for transient provider failures.
 
 ## Manual Setup Required
 - Configure automated alerts for Resend delivery failures, provider quota exhaustion, and provider rate-limit exhaustion.
@@ -28,3 +28,11 @@
 - Avoid logging recipient content beyond the minimum needed for debugging.
 - Prefer explicit status transitions over ambiguous boolean sent flags.
 - Do not retry quota failures aggressively; record them and let the next scheduled run decide whether to send.
+
+## Completion Notes
+- Added shared email delivery observability for welcome and daily digest sends.
+- Provider send results store only safe metadata: provider message id, accepted/rejected counts, and capped provider response text.
+- Delivery failures are classified as `PROVIDER_QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMITED`, `PROVIDER_AUTH_FAILED`, `TEMPLATE_RENDER_FAILED`, `RECIPIENT_REJECTED`, or `PROVIDER_TRANSIENT_FAILURE`.
+- Configured budget exhaustion and provider quota halts create auditable `SKIPPED` delivery attempts.
+- Manual digest sends use a stricter authenticated-user rate limit and return the logical `x-taskforge-idempotency-key`.
+- Production review steps are documented in `docs/prod/email-observability-runbook.md`.

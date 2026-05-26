@@ -18,6 +18,7 @@ import type { EmailAdapter } from './email/types';
 import { DailyDigestRunner } from './notifications/daily-digest-runner';
 import { createJobsRouter } from './routes/jobs';
 import { createEmailDigestRouter } from './routes/email-digest';
+import { getHttpServerConfig } from './config/http';
 
 const EmailPreferenceUpdateSchema = z.object({
   dailyDigestEnabled: z.boolean(),
@@ -40,6 +41,10 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions = {}) {
   const app = express();
+  const httpConfig = getHttpServerConfig();
+  if (httpConfig.trustProxy !== undefined) {
+    app.set('trust proxy', httpConfig.trustProxy);
+  }
 
   app.use(express.json());
   app.use(cookieParser());

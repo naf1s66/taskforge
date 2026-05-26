@@ -9,6 +9,11 @@ export interface SendMailInput extends EmailMessage {
   from?: string;
 }
 
+export interface EmailSendResult {
+  providerMessageId?: string | null;
+  providerMetadata?: Record<string, unknown> | null;
+}
+
 export interface EmailAdapter {
-  sendMail(message: SendMailInput): Promise<void>;
+  sendMail(message: SendMailInput): Promise<EmailSendResult | void>;
 }

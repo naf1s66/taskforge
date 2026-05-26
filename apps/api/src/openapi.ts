@@ -609,6 +609,7 @@ const dailyDigestPreviewResponse: OpenAPIV3.SchemaObject = {
 
 const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
   type: 'object',
+  additionalProperties: false,
   properties: {
     digestDate: {
       type: 'string',
@@ -646,6 +647,7 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
     skipped: { type: 'integer', minimum: 0 },
     failed: { type: 'integer', minimum: 0 },
     budgetSkipped: { type: 'integer', minimum: 0 },
+    providerQuotaSkipped: { type: 'integer', minimum: 0 },
     duplicateSkipped: { type: 'integer', minimum: 0 },
     preferenceSkipped: { type: 'integer', minimum: 0 },
     noContentSkipped: { type: 'integer', minimum: 0 },
@@ -657,6 +659,7 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
     'skipped',
     'failed',
     'budgetSkipped',
+    'providerQuotaSkipped',
     'duplicateSkipped',
     'preferenceSkipped',
     'noContentSkipped',
@@ -668,6 +671,7 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
     skipped: 0,
     failed: 0,
     budgetSkipped: 0,
+    providerQuotaSkipped: 0,
     duplicateSkipped: 0,
     preferenceSkipped: 0,
     noContentSkipped: 0,
@@ -1163,6 +1167,12 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           '200': {
             description: 'Digest run completed.',
+            headers: {
+              'x-taskforge-idempotency-key': {
+                description: 'Logical delivery idempotency key used to deduplicate the authenticated user and digest date.',
+                schema: { type: 'string', example: 'digest:2026-05-21:4cbb6f43-6c94-4f76-a36a-8f9f45770b8f' },
+              },
+            },
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },

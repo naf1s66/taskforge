@@ -1,0 +1,50 @@
+export type TrustProxySetting = boolean | number | string | string[];
+
+export interface HttpServerConfig {
+  trustProxy?: TrustProxySetting;
+}
+
+const TRUE_VALUES = new Set(['true', 'yes', 'on']);
+const FALSE_VALUES = new Set(['false', 'no', 'off']);
+
+export function parseTrustProxySetting(rawValue: string | undefined): TrustProxySetting | undefined {
+  const value = rawValue?.trim();
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.toLowerCase();
+  if (TRUE_VALUES.has(normalized)) {
+    return true;
+  }
+
+  if (FALSE_VALUES.has(normalized)) {
+    return false;
+  }
+
+  if (/^\d+$/.test(value)) {
+    const hopCount = Number.parseInt(value, 10);
+    if (!Number.isSafeInteger(hopCount)) {
+      throw new Error(`TRUST_PROXY is too large. Received: ${rawValue}`);
+    }
+
+    return hopCount;
+  }
+
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) {
+    throw new Error(`TRUST_PROXY must be a non-negative integer, boolean, or proxy list. Received: ${rawValue}`);
+  }
+
+  const proxyList = value.split(',').map(item => item.trim());
+  if (proxyList.some(item => item.length === 0)) {
+    throw new Error(`TRUST_PROXY contains an empty proxy entry. Received: ${rawValue}`);
+  }
+
+  return proxyList.length === 1 ? proxyList[0] : proxyList;
+}
+
+export function getHttpServerConfig(env: NodeJS.ProcessEnv = process.env): HttpServerConfig {
+  return {
+    trustProxy: parseTrustProxySetting(env.TRUST_PROXY),
+  };
+}
