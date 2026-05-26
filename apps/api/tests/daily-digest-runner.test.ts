@@ -290,6 +290,53 @@ describe('DailyDigestRunner', () => {
     });
   });
 
+  it('does not count template rendering failures against the send budget', async () => {
+    const prisma = getTestPrisma();
+    await createDigestUser({ email: 'template-budget-a@taskforge.dev' });
+    await createDigestUser({ email: 'template-budget-b@taskforge.dev' });
+    const sendMail = jest.fn();
+    let renderCount = 0;
+
+    const runner = new DailyDigestRunner({
+      prisma,
+      emailAdapter: { sendMail },
+      renderDailyDigestTemplate: () => {
+        renderCount += 1;
+        if (renderCount === 1) {
+          throw new Error('template render failed before provider send');
+        }
+
+        return {
+          subject: 'Digest',
+          text: 'Digest body',
+          html: '<p>Digest body</p>',
+        };
+      },
+    });
+
+    const result = await runner.run({ digestDate: '2026-05-19', sendLimit: 1 });
+    const attempts = await prisma.notificationDeliveryAttempt.findMany({
+      orderBy: { attemptedAt: 'asc' },
+      select: { status: true, errorCode: true },
+    });
+
+    expect(result.failed).toBe(1);
+    expect(result.sent).toBe(1);
+    expect(result.budgetSkipped).toBe(0);
+    expect(renderCount).toBe(2);
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        status: NotificationDeliveryStatus.FAILED,
+        errorCode: 'TEMPLATE_RENDER_FAILED',
+      }),
+      expect.objectContaining({
+        status: NotificationDeliveryStatus.SENT,
+        errorCode: null,
+      }),
+    ]));
+  });
+
   it('classifies provider auth and recipient failures separately', async () => {
     const prisma = getTestPrisma();
     await createDigestUser({ email: 'auth-classification@taskforge.dev' });

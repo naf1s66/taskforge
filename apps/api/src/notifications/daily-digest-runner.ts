@@ -56,6 +56,8 @@ type ReserveAttemptResult =
   | { status: 'budget_exhausted'; attempt: NotificationDeliveryAttempt | null }
   | { status: 'duplicate' };
 
+const TEMPLATE_RENDER_FAILURE_CODE = 'TEMPLATE_RENDER_FAILED';
+
 export class DailyDigestRunner {
   private readonly queryService: DailyDigestQueryService;
   private readonly logger: NotificationLogger;
@@ -329,7 +331,7 @@ export class DailyDigestRunner {
         digest: input.digest,
       });
     } catch (error) {
-      const failure = classifyDeliveryFailure(error, { code: 'TEMPLATE_RENDER_FAILED', retryable: false });
+      const failure = classifyDeliveryFailure(error, { code: TEMPLATE_RENDER_FAILURE_CODE, retryable: false });
       await this.options.prisma.notificationDeliveryAttempt.update({
         where: { id: input.attemptId },
         data: {
@@ -414,13 +416,23 @@ function normalizeSendLimit(sendLimit: number | undefined): number {
 async function countConsumedBudget(prisma: PrismaClient | Prisma.TransactionClient, digestDate: string): Promise<number> {
   return prisma.notificationDeliveryAttempt.count({
     where: {
-      status: {
-        in: [
-          NotificationDeliveryStatus.PENDING,
-          NotificationDeliveryStatus.SENT,
-          NotificationDeliveryStatus.FAILED,
-        ],
-      },
+      OR: [
+        {
+          status: {
+            in: [
+              NotificationDeliveryStatus.PENDING,
+              NotificationDeliveryStatus.SENT,
+            ],
+          },
+        },
+        {
+          status: NotificationDeliveryStatus.FAILED,
+          OR: [
+            { errorCode: null },
+            { errorCode: { not: TEMPLATE_RENDER_FAILURE_CODE } },
+          ],
+        },
+      ],
       delivery: {
         type: NotificationDeliveryType.DAILY_DIGEST,
         idempotencyKey: { startsWith: `digest:${digestDate}:` },
