@@ -6,7 +6,9 @@
 @mailhogDeliveryDryRun = true
 
 # Email HTTP pack (safe by default)
-# 1) Start local services with `make up`, then run `make seed`.
+# 1) Start local services with `make up`, then seed inside the API container:
+#    `docker compose -f infra/docker-compose.yml exec api pnpm prisma migrate deploy`
+#    `docker compose -f infra/docker-compose.yml exec api pnpm tsx prisma/seed.ts`
 # 2) The seed creates a verified demo user plus one deterministic digest task for @digestDate.
 # 3) If SEED_USER_PASSWORD is overridden, update @authPassword before logging in.
 # 4) Dockerized local SMTP uses MailHog (SMTP_HOST=mailhog, SMTP_PORT=1025).

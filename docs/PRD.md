@@ -46,6 +46,8 @@ model User {
   updatedAt     DateTime @updatedAt
   tasks         Task[]
   tags          Tag[]
+  emailPreference        EmailPreference?
+  notificationDeliveries NotificationDelivery[]
 }
 
 model Task {
@@ -87,13 +89,63 @@ model TaskTag {
   @@index([userId])
 }
 
+model EmailPreference {
+  userId              String   @id @db.Uuid
+  welcomeEmailEnabled Boolean  @default(true)
+  dailyDigestEnabled  Boolean  @default(false)
+  dailyDigestHourUtc  Int?
+  dailyDigestTimezone String   @default("UTC")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationDelivery {
+  id             String                        @id @default(uuid()) @db.Uuid
+  userId         String                        @db.Uuid
+  idempotencyKey String                        @unique
+  type           NotificationDeliveryType
+  recipient      String
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  user           User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts       NotificationDeliveryAttempt[]
+
+  @@index([userId, type])
+}
+
+model NotificationDeliveryAttempt {
+  id                String                     @id @default(uuid()) @db.Uuid
+  deliveryId        String                     @db.Uuid
+  attemptNumber     Int
+  type              NotificationDeliveryType
+  recipient         String
+  status            NotificationDeliveryStatus
+  provider          String
+  providerMessageId String?
+  providerMetadata  Json?
+  errorCode         String?
+  errorMessage      String?
+  attemptedAt       DateTime                   @default(now())
+  deliveredAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  delivery          NotificationDelivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([status, attemptedAt])
+}
+
 enum TaskStatus { TODO IN_PROGRESS DONE }
 enum TaskPriority { LOW MEDIUM HIGH }
+enum NotificationDeliveryType { WELCOME DAILY_DIGEST }
+enum NotificationDeliveryStatus { PENDING SENT FAILED SKIPPED }
 ```
 
 ## API (v1)
 - `GET /api/taskforge/v1/health`
 - `GET /api/taskforge/v1/me`
+- `PATCH /api/taskforge/v1/me/email-preferences`
 - `GET /api/taskforge/v1/tasks?status=&priority=&tag=&q=&dueFrom=&dueTo=&page=&pageSize=`
 - `POST /api/taskforge/v1/tasks`
 - `PATCH /api/taskforge/v1/tasks/:id`
@@ -102,6 +154,11 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - `PATCH /api/taskforge/v1/tasks/board/move`
 - `GET /api/taskforge/v1/tags`
 - `POST /api/taskforge/v1/tags`
+- `GET /api/taskforge/v1/email/digest/preview?timezone=&digestDate=&dueSoonDays=&recentlyUpdatedDays=&maxTasksPerGroup=`
+- `POST /api/taskforge/v1/email/digest/send`
+- `GET /api/taskforge/v1/jobs/digest?digestDate=&dryRun=&sendLimit=&digestHourUtc=`
+- `POST /api/taskforge/v1/jobs/digest`
+- Web cron proxy: `GET /api/cron/digest`
 - Docs: `GET /api/taskforge/docs`
 - OpenAPI reference: [`docs/openapi.json`](./openapi.json)
 

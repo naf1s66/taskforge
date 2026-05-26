@@ -150,6 +150,7 @@ Reusable HTTP request packs live in `apps/api/tests/`:
 - `auth.http` (auth smoke flows)
 - `tasks.http` (task CRUD and filters)
 - `kanban.http` (board fetch/move + tag list/create)
+- `email.http` (seeded email auth, preferences, digest preview, dry-run send, and guarded MailHog delivery)
 
 Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`) so the same files run against local, dev, and staging environments.
 
@@ -206,7 +207,7 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md`.
+- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
 - Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
@@ -229,7 +230,9 @@ Task data persists via Prisma. Run migrations before exercising the API in any e
 - `SMTP_USER=resend`
 - `SMTP_PASS=<RESEND_API_KEY>`
 - `EMAIL_FROM=<verified sender on the Resend-verified domain>`
-- `EMAIL_DAILY_SEND_LIMIT=90` on Resend free tier (conservative buffer below the nominal daily cap)
+- `EMAIL_DAILY_SEND_LIMIT=90` on Resend free tier (conservative buffer below the 100-email daily cap)
+
+Resend's free transactional plan is currently documented as 100 emails/day and 3,000 emails/month. Sent and received messages count toward quota, and multiple `To`, `CC`, or `BCC` recipients count separately, so TaskForge keeps the default application budget below the full daily provider cap.
 
 Also configure:
 - API: `DIGEST_JOB_SECRET`
@@ -245,8 +248,10 @@ Also configure:
 1. Start infra and seed data:
    ```bash
    make up
-   make seed
+   docker compose -f infra/docker-compose.yml exec api pnpm prisma migrate deploy
+   docker compose -f infra/docker-compose.yml exec api pnpm tsx prisma/seed.ts
    ```
+   The Docker exec form uses the container's `DATABASE_URL` (`db:5432`) and avoids host/compose credential mismatches. If you intentionally run Prisma from the host, point `DATABASE_URL` at `localhost:5432` first.
 2. Run API and web checks:
    ```bash
    pnpm -C apps/api run lint:http
@@ -261,10 +266,16 @@ Also configure:
    ```bash
    curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
      -H "content-type: application/json" \
-     -H "x-job-secret: $DIGEST_JOB_SECRET" \
+     -H "x-job-secret: dev-digest-job-secret" \
      -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
    ```
-5. Verify captured emails in MailHog UI: `http://localhost:8025`.
+   Replace `dev-digest-job-secret` if your local env overrides `DIGEST_JOB_SECRET`.
+5. Run `apps/api/tests/email.http` in your HTTP client:
+   - Login as the seeded `demo@taskforge.dev` user.
+   - Read/update digest preferences.
+   - Preview the digest payload.
+   - Run the safe dry-run send request.
+6. To verify actual local SMTP capture, keep the target API local, confirm SMTP points to MailHog, set `@mailhogDeliveryDryRun = false` in `apps/api/tests/email.http`, and run only the "MailHog delivery opt-in" request. Verify one message in MailHog UI: `http://localhost:8025`.
 
 References:
 - Manual checklist: `docs/testing/milestone5-manual-checklist.md`

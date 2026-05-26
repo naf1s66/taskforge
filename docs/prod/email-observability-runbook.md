@@ -2,6 +2,8 @@
 
 Use this runbook during the first production rollout of TaskForge welcome emails and daily digests.
 
+Before first production sends, fill the reviewer and escalation fields in `docs/prod/email-production-rollout.md`.
+
 ## Daily Review
 
 For each rollout day:
@@ -50,3 +52,4 @@ After the first production rollout:
 - Review the default `EMAIL_DAILY_SEND_LIMIT` against actual Resend quota usage.
 - Check whether `SKIPPED` and `FAILED` counts need an admin dashboard or exported report.
 - Revisit whether a shared rate-limit store is needed if the API runs multiple instances.
+- Update `docs/prod/email-production-rollout.md` with the final monitoring owner, escalation path, and any plan/budget changes.
