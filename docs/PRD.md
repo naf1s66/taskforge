@@ -16,7 +16,7 @@
 - Tasks: title, description (MD), status, priority, **tags**, **dueDate**.
 - Kanban: DnD with optimistic UI.
 - Filters/search: tag/status/due range/text.
-- Email: Nodemailer SMTP adapter with MailHog local defaults and Resend production configuration; welcome emails send after first account creation, and users can manage digest preferences, preview digest payloads, and trigger guarded manual digest sends. The digest scheduler runs through a protected API job endpoint with a Vercel Cron web proxy and GitHub Actions fallback.
+- Email: provider-neutral Nodemailer SMTP adapter with MailHog local defaults and Resend as the production SMTP default; welcome emails send after first account creation, and users can manage digest preferences, preview digest payloads, and trigger guarded manual digest sends. The digest scheduler runs through a protected API job endpoint with a Vercel Cron web proxy and GitHub Actions fallback.
 - UI: Next.js, Tailwind, shadcn/ui, Framer Motion, desktop-first dark theme.
 - Docs: Swagger/OpenAPI + ADRs. `.http` pack.
 - Tests: Jest/Supertest for API coverage and Vitest/React Testing Library for frontend coverage.
@@ -30,7 +30,7 @@
 - BE: Express (TS), Zod validation, Prisma (Postgres), Swagger. Auth router issues JWT access/refresh pairs, maintains
   `tf_session` HttpOnly cookies, and exposes a `session-bridge` endpoint for trusted frontends.
 - DB: Neon/Supabase Postgres; Prisma migrations + seed.
-- Email: Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once pre-launch verification is complete. Daily digest scheduling uses a protected API job endpoint invoked through the web app's Vercel Cron proxy when available, with GitHub Actions schedule as the free fallback.
+- Email: provider-neutral Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once the sending domain and DNS are verified. Daily digest scheduling uses a protected API job endpoint invoked through the web app's Vercel Cron proxy when available, with GitHub Actions schedule as the free fallback.
 - Infra: Dockerfiles + docker-compose; CI with GitHub Actions.
 
 ## Data Model (Prisma Sketch)
@@ -46,6 +46,8 @@ model User {
   updatedAt     DateTime @updatedAt
   tasks         Task[]
   tags          Tag[]
+  emailPreference        EmailPreference?
+  notificationDeliveries NotificationDelivery[]
 }
 
 model Task {
@@ -87,13 +89,63 @@ model TaskTag {
   @@index([userId])
 }
 
+model EmailPreference {
+  userId              String   @id @db.Uuid
+  welcomeEmailEnabled Boolean  @default(true)
+  dailyDigestEnabled  Boolean  @default(false)
+  dailyDigestHourUtc  Int?
+  dailyDigestTimezone String   @default("UTC")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationDelivery {
+  id             String                        @id @default(uuid()) @db.Uuid
+  userId         String                        @db.Uuid
+  idempotencyKey String                        @unique
+  type           NotificationDeliveryType
+  recipient      String
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  user           User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts       NotificationDeliveryAttempt[]
+
+  @@index([userId, type])
+}
+
+model NotificationDeliveryAttempt {
+  id                String                     @id @default(uuid()) @db.Uuid
+  deliveryId        String                     @db.Uuid
+  attemptNumber     Int
+  type              NotificationDeliveryType
+  recipient         String
+  status            NotificationDeliveryStatus
+  provider          String
+  providerMessageId String?
+  providerMetadata  Json?
+  errorCode         String?
+  errorMessage      String?
+  attemptedAt       DateTime                   @default(now())
+  deliveredAt       DateTime?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  delivery          NotificationDelivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([status, attemptedAt])
+}
+
 enum TaskStatus { TODO IN_PROGRESS DONE }
 enum TaskPriority { LOW MEDIUM HIGH }
+enum NotificationDeliveryType { WELCOME DAILY_DIGEST }
+enum NotificationDeliveryStatus { PENDING SENT FAILED SKIPPED }
 ```
 
 ## API (v1)
 - `GET /api/taskforge/v1/health`
 - `GET /api/taskforge/v1/me`
+- `PATCH /api/taskforge/v1/me/email-preferences`
 - `GET /api/taskforge/v1/tasks?status=&priority=&tag=&q=&dueFrom=&dueTo=&page=&pageSize=`
 - `POST /api/taskforge/v1/tasks`
 - `PATCH /api/taskforge/v1/tasks/:id`
@@ -102,6 +154,11 @@ enum TaskPriority { LOW MEDIUM HIGH }
 - `PATCH /api/taskforge/v1/tasks/board/move`
 - `GET /api/taskforge/v1/tags`
 - `POST /api/taskforge/v1/tags`
+- `GET /api/taskforge/v1/email/digest/preview?timezone=&digestDate=&dueSoonDays=&recentlyUpdatedDays=&maxTasksPerGroup=`
+- `POST /api/taskforge/v1/email/digest/send`
+- `GET /api/taskforge/v1/jobs/digest?digestDate=&dryRun=&sendLimit=&digestHourUtc=`
+- `POST /api/taskforge/v1/jobs/digest`
+- Web cron proxy: `GET /api/cron/digest`
 - Docs: `GET /api/taskforge/docs`
 - OpenAPI reference: [`docs/openapi.json`](./openapi.json)
 
@@ -170,7 +227,7 @@ sequenceDiagram
 - **Day 2:** Frontend OAuth (GitHub/Google) with NextAuth, guarded routes, session UI, and the `/auth/session-bridge` flow to mint API cookies.
 - **Day 3:** `/tasks` CRUD + Zod + tests; FE list + dialogs; OpenAPI draft.
 - **Day 4:** Kanban DnD, `/tags`, optimistic UI, `.http` pack.
-- **Day 5:** Search, due filters, priority. Email digest was deferred to future scope.
+- **Day 5:** Search, due filters, priority, and milestone email capability (welcome email, digest preferences, preview/manual send, guarded scheduler path).
 - **Day 6:** Helmet/CORS/rate-limit; finalize Swagger; ADRs + README; CI docker build.
 - **Day 7:** Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); smoke test; v1 release.
 
@@ -213,6 +270,11 @@ sequenceDiagram
 - **Create/edit dialogs:** Create and edit dialogs surface the same fields (title, description, status, priority, due date, tags), run Zod validation, and submit through React Query mutations. Successful actions optimistically update the task list and kanban preview; validation errors show inline with a destructive toast for visibility. Edits can clear optional description and due date fields, and if a task is deleted while editing, the dialog closes with a conflict notice.
 - **Screenshots/GIFs:** Approved dashboard, filter, and dialog assets are not committed yet. Attach screenshots to PRs when useful and add final approved assets before publishing externally.
 - **Known limitations:** UI pagination controls are not exposed yet (the list defaults to the first page), and dedicated tag administration is not included; tag creation, selection, and filtering remain embedded in task dialogs and board/list filters.
+
+## Email scope and current limitations (Milestone 5)
+- **Implemented scope:** SMTP adapter, MailHog local verification path, Resend SMTP production defaults, welcome email dispatch, digest preferences, digest preview/manual-send APIs, and protected scheduled invocation route.
+- **Still manual before production sends:** selecting and verifying the exact production sending domain, storing Resend API keys per deployment target, and approving first production digest schedule/send budget/escalation workflow.
+- **Free-tier constraints:** keep `EMAIL_DAILY_SEND_LIMIT` conservative (default `90`) and track provider quota/rate-limit outcomes before enabling unattended scheduled sends.
 
 ## Task dialog UX
 - **Creation:** The dashboard and hooks demo use buttons with `data-task-dialog="create"` to launch the modal form. It runs the shared Zod schema with `react-hook-form`, sanitizes tags/due dates, and optimistically inserts the task into the page-one cache so the kanban preview updates instantly.

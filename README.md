@@ -150,6 +150,7 @@ Reusable HTTP request packs live in `apps/api/tests/`:
 - `auth.http` (auth smoke flows)
 - `tasks.http` (task CRUD and filters)
 - `kanban.http` (board fetch/move + tag list/create)
+- `email.http` (seeded email auth, preferences, digest preview, dry-run send, and guarded MailHog delivery)
 
 Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`) so the same files run against local, dev, and staging environments.
 
@@ -206,7 +207,78 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: Nodemailer SMTP adapter is available. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`). See `docs/prod/resend-email-setup.md`.
+- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
 - Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
+
+## Email setup and local verification (Milestone 5)
+
+### Local development (MailHog)
+- Docker compose includes MailHog for SMTP capture (`mailhog:1025`) and inbox preview (`http://localhost:8025`).
+- Use env defaults from `infra/env/api.env.example`:
+  - `SMTP_HOST=mailhog`
+  - `SMTP_PORT=1025`
+  - `SMTP_USER=` / `SMTP_PASS=` (blank locally)
+  - `EMAIL_FROM=TaskForge <noreply@taskforge.local>`
+  - `EMAIL_DAILY_SEND_LIMIT=90`
+- Keep `DIGEST_JOB_SECRET` configured in both `apps/api/.env` and `apps/web/.env` so local protected digest routes can be exercised.
+
+### Production default (Resend SMTP)
+- `SMTP_HOST=smtp.resend.com`
+- `SMTP_PORT=587`
+- `SMTP_USER=resend`
+- `SMTP_PASS=<RESEND_API_KEY>`
+- `EMAIL_FROM=<verified sender on the Resend-verified domain>`
+- `EMAIL_DAILY_SEND_LIMIT=90` on Resend free tier (conservative buffer below the 100-email daily cap)
+
+Resend's free transactional plan is currently documented as 100 emails/day and 3,000 emails/month. Sent and received messages count toward quota, and multiple `To`, `CC`, or `BCC` recipients count separately, so TaskForge keeps the default application budget below the full daily provider cap.
+
+Also configure:
+- API: `DIGEST_JOB_SECRET`
+- Web: `CRON_SECRET`
+- Web: `DIGEST_JOB_SECRET` (must match API value)
+
+### Digest behavior summary
+- Daily digest execution is explicit (`/api/taskforge/v1/jobs/digest`) and can run as dry run or real send.
+- Digests are idempotent for the same user/date and skip users with disabled preferences, unverified/placeholder addresses, or non-matching digest hour.
+- Budget controls include `EMAIL_DAILY_SEND_LIMIT` and per-run `sendLimit`; budget/provider-quota skips are tracked in run results.
+
+### Local verification steps
+1. Start infra and seed data:
+   ```bash
+   make up
+   docker compose -f infra/docker-compose.yml exec api pnpm prisma migrate deploy
+   docker compose -f infra/docker-compose.yml exec api pnpm tsx prisma/seed.ts
+   ```
+   The Docker exec form uses the container's `DATABASE_URL` (`db:5432`) and avoids host/compose credential mismatches. If you intentionally run Prisma from the host, point `DATABASE_URL` at `localhost:5432` first.
+2. Run API and web checks:
+   ```bash
+   pnpm -C apps/api run lint:http
+   pnpm -C apps/api test -- daily-digest-runner.test.ts email-digest-route.test.ts auth.e2e.test.ts jobs-route.test.ts
+   pnpm -C apps/web test -- app/api/cron/digest/route.test.ts
+   ```
+3. Trigger a digest dry run locally:
+   ```bash
+   pnpm -C apps/api digest:run 2026-05-19 --dry-run
+   ```
+4. Exercise protected digest endpoint:
+   ```bash
+   curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
+     -H "content-type: application/json" \
+     -H "x-job-secret: dev-digest-job-secret" \
+     -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
+   ```
+   Replace `dev-digest-job-secret` if your local env overrides `DIGEST_JOB_SECRET`.
+5. Run `apps/api/tests/email.http` in your HTTP client:
+   - Login as the seeded `demo@taskforge.dev` user.
+   - Read/update digest preferences.
+   - Preview the digest payload.
+   - Run the safe dry-run send request.
+6. To verify actual local SMTP capture, keep the target API local, confirm SMTP points to MailHog, set `@mailhogDeliveryDryRun = false` in `apps/api/tests/email.http`, and run only the "MailHog delivery opt-in" request. Verify one message in MailHog UI: `http://localhost:8025`.
+
+References:
+- Manual checklist: `docs/testing/milestone5-manual-checklist.md`
+- Automated checks: `docs/testing/milestone5-automated.md`
+- Production setup: `docs/prod/resend-email-setup.md`
+- Scheduler runbook: `docs/prod/digest-scheduler.md`

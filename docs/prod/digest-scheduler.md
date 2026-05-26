@@ -21,6 +21,8 @@ Set these values before enabling real sends:
 
 The web and API `DIGEST_JOB_SECRET` values must match. Keep `EMAIL_DAILY_SEND_LIMIT` at `90` on the Resend free plan unless there is an intentional reason to use the full 100-message quota.
 
+API production placeholders live in `infra/env/api.prod.env.example`; web production placeholders live in `infra/env/web.prod.env.example`.
+
 ## Request Contract
 
 `POST /api/taskforge/v1/jobs/digest`
@@ -56,21 +58,24 @@ Run the protected API endpoint locally:
 ```bash
 curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
   -H "content-type: application/json" \
-  -H "x-job-secret: $DIGEST_JOB_SECRET" \
+  -H "x-job-secret: dev-digest-job-secret" \
   -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
 ```
+
+Replace `dev-digest-job-secret` if the local API env overrides `DIGEST_JOB_SECRET`.
 
 ## Production Enablement
 
 1. Complete `docs/prod/resend-email-setup.md`.
-2. Set API `DIGEST_JOB_SECRET` and `EMAIL_DAILY_SEND_LIMIT`.
-3. Set web `CRON_SECRET` and matching `DIGEST_JOB_SECRET`.
-4. Deploy API and web.
-5. Run a production dry run for the intended `digestDate`.
-6. Confirm output counts, TaskForge logs, delivery history, Resend logs, alert delivery, and quota visibility.
-7. Run manual-only sends first; keep scheduled sends disabled until observability checks pass.
-8. Enable Vercel Cron for the web route `GET /api/cron/digest`.
-9. Keep GitHub Actions schedule disabled unless it is the chosen fallback.
+2. Complete the production fact register in `docs/prod/email-production-rollout.md`.
+3. Set API `DIGEST_JOB_SECRET` and `EMAIL_DAILY_SEND_LIMIT`.
+4. Set web `CRON_SECRET` and matching `DIGEST_JOB_SECRET`.
+5. Deploy API and web.
+6. Run a production dry run for the intended `digestDate`.
+7. Confirm output counts, TaskForge logs, delivery history, Resend logs, alert delivery, and quota visibility.
+8. Run manual-only sends first; keep scheduled sends disabled until observability checks pass.
+9. Enable Vercel Cron for the web route `GET /api/cron/digest`.
+10. Keep GitHub Actions schedule disabled unless it is the chosen fallback.
 
 ## Operational Notes
 

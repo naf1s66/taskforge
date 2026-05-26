@@ -3,6 +3,7 @@
 Production and pre-launch operations docs live here. Milestone/task planning files stay under `docs/tasks`.
 
 - `resend-email-setup.md` - Resend SMTP account, DNS, sender, and smoke-test checklist for pre-launch email enablement.
+- `email-production-rollout.md` - production email fact register, enablement gates, manual production smoke, and post-production TODOs.
 - `digest-scheduler.md` - protected digest job endpoint, Vercel Cron proxy, dry-run, and rollout checklist.
 - `email-observability-runbook.md` - first-rollout review procedure, failure codes, delivery statuses, and post-production follow-up items.
 - `database-migration-squash.md` - rules for squashing development Prisma migrations before the first production database exists.

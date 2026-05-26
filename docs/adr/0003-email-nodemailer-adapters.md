@@ -3,7 +3,7 @@
 **Status:** Accepted, adapter implemented
 
 ## Context
-We need basic emails (welcome, daily digest) on free setup for dev/prod. The provider-neutral SMTP adapter is implemented in milestone 5; welcome sends and the protected digest scheduler are staged while user-facing digest product flows remain separate follow-up work.
+We need basic emails (welcome, daily digest) on free setup for dev/prod. This ADR originally marked digest capability as deferred; milestone 5 now ships the provider-neutral SMTP adapter, welcome sends, digest preferences, digest preview/manual-send APIs, and the protected scheduler invocation path.
 
 ## Decision
 Use **Nodemailer** behind a small adapter. Dev uses **MailHog** (docker). Production defaults to **Resend SMTP** for milestone 5, with credentials supplied via env.
@@ -24,3 +24,4 @@ The email adapter remains provider-neutral so TaskForge can move to another SMTP
 - Resend's free plan has a daily send limit, so digest delivery needs an explicit send-budget guard.
 - Digest scheduling is a production invocation concern; see `docs/prod/adr/0006-digest-scheduler-invocation.md` for the protected endpoint and free scheduler decision.
 - SMTP provider variance remains; keep all provider details behind configuration and the adapter.
+- This ADR remains valid (not superseded): provider neutrality is preserved even though Resend is the production default at this stage.

@@ -3,7 +3,7 @@
 Use this checklist before enabling real email sends in any shared environment.
 
 - [ ] MailHog receives local welcome emails.
-- [ ] `apps/api/tests/email.http` runs against the seeded `demo@taskforge.dev` user after `make up` and `make seed`.
+- [ ] `apps/api/tests/email.http` runs against the seeded `demo@taskforge.dev` user after `make up`, `docker compose -f infra/docker-compose.yml exec api pnpm prisma migrate deploy`, and `docker compose -f infra/docker-compose.yml exec api pnpm tsx prisma/seed.ts`.
 - [ ] Digest dry run reports attempted, sent, skipped, failed, and skip reason counts.
 - [ ] Digest dry run does not create `NotificationDelivery` or `NotificationDeliveryAttempt` records.
 - [ ] Protected API job endpoint rejects missing or incorrect `DIGEST_JOB_SECRET`.
