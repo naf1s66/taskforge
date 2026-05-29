@@ -11,4 +11,4 @@
 9. **09-email-observability-and-safety.md** - Add structured logging, idempotency, rate limits, and failure handling.
 10. **10-email-http-pack.md** - Completed: HTTP collections now cover seeded email auth, preference reads/updates, digest preview, safe dry-run, and guarded MailHog manual-send verification.
 11. **11-email-docs.md** - Completed: README, PRD, ADR notes, env docs, testing docs, Resend setup, production rollout, and runbook notes now reflect shipped email behavior.
-12. **12-email-tests.md** - Cover adapter, scheduler, API, and frontend email flows in automated tests and CI.
+12. **12-email-tests.md** - Completed: automated API, adapter/template, config, scheduler, frontend digest UI, and email preference hook coverage now runs through mocked/fake email paths.
