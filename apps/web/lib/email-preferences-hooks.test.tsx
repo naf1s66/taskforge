@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { type PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,7 +54,12 @@ describe('email preference hooks', () => {
   });
 
   it('rolls back optimistic toggle when update fails', async () => {
-    updateEmailPreferenceMock.mockRejectedValue(new Error('request failed'));
+    let rejectUpdate!: (error: Error) => void;
+    updateEmailPreferenceMock.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectUpdate = reject;
+      }),
+    );
 
     const queryClient = new QueryClient();
     queryClient.setQueryData(['email-preferences', 'user-1'], {
@@ -66,7 +71,23 @@ describe('email preference hooks', () => {
       wrapper: wrapperWithClient(queryClient),
     });
 
-    result.current.mutate(false);
+    act(() => {
+      result.current.mutate(false);
+    });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryData(['email-preferences', 'user-1'])).toEqual({
+        dailyDigestEnabled: false,
+        dailyDigestTimezone: 'America/New_York',
+      });
+    });
+    await waitFor(() => {
+      expect(updateEmailPreferenceMock).toHaveBeenCalledWith({ dailyDigestEnabled: false });
+    });
+
+    act(() => {
+      rejectUpdate(new Error('request failed'));
+    });
 
     await waitFor(() => {
       expect(queryClient.getQueryData(['email-preferences', 'user-1'])).toEqual({
