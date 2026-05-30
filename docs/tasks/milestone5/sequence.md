@@ -8,7 +8,7 @@ Scope note: search, due-range filters, and priority filtering were delivered bef
 4. **04-digest-query-service.md** - Build the daily digest read model for overdue, due-soon, and recently moved tasks.
 5. **05-digest-scheduler.md** - Completed: deterministic digest runner behind a protected job endpoint, Vercel Cron proxy, local script, and CI smoke path while respecting Resend free-tier send limits.
 6. **06-digest-preview-and-send-api.md** - Expose protected preview/send endpoints for manual QA and future admin tooling.
-7. **07-email-settings-ui.md** - Let users opt in/out of digest emails and choose digest timing from the web app.
+7. **07-email-settings-ui.md** - Let users opt in/out of digest emails and understand the configured delivery timing from the web app.
 8. **08-digest-preview-ui.md** - Add a dashboard preview surface so users can inspect the digest before enabling it.
 9. **09-email-observability-and-safety.md** - Add structured logging, idempotency, rate limits, and failure handling.
 10. **10-email-http-pack.md** - Completed: HTTP collections now cover seeded email auth, preference reads/updates, digest preview, safe dry-run, and guarded MailHog manual-send verification.
