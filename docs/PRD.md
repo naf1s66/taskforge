@@ -154,7 +154,7 @@ enum NotificationDeliveryStatus { PENDING SENT FAILED SKIPPED }
 - `PATCH /api/taskforge/v1/tasks/board/move`
 - `GET /api/taskforge/v1/tags`
 - `POST /api/taskforge/v1/tags`
-- `GET /api/taskforge/v1/email/digest/preview?timezone=&digestDate=&dueSoonDays=&recentlyUpdatedDays=&maxTasksPerGroup=`
+- `GET /api/taskforge/v1/email/digest/preview?timezone=&dueSoonDays=&recentlyUpdatedDays=&maxTasksPerGroup=`
 - `POST /api/taskforge/v1/email/digest/send`
 - `GET /api/taskforge/v1/jobs/digest?digestDate=&dryRun=&sendLimit=&digestHourUtc=`
 - `POST /api/taskforge/v1/jobs/digest`
