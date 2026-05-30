@@ -5,7 +5,7 @@ Scope note: search, due-range filters, and priority filtering were delivered bef
 1. **01-email-preferences-schema.md** - Add user-scoped email preferences and notification audit tables.
 2. **02-email-adapter-and-config.md** - Implement the Nodemailer adapter, MailHog dev defaults, Resend SMTP production defaults, and SMTP config validation.
 3. **03-welcome-email-flow.md** - Send a welcome email after first successful registration or OAuth account creation.
-4. **04-digest-query-service.md** - Build the daily digest read model for overdue, due-soon, and recently moved tasks.
+4. **04-digest-query-service.md** - Build the daily digest read model for overdue, due-soon, recently updated, and still-todo tasks.
 5. **05-digest-scheduler.md** - Completed: deterministic digest runner behind a protected job endpoint, Vercel Cron proxy, local script, and CI smoke path while respecting Resend free-tier send limits.
 6. **06-digest-preview-and-send-api.md** - Expose protected preview/send endpoints for manual QA and future admin tooling.
 7. **07-email-settings-ui.md** - Let users opt in/out of digest emails and understand the configured delivery timing from the web app.
