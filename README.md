@@ -97,7 +97,7 @@ For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskfo
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
 2. Update the secrets listed above. For Docker-based workflows keep the Postgres host as `db`; when running the dev servers directly (`pnpm -C apps/* dev`) point `DATABASE_URL` at `localhost` or your cloud instance.
-3. Restart the affected service after changing secrets (for example, `pnpm -C apps/web dev` or `make up`).
+3. The API server, digest CLI, and seed script load `apps/api/.env*` through `dotenv-flow`; restart the affected service after changing secrets (for example, `pnpm -C apps/api dev`, `pnpm -C apps/web dev`, or `make up`).
 
 ### OAuth providers
 - Configure any provider credentials that are available. Leaving the variables blank keeps the login screen in a safe "No providers configured" state.

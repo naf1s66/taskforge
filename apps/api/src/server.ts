@@ -1,3 +1,5 @@
+import './env';
+
 import { createApp } from './app';
 import { getDigestJobConfig } from './config/digest';
 import { getSmtpConfig } from './config/smtp';

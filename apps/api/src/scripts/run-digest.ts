@@ -1,3 +1,5 @@
+import '../env';
+
 import { DailyDigestRunner } from '../notifications/daily-digest-runner';
 import { NodemailerEmailAdapter } from '../email/nodemailer-adapter';
 import { parseDailySendLimit } from '../config/digest';

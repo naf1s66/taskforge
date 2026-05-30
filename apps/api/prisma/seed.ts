@@ -1,3 +1,5 @@
+import '../src/env';
+
 import { PrismaClient } from '@prisma/client';
 
 import { createPasswordHasher } from '../src/auth/password';
