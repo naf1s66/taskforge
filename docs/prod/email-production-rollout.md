@@ -26,6 +26,7 @@ Official quota references:
 | DNS records required | SPF + DKIM from Resend, plus DMARC before launch |
 | `EMAIL_FROM` | `<TBD before enablement>` |
 | Resend plan | Free until explicitly changed |
+| API `CORS_ALLOWED_ORIGINS` | `<TBD before enablement>`; exact deployed web origin list |
 | API `SMTP_PASS` storage | `<TBD before enablement>`; API secret manager only |
 | API `DIGEST_JOB_SECRET` storage | `<TBD before enablement>` |
 | Web `CRON_SECRET` storage | `<TBD before enablement>` |
@@ -44,12 +45,13 @@ Do not store the Resend API key in the web app, browser-visible env vars, reposi
 2. Replace every `<TBD before enablement>` value in the fact register.
 3. Deploy API env from `infra/env/api.prod.env.example`.
 4. Deploy web env from `infra/env/web.prod.env.example`.
-5. Confirm the web app has no `SMTP_PASS` or Resend API key.
-6. Run a production dry run through the protected digest job endpoint.
-7. Run a manual-only real send to an approved internal recipient.
-8. Confirm TaskForge delivery records, API logs, Resend logs, alert delivery, and quota state.
-9. Enable exactly one scheduler path: Vercel Cron preferred, GitHub Actions fallback only if selected.
-10. Keep first scheduled sends under daily human review.
+5. Confirm API `CORS_ALLOWED_ORIGINS` contains the deployed web origin used by browsers.
+6. Confirm the web app has no `SMTP_PASS` or Resend API key.
+7. Run a production dry run through the protected digest job endpoint.
+8. Run a manual-only real send to an approved internal recipient.
+9. Confirm TaskForge delivery records, API logs, Resend logs, alert delivery, and quota state.
+10. Enable exactly one scheduler path: Vercel Cron preferred, GitHub Actions fallback only if selected.
+11. Keep first scheduled sends under daily human review.
 
 ## Manual production smoke
 

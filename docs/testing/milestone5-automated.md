@@ -25,6 +25,7 @@ The default automated path uses fake SMTP transports or adapter mocks only. CI m
 - `apps/api/tests/auth.e2e.test.ts` covers welcome-email delivery history and classified provider failures.
 - `apps/api/tests/digest-config.test.ts` covers digest job budget parsing, production `DIGEST_JOB_SECRET` requirements, placeholder rejection, and local optional-secret behavior.
 - `apps/api/tests/smtp-config.test.ts` covers local MailHog defaults, Resend production SMTP settings, missing SMTP configuration, placeholder credentials, and unsafe sender domains.
+- `apps/api/tests/http-config.test.ts` covers `TRUST_PROXY` parsing and `CORS_ALLOWED_ORIGINS` defaults/validation.
 - `apps/api/tests/jobs-route.test.ts` covers protected job endpoint auth, GET/POST invocation, default budget passing, and invalid digest dates.
 - `apps/api/tests/email-adapter.test.ts` covers Nodemailer transport construction, sanitized provider metadata, and deterministic welcome/digest template essentials.
 - `apps/web/app/api/cron/digest/route.test.ts` covers the Vercel Cron proxy route and forwarding to the protected API endpoint.
@@ -34,6 +35,6 @@ The default automated path uses fake SMTP transports or adapter mocks only. CI m
 ## Focused Checks
 
 ```bash
-pnpm -C apps/api test -- daily-digest-runner.test.ts email-digest-route.test.ts auth.e2e.test.ts jobs-route.test.ts digest-config.test.ts smtp-config.test.ts email-adapter.test.ts
+pnpm -C apps/api test -- daily-digest-runner.test.ts email-digest-route.test.ts auth.e2e.test.ts jobs-route.test.ts digest-config.test.ts smtp-config.test.ts http-config.test.ts email-adapter.test.ts
 pnpm -C apps/web test -- app/api/cron/digest/route.test.ts 'app/(protected)/dashboard/dashboard-content.test.tsx' lib/email-preferences-hooks.test.tsx
 ```

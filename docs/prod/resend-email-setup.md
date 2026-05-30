@@ -13,6 +13,7 @@ Real outbound email should remain disabled until a future pre-launch issue compl
 - `EMAIL_FROM=<VERIFIED_SENDER_ON_RESEND_DOMAIN>`
 - `EMAIL_DAILY_SEND_LIMIT=90`
 - `DIGEST_JOB_SECRET=<random job invocation secret>`
+- `CORS_ALLOWED_ORIGINS=<deployed web origin>`
 
 The production API env example lives at `infra/env/api.prod.env.example`.
 
@@ -31,12 +32,13 @@ Resend's free transactional plan is documented as 100 emails/day and 3,000 email
 6. Choose `EMAIL_FROM` using the verified domain (example: `TaskForge <noreply@mail.taskforge.example>`).
 7. Set `EMAIL_DAILY_SEND_LIMIT` at or below the active Resend daily limit. Use `90` on the free plan by default to leave room for other transactional mail and provider-side counting differences.
 8. Set `DIGEST_JOB_SECRET` to a strong random value before enabling the protected digest job endpoint.
-9. Configure the free digest scheduler from ADR 0006 and `docs/prod/digest-scheduler.md`: prefer Vercel Cron calling the web proxy route, with GitHub Actions schedule as the fallback.
-10. Configure automated alerts for Resend delivery failures, provider quota exhaustion, and provider rate-limit exhaustion.
-11. Assign a daily human reviewer for the first production rollout.
-12. Confirm the reviewer can access TaskForge logs, delivery history, Resend logs, alert delivery, and quota state.
-13. Run production-like dry runs and manual-only sends against the verified sender before enabling scheduled sends.
-14. If `apps/api/tests/email.http` is used for a production-like smoke, keep the Resend request commented until the verified domain, deployed secrets, target recipient, and `dryRun=false` intent are confirmed in the local operator environment.
+9. Set `CORS_ALLOWED_ORIGINS` to the deployed web origin so authenticated browser calls can reach the API.
+10. Configure the free digest scheduler from ADR 0006 and `docs/prod/digest-scheduler.md`: prefer Vercel Cron calling the web proxy route, with GitHub Actions schedule as the fallback.
+11. Configure automated alerts for Resend delivery failures, provider quota exhaustion, and provider rate-limit exhaustion.
+12. Assign a daily human reviewer for the first production rollout.
+13. Confirm the reviewer can access TaskForge logs, delivery history, Resend logs, alert delivery, and quota state.
+14. Run production-like dry runs and manual-only sends against the verified sender before enabling scheduled sends.
+15. If `apps/api/tests/email.http` is used for a production-like smoke, keep the Resend request commented until the verified domain, deployed secrets, target recipient, and `dryRun=false` intent are confirmed in the local operator environment.
 
 The email rollout decisions are documented in `docs/prod/adr/0007-email-observability-rollout-decisions.md`. The production fact register and post-production TODOs live in `docs/prod/email-production-rollout.md`.
 
@@ -49,6 +51,7 @@ Document where each secret is stored for each deployment target without committi
   - `DIGEST_JOB_SECRET=<random job invocation secret>`
   - `EMAIL_FROM=<verified sender>`
   - `EMAIL_DAILY_SEND_LIMIT=90`
+  - `CORS_ALLOWED_ORIGINS=<deployed web origin>`
 - Web host (Vercel/etc):
   - `CRON_SECRET=<random Vercel Cron bearer secret>`
   - `DIGEST_JOB_SECRET=<same value as API>`

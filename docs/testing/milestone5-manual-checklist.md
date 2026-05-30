@@ -8,6 +8,7 @@ Use this checklist before enabling real email sends in any shared environment.
 - [ ] Digest dry run does not create `NotificationDelivery` or `NotificationDeliveryAttempt` records.
 - [ ] Protected API job endpoint rejects missing or incorrect `DIGEST_JOB_SECRET`.
 - [ ] Web cron proxy rejects missing or incorrect `CRON_SECRET`.
+- [ ] In shared or production-like environments, API `CORS_ALLOWED_ORIGINS` includes the deployed web origin and browser requests with credentials succeed.
 - [ ] Users with disabled digest preferences, unverified email, placeholder email domains, or off-hour preferences are skipped.
 - [ ] Re-running the same digest date does not send duplicate emails to users with `SENT` or `PENDING` attempts.
 - [ ] Budget exhaustion reports `budgetSkipped`, records `SKIPPED` attempts with `BUDGET_SKIPPED`, and does not exceed the configured send limit.

@@ -27,5 +27,5 @@
 - API coverage exists in `email-preferences-route.test.ts`, `auth.e2e.test.ts`, `email-digest-route.test.ts`, `jobs-route.test.ts`, `daily-digest-runner.test.ts`, `email-adapter.test.ts`, `smtp-config.test.ts`, and `digest-config.test.ts`.
 - Email template assertions verify deterministic subject/plaintext/HTML essentials without full-body snapshots.
 - Frontend coverage exists in `dashboard-content.test.tsx` for preference toggles and digest preview states, plus `email-preferences-hooks.test.tsx` for query loading, optimistic update success, and rollback after failed preference updates.
-- Config and scheduler tests cover MailHog defaults, Resend production SMTP settings, missing/placeholder secrets, malformed budgets, and send-budget exhaustion.
+- Config and scheduler tests cover MailHog defaults, Resend production SMTP settings, missing/placeholder secrets, malformed budgets, `CORS_ALLOWED_ORIGINS` validation, and send-budget exhaustion.
 - CI runs the API Jest and web Vitest suites through existing workflow steps using fake transports or adapter mocks only; no default path requires Resend secrets or external email delivery.
