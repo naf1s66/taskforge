@@ -45,6 +45,7 @@ export function createApp(options: CreateAppOptions = {}) {
   if (httpConfig.trustProxy !== undefined) {
     app.set('trust proxy', httpConfig.trustProxy);
   }
+  const allowedCorsOrigins = httpConfig.corsAllowedOrigins;
 
   app.use(express.json());
   app.use(cookieParser());
@@ -55,15 +56,8 @@ export function createApp(options: CreateAppOptions = {}) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      // Define allowed origins
-      const allowedOrigins = [
-        'http://localhost:3000',  // Web app in development
-        'http://127.0.0.1:3000',  // Alternative localhost
-        'https://taskforge.app',  // Production domain (if applicable)
-      ];
-      
       // Check if the origin is allowed
-      if (allowedOrigins.includes(origin)) {
+      if (allowedCorsOrigins.includes(origin)) {
         return callback(null, true);
       }
       
