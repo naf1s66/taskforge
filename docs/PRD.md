@@ -225,9 +225,9 @@ sequenceDiagram
 ## Milestones (7 days)
 - **Day 1:** Monorepo setup, Tailwind + shadcn/ui, Express + Prisma scaffold, Dockerfiles, compose, CI skeleton.
 - **Day 2:** Frontend OAuth (GitHub/Google) with NextAuth, guarded routes, session UI, and the `/auth/session-bridge` flow to mint API cookies.
-- **Day 3:** `/tasks` CRUD + Zod + tests; FE list + dialogs; OpenAPI draft.
-- **Day 4:** Kanban DnD, `/tags`, optimistic UI, `.http` pack.
-- **Day 5:** Search, due filters, priority, and milestone email capability (welcome email, digest preferences, preview/manual send, guarded scheduler path).
+- **Day 3:** `/tasks` CRUD, list search/due/priority filters, Zod + tests; FE list + filter UI + dialogs; OpenAPI draft.
+- **Day 4:** Kanban DnD, `/tags`, board filters/search, optimistic UI, `.http` pack.
+- **Day 5:** Milestone email capability (welcome email, digest preferences, preview/manual send, guarded scheduler path).
 - **Day 6:** Helmet/CORS/rate-limit; finalize Swagger; ADRs + README; CI docker build.
 - **Day 7:** Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); smoke test; v1 release.
 

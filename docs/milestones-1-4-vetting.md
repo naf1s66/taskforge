@@ -36,5 +36,5 @@ Date: 2026-05-18
 ## Residual Scope Notes
 - Approved screenshots/GIFs are still intentionally documented as not committed; PR attachments remain the review path until assets are approved.
 - UI pagination controls and dedicated tag administration remain explicitly documented limitations, not missing milestone 1-4 requirements.
-- Email delivery remains deferred and is now planned in `docs/tasks/milestone5`.
+- Historical note: at the time of this 2026-05-18 vetting, email delivery remained deferred and was planned in `docs/tasks/milestone5`. Milestone 5 later completed the email delivery infrastructure.
 - Live third-party OAuth provider login still depends on real Google/GitHub credentials and should be exercised manually in environments where those credentials are configured.

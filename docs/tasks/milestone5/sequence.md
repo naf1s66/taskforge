@@ -1,5 +1,7 @@
 # Milestone 5 Task Sequence (Email Notifications)
 
+Scope note: search, due-range filters, and priority filtering were delivered before this milestone: list filtering shipped in Milestone 3, and board filtering/search shipped in Milestone 4. Milestone 5 is intentionally scoped to email notification capability.
+
 1. **01-email-preferences-schema.md** - Add user-scoped email preferences and notification audit tables.
 2. **02-email-adapter-and-config.md** - Implement the Nodemailer adapter, MailHog dev defaults, Resend SMTP production defaults, and SMTP config validation.
 3. **03-welcome-email-flow.md** - Send a welcome email after first successful registration or OAuth account creation.
