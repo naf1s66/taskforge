@@ -12,6 +12,7 @@ async function createDigestUser(options: {
   emailVerified?: Date | null;
   task?: boolean;
   taskDueDate?: Date;
+  dailyDigestTimezone?: string;
 }) {
   const prisma = getTestPrisma();
   const user = await prisma.user.create({
@@ -25,6 +26,7 @@ async function createDigestUser(options: {
       userId: user.id,
       dailyDigestEnabled: options.dailyDigestEnabled ?? true,
       dailyDigestHourUtc: options.dailyDigestHourUtc,
+      dailyDigestTimezone: options.dailyDigestTimezone,
     },
   });
 
@@ -485,6 +487,36 @@ describe('DailyDigestRunner', () => {
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]?.text).toContain('Due today: 1');
     expect(sentMessages[0]?.text).not.toContain('Overdue: 1');
+  });
+
+  it('derives scheduled digest dates per user timezone when no digest date is requested', async () => {
+    const prisma = getTestPrisma();
+    const newYorkUser = await createDigestUser({
+      dailyDigestTimezone: 'America/New_York',
+      email: 'new-york@taskforge.dev',
+      taskDueDate: new Date('2026-05-18T15:00:00.000Z'),
+    });
+    const tokyoUser = await createDigestUser({
+      dailyDigestTimezone: 'Asia/Tokyo',
+      email: 'tokyo@taskforge.dev',
+      taskDueDate: new Date('2026-05-19T03:00:00.000Z'),
+    });
+
+    const runner = new DailyDigestRunner({ prisma, emailAdapter: { sendMail: async msg => { sent.push(msg.to); } } });
+    const result = await runner.run({ now: new Date('2026-05-19T00:30:00.000Z'), sendLimit: 10 });
+    const deliveries = await prisma.notificationDelivery.findMany({
+      select: { idempotencyKey: true, recipient: true },
+      orderBy: { recipient: 'asc' },
+    });
+
+    expect(result.digestDate).toBeNull();
+    expect(result.digestDates).toEqual(['2026-05-18', '2026-05-19']);
+    expect(result.sent).toBe(2);
+    expect([...sent].sort()).toEqual(['new-york@taskforge.dev', 'tokyo@taskforge.dev']);
+    expect(deliveries).toEqual([
+      { idempotencyKey: `digest:2026-05-18:${newYorkUser.id}`, recipient: 'new-york@taskforge.dev' },
+      { idempotencyKey: `digest:2026-05-19:${tokyoUser.id}`, recipient: 'tokyo@taskforge.dev' },
+    ]);
   });
 
   it('skips users with invalid timezones without aborting the digest run', async () => {

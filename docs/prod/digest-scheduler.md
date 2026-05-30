@@ -29,16 +29,15 @@ API production placeholders live in `infra/env/api.prod.env.example`; web produc
 
 ```json
 {
-  "digestDate": "2026-05-19",
   "dryRun": true,
   "sendLimit": 90,
   "digestHourUtc": 8
 }
 ```
 
-`GET /api/taskforge/v1/jobs/digest?digestDate=2026-05-19&dryRun=true&sendLimit=90&digestHourUtc=8`
+`GET /api/taskforge/v1/jobs/digest?dryRun=true&sendLimit=90&digestHourUtc=8`
 
-- `digestDate`: required `YYYY-MM-DD` calendar date for the idempotency window.
+- `digestDate`: optional `YYYY-MM-DD` calendar date. Omit it for scheduled production runs so the API derives the correct local digest date for each user's `dailyDigestTimezone`; provide it only for manual dry runs, manual sends, or intentional backfills.
 - `dryRun`: optional boolean; when true, reports would-send counts without sending email or recording deliveries.
 - `sendLimit`: optional non-negative integer; defaults to `EMAIL_DAILY_SEND_LIMIT`.
 - `digestHourUtc`: optional integer `0` through `23`; when set, users with a different configured digest hour are skipped.
@@ -59,7 +58,7 @@ Run the protected API endpoint locally:
 curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
   -H "content-type: application/json" \
   -H "x-job-secret: dev-digest-job-secret" \
-  -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
+  -d '{"dryRun":true,"sendLimit":90}'
 ```
 
 Replace `dev-digest-job-secret` if the local API env overrides `DIGEST_JOB_SECRET`.
@@ -71,7 +70,7 @@ Replace `dev-digest-job-secret` if the local API env overrides `DIGEST_JOB_SECRE
 3. Set API `DIGEST_JOB_SECRET` and `EMAIL_DAILY_SEND_LIMIT`.
 4. Set web `CRON_SECRET` and matching `DIGEST_JOB_SECRET`.
 5. Deploy API and web.
-6. Run a production dry run for the intended `digestDate`.
+6. Run a production dry run without `digestDate` to validate scheduled per-user local-date behavior; use an explicit `digestDate` only for a targeted backfill check.
 7. Confirm output counts, TaskForge logs, delivery history, Resend logs, alert delivery, and quota visibility.
 8. Run manual-only sends first; keep scheduled sends disabled until observability checks pass.
 9. Enable Vercel Cron for the web route `GET /api/cron/digest`.
@@ -80,7 +79,7 @@ Replace `dev-digest-job-secret` if the local API env overrides `DIGEST_JOB_SECRE
 ## Operational Notes
 
 - Do not run both Vercel Cron and GitHub Actions on the same schedule unless one is dry-run only.
-- The API runner treats existing `SENT` or `PENDING` attempts for the same user/date as duplicates.
+- The web cron proxy does not supply `digestDate` by default. The API runner computes each user's local digest date from `dailyDigestTimezone`, and treats existing `SENT` or `PENDING` attempts for that same user/local-date pair as duplicates.
 - Failed provider attempts count against the daily send budget because they may still consume provider quota.
 - Template render failures are recorded as failed attempts but do not count against the provider send budget.
 - Provider failures are classified as `PROVIDER_QUOTA_EXHAUSTED`, `PROVIDER_RATE_LIMITED`, `PROVIDER_AUTH_FAILED`, `TEMPLATE_RENDER_FAILED`, `RECIPIENT_REJECTED`, or `PROVIDER_TRANSIENT_FAILURE`.

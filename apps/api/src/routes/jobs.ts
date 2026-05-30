@@ -20,7 +20,7 @@ const optionalIntegerParam = (schema: z.ZodNumber) =>
   );
 
 const runDigestSchema = z.object({
-  digestDate: dateOnlySchema,
+  digestDate: dateOnlySchema.optional(),
   digestHourUtc: optionalIntegerParam(z.coerce.number().int().min(0).max(23)),
   dryRun: z
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])

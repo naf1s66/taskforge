@@ -36,7 +36,7 @@
 ## Implementation Notes
 - Added `DailyDigestRunner`, `pnpm -C apps/api digest:run`, and protected `GET`/`POST /api/taskforge/v1/jobs/digest` invocation.
 - Added a Vercel-compatible web proxy at `GET /api/cron/digest` so Vercel Cron can call the web app and forward to the API with `DIGEST_JOB_SECRET`.
-- The API endpoint accepts `digestDate`, `dryRun`, `sendLimit`, and optional `digestHourUtc`; invalid calendar dates and hours are rejected.
+- The API endpoint accepts optional `digestDate`, `dryRun`, `sendLimit`, and optional `digestHourUtc`; invalid calendar dates and hours are rejected. Scheduled cron calls omit `digestDate` so the API derives each user's local digest date from their configured timezone.
 - Idempotency uses `NotificationDelivery.idempotencyKey` with per-attempt uniqueness and skips existing `SENT` or `PENDING` attempts for the same user/date.
 - Job output includes `attempted`, `sent`, `skipped`, `failed`, `budgetSkipped`, `duplicateSkipped`, `preferenceSkipped`, and `noContentSkipped`.
 - Production operations are documented in `docs/prod/digest-scheduler.md`; automated/manual checks are documented in `docs/testing/milestone5-automated.md` and `docs/testing/milestone5-manual-checklist.md`.

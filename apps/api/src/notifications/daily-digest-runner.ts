@@ -26,7 +26,7 @@ export interface DailyDigestRunnerOptions {
 }
 
 export interface DailyDigestRunInput {
-  digestDate: string;
+  digestDate?: string;
   digestHourUtc?: number;
   now?: Date;
   dryRun?: boolean;
@@ -35,7 +35,8 @@ export interface DailyDigestRunInput {
 }
 
 export interface DailyDigestRunResult {
-  digestDate: string;
+  digestDate: string | null;
+  digestDates: string[];
   attempted: number;
   sent: number;
   skipped: number;
@@ -68,12 +69,17 @@ export class DailyDigestRunner {
   }
 
   async run(input: DailyDigestRunInput): Promise<DailyDigestRunResult> {
-    assertDigestDate(input.digestDate);
+    if (input.digestDate) {
+      assertDigestDate(input.digestDate);
+    }
     assertDigestHour(input.digestHourUtc);
 
     const sendLimit = normalizeSendLimit(input.sendLimit);
     const dryRun = input.dryRun ?? false;
-    const dryRunConsumedBudget = dryRun ? await countConsumedBudget(this.options.prisma, input.digestDate) : 0;
+    const runTimestamp = input.now ?? new Date();
+    const dryRunConsumedBudgetByDate = new Map<string, number>();
+    const dryRunReservedByDate = new Map<string, number>();
+    const digestDates = new Set<string>();
     const users = await this.options.prisma.user.findMany({
       where: input.userIds?.length ? { id: { in: input.userIds } } : undefined,
       select: {
@@ -94,18 +100,24 @@ export class DailyDigestRunner {
     let duplicateSkipped = 0;
     let preferenceSkipped = 0;
     let noContentSkipped = 0;
-    let dryRunReserved = 0;
     let providerQuotaHalt: ClassifiedDeliveryFailure | null = null;
 
     for (const user of users) {
       attempted += 1;
       const timezone = user.emailPreference?.dailyDigestTimezone ?? 'UTC';
-      const now = resolveDigestDateNoon(input.digestDate, timezone, input.now);
-      if (!now) {
+      const digestContext = resolveDigestContext({
+        digestDate: input.digestDate,
+        now: input.now,
+        runTimestamp,
+        timezone,
+      });
+      if (!digestContext) {
         skipped += 1;
         preferenceSkipped += 1;
         continue;
       }
+      const { digestDate, now } = digestContext;
+      digestDates.add(digestDate);
 
       const isDigestEnabled = user.emailPreference?.dailyDigestEnabled ?? false;
       const recipient = normalizeDeliverableEmail(user.email);
@@ -120,7 +132,7 @@ export class DailyDigestRunner {
         continue;
       }
 
-      const idempotencyKey = `digest:${input.digestDate}:${user.id}`;
+      const idempotencyKey = `digest:${digestDate}:${user.id}`;
       const existing = await this.options.prisma.notificationDelivery.findUnique({
         where: { idempotencyKey },
         include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
@@ -144,6 +156,12 @@ export class DailyDigestRunner {
       }
 
       if (dryRun) {
+        const dryRunConsumedBudget = await getDryRunConsumedBudget({
+          cache: dryRunConsumedBudgetByDate,
+          digestDate,
+          prisma: this.options.prisma,
+        });
+        const dryRunReserved = dryRunReservedByDate.get(digestDate) ?? 0;
         if (dryRunConsumedBudget + dryRunReserved >= sendLimit) {
           skipped += 1;
           budgetSkipped += 1;
@@ -152,14 +170,14 @@ export class DailyDigestRunner {
 
         this.options.renderDailyDigestTemplate?.({
           recipientEmail: recipient,
-          digestDate: input.digestDate,
+          digestDate,
           digest,
         }) ?? defaultRenderDailyDigestTemplate({
           recipientEmail: recipient,
-          digestDate: input.digestDate,
+          digestDate,
           digest,
         });
-        dryRunReserved += 1;
+        dryRunReservedByDate.set(digestDate, dryRunReserved + 1);
         sent += 1;
         continue;
       }
@@ -171,7 +189,7 @@ export class DailyDigestRunner {
         };
         const reservation = await reserveSkippedDeliveryAttempt({
           prisma: this.options.prisma,
-          digestDate: input.digestDate,
+          digestDate,
           userId: user.id,
           recipient,
           idempotencyKey,
@@ -201,7 +219,7 @@ export class DailyDigestRunner {
 
       const reservation = await reserveDeliveryAttempt({
         prisma: this.options.prisma,
-        digestDate: input.digestDate,
+        digestDate,
         sendLimit,
         userId: user.id,
         recipient,
@@ -218,7 +236,7 @@ export class DailyDigestRunner {
           retryable: false,
           providerResponse: {
             skipReason: 'budget_exhausted',
-            digestDate: input.digestDate,
+            digestDate,
             sendLimit,
           },
         });
@@ -238,7 +256,7 @@ export class DailyDigestRunner {
         userId: user.id,
         provider: reservation.attempt.provider,
         recipient,
-        digestDate: input.digestDate,
+        digestDate,
         digest,
       });
       if (!template) {
@@ -303,7 +321,8 @@ export class DailyDigestRunner {
     }
 
     return {
-      digestDate: input.digestDate,
+      digestDate: input.digestDate ?? null,
+      digestDates: Array.from(digestDates).sort(),
       attempted,
       sent,
       skipped,
@@ -355,6 +374,21 @@ export class DailyDigestRunner {
   }
 }
 
+async function getDryRunConsumedBudget(input: {
+  cache: Map<string, number>;
+  digestDate: string;
+  prisma: PrismaClient;
+}): Promise<number> {
+  const cached = input.cache.get(input.digestDate);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const consumed = await countConsumedBudget(input.prisma, input.digestDate);
+  input.cache.set(input.digestDate, consumed);
+  return consumed;
+}
+
 function assertDigestDate(digestDate: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(digestDate)) {
     throw new Error('digestDate must use YYYY-MM-DD format.');
@@ -385,6 +419,50 @@ function resolveDigestDateNoon(digestDate: string, timezone: string, now: Date |
 
     throw error;
   }
+}
+
+function resolveDigestContext(input: {
+  digestDate: string | undefined;
+  now: Date | undefined;
+  runTimestamp: Date;
+  timezone: string;
+}): { digestDate: string; now: Date } | null {
+  if (input.digestDate) {
+    const now = resolveDigestDateNoon(input.digestDate, input.timezone, input.now);
+    return now ? { digestDate: input.digestDate, now } : null;
+  }
+
+  try {
+    return {
+      digestDate: formatLocalDate(input.runTimestamp, input.timezone),
+      now: input.runTimestamp,
+    };
+  } catch (error) {
+    if (isInvalidTimezoneError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function formatLocalDate(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find(part => part.type === 'year')?.value;
+  const month = parts.find(part => part.type === 'month')?.value;
+  const day = parts.find(part => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error(`Unable to compute local date for timezone ${timezone}`);
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 function isInvalidTimezoneError(error: unknown): boolean {

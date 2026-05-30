@@ -48,6 +48,26 @@ describe('jobs router', () => {
     });
   });
 
+  it('accepts scheduled digest runs without an explicit digest date', async () => {
+    const run = jest.fn().mockResolvedValue({ digestDate: null, digestDates: [], attempted: 0, sent: 0, skipped: 0, failed: 0 });
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ dryRun: true, sendLimit: 5 })
+      .expect(200);
+
+    expect(run).toHaveBeenCalledWith({
+      digestDate: undefined,
+      digestHourUtc: undefined,
+      dryRun: true,
+      sendLimit: 5,
+    });
+  });
+
   it('parses explicit false dry-run query values as real sends', async () => {
     const run = jest.fn().mockResolvedValue({ attempted: 1, sent: 1, skipped: 0, failed: 0 });
     const app = express();

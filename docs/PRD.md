@@ -156,7 +156,7 @@ enum NotificationDeliveryStatus { PENDING SENT FAILED SKIPPED }
 - `POST /api/taskforge/v1/tags`
 - `GET /api/taskforge/v1/email/digest/preview?timezone=&dueSoonDays=&recentlyUpdatedDays=&maxTasksPerGroup=`
 - `POST /api/taskforge/v1/email/digest/send`
-- `GET /api/taskforge/v1/jobs/digest?digestDate=&dryRun=&sendLimit=&digestHourUtc=`
+- `GET /api/taskforge/v1/jobs/digest?digestDate=&dryRun=&sendLimit=&digestHourUtc=` (`digestDate` is optional for scheduled runs; when omitted, the API derives each user's local digest date from their configured timezone)
 - `POST /api/taskforge/v1/jobs/digest`
 - Web cron proxy: `GET /api/cron/digest`
 - Docs: `GET /api/taskforge/docs`

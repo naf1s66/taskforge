@@ -2,10 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { getApiUrl } from '@/lib/env';
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function getOptionalQueryValue(searchParams: URLSearchParams, key: string): string | undefined {
   const value = searchParams.get(key);
   return value === null ? undefined : value;
@@ -28,7 +24,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const payload = {
-    digestDate: url.searchParams.get('digestDate') ?? todayUtc(),
+    digestDate: getOptionalQueryValue(url.searchParams, 'digestDate'),
     digestHourUtc: getOptionalQueryValue(url.searchParams, 'digestHourUtc'),
     dryRun: url.searchParams.get('dryRun') === 'true' || url.searchParams.get('dryRun') === '1',
     sendLimit: getOptionalQueryValue(url.searchParams, 'sendLimit'),

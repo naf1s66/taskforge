@@ -641,7 +641,17 @@ const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
 const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    digestDate: { type: 'string', format: 'date' },
+    digestDate: {
+      type: 'string',
+      format: 'date',
+      nullable: true,
+      description: 'Explicit requested digest date, or null when a scheduled run derives local dates per user.',
+    },
+    digestDates: {
+      type: 'array',
+      items: { type: 'string', format: 'date' },
+      description: 'Local digest dates touched by the run.',
+    },
     attempted: { type: 'integer', minimum: 0 },
     sent: { type: 'integer', minimum: 0 },
     skipped: { type: 'integer', minimum: 0 },
@@ -654,6 +664,7 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
   },
   required: [
     'digestDate',
+    'digestDates',
     'attempted',
     'sent',
     'skipped',
@@ -666,6 +677,7 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
   ],
   example: {
     digestDate: '2026-05-21',
+    digestDates: ['2026-05-21'],
     attempted: 1,
     sent: 1,
     skipped: 0,

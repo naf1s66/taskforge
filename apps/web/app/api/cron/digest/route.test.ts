@@ -77,6 +77,27 @@ describe('/api/cron/digest', () => {
     });
   });
 
+  it('omits digestDate when the cron request does not provide one', async () => {
+    const { GET } = await import('./route');
+
+    const response = await GET(new Request('https://app.test/api/cron/digest', {
+      headers: { authorization: 'Bearer cron-secret' },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith('https://api.test/api/taskforge/v1/jobs/digest', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-job-secret': 'job-secret',
+      },
+      body: JSON.stringify({
+        dryRun: false,
+      }),
+      cache: 'no-store',
+    });
+  });
+
   it('rejects requests without the cron bearer token', async () => {
     const { GET } = await import('./route');
 
