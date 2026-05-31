@@ -17,20 +17,20 @@
 
 ### API middleware and route security
 - `apps/api/src/app.ts` initializes trust proxy from `getHttpServerConfig()`, then applies `express.json()`, `cookieParser()`, credentialed CORS, Helmet, and a global `express-rate-limit` limiter before public health/docs routes and protected API routers.
-- CORS origin parsing already rejects invalid URLs, pathful origins, and empty entries in `apps/api/src/config/http.ts`; runtime CORS still has a development-only `localhost` wildcard and a production fallback origin, so Milestone 6 hardening must verify fallback behavior and tests before release.
+- CORS origin parsing rejects invalid URLs, pathful origins, and empty entries in `apps/api/src/config/http.ts`; Milestone 6 hardening removed the production fallback origin and now relies on configured origins plus local non-production defaults.
 - Request body limits are currently the Express JSON parser default because `express.json()` is called without an explicit `limit`; this is acceptable for the audit but must become an explicit follow-up for abuse-control work.
 - Auth middleware accepts the HttpOnly API session cookie first, then `Authorization: Bearer`, and only falls back to `x-taskforge-dev-bypass` when the dev bypass is enabled with a client secret.
 - Auth register/login/refresh/session-bridge routes have a 5-per-15-minute limiter outside `NODE_ENV=test`; digest preview/send routes add 10-per-minute and 3-per-minute controls, while task/tag/board mutations rely on the global limiter plus schema validation.
 - Current rate limits use the default in-process `express-rate-limit` store, so production release work must either document a single API instance assumption or choose a shared store before horizontally scaling the API.
 - Protected digest job routes are only registered when `DIGEST_JOB_SECRET` is configured and require either `Authorization: Bearer <secret>` or `x-job-secret`; missing/incorrect secrets return a generic `401`.
 - Trusted proxy parsing supports boolean, hop count, named/subnet proxy lists, or disabled values, but Milestone 6 still needs tests proving `req.ip` behavior cannot be spoofed when rate limits are evaluated.
-- No terminal Express error-handling middleware is registered in `createApp()`. Route handlers call `next(error)`, which currently falls through to Express defaults; release hardening should add/verify a structured non-secret error response.
+- `createApp()` now registers terminal JSON 404/error handling, and async auth handlers are wrapped so route failures do not fall through to Express' default HTML/stack responses.
 
 ### Web auth, proxy, cookies, and bypass behavior
 - NextAuth uses the Prisma adapter, database sessions, `NEXTAUTH_SECRET`, `trustHost: true`, OAuth email normalization, and verified-email checks for Google sign-ins.
 - Web route surfaces are limited to NextAuth, logout, `/api/auth/me`, `/auth/session-bridge`, and the digest cron proxy. There are no general task/tag API proxy routes; app data clients call the API base URL directly.
 - `/api/cron/digest` validates `Authorization: Bearer <CRON_SECRET>`, requires `DIGEST_JOB_SECRET`, and forwards the request to the API job endpoint with `x-job-secret`.
-- The web `/auth/session-bridge` route mints or refreshes the API session cookie for an authenticated web user, sanitizes the return path, probes existing API cookies, and sets the cookie as `httpOnly`, `sameSite: 'lax'`, `secure` in production, path `/`, seven-day max age, and optional `COOKIE_DOMAIN`; the API auth routes use matching cookie semantics.
+- The web `/auth/session-bridge` route mints or refreshes the API session cookie for an authenticated web user, sanitizes the return path, probes existing API cookies, sets no-store redirect responses, and sets the cookie as `httpOnly`, `sameSite: 'lax'`, `secure` in production, path `/`, seven-day max age, and explicit-only `COOKIE_DOMAIN`; the API auth routes use matching cookie semantics.
 - Logout performs an origin/referer check before calling the API logout endpoint with the cookie header and expiring the session cookie.
 - `TF_DEV_BYPASS_AUTH` is gated to `NODE_ENV=development` or `test` in both API and web code; production examples keep it false and production docs explicitly require it to stay disabled.
 
