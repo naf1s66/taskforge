@@ -37,7 +37,7 @@
 ### Environment, Docker, CI, and production docs
 - `infra/env/api.prod.env.example` documents production API values for CORS, database, JWT secrets, session bridge, dev bypass disabled, SMTP/Resend, digest secret, `NODE_ENV=production`, `TRUST_PROXY`, and optional `COOKIE_DOMAIN`.
 - `infra/env/web.prod.env.example` documents production web values for NextAuth, database/OAuth, session bridge, API base URLs, cron/digest secrets, dev bypass disabled, and optional `COOKIE_DOMAIN`.
-- README documents the local and production meaning of `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_SECRET`, `DIGEST_JOB_SECRET`, `CRON_SECRET`, `COOKIE_DOMAIN`, and dev bypass variables. It does not yet list `TRUST_PROXY` in the environment reference, so the docs refresh task now tracks that concrete gap.
+- README documents the local and production meaning of `CORS_ALLOWED_ORIGINS`, `TRUST_PROXY`, `NEXTAUTH_SECRET`, `DIGEST_JOB_SECRET`, `CRON_SECRET`, `COOKIE_DOMAIN`, and dev bypass variables.
 - CI currently supplies safe test secrets for JWT/session/NextAuth values, runs migrations and `make build`, but does not document or validate production CORS/trust-proxy behavior directly.
 - Docker Compose uses the env examples for local services and MailHog; no production secret values are committed.
 
@@ -47,9 +47,9 @@
 - Email observability ADR/runbook continue to require alerts and daily human review before scheduled sends are enabled.
 
 ## Concrete Follow-up Edits Recorded
-- `docs/tasks/milestone6/02-cors-cookie-proxy-hardening.md`: added follow-ups for CORS fallback decisions, explicit cookie/session-bridge topology, `TRUST_PROXY` tests, README `TRUST_PROXY` docs, and API error handling.
+- `docs/tasks/milestone6/02-cors-cookie-proxy-hardening.md`: added follow-ups for CORS fallback decisions, explicit cookie/session-bridge topology, `TRUST_PROXY` tests, production-doc `TRUST_PROXY` checks, and API error handling.
 - `docs/tasks/milestone6/03-rate-limit-and-abuse-controls.md`: added follow-ups for explicit body-size limits, concrete mutation/query bounds, endpoint-specific rate-limit coverage, job-secret negative tests, trusted-proxy/IP spoofing tests, and the in-process limiter scaling decision.
-- `docs/tasks/milestone6/05-docs-adrs-readme-refresh.md`: added follow-ups to document `TRUST_PROXY`, production placeholders, no general web task/tag proxy, rate-limit deployment assumptions, and email scheduled-send gates.
+- `docs/tasks/milestone6/05-docs-adrs-readme-refresh.md`: added follow-ups to verify `TRUST_PROXY` docs stay aligned, production placeholders, no general web task/tag proxy, rate-limit deployment assumptions, and email scheduled-send gates.
 - `docs/tasks/milestone6/07-security-http-pack-and-smoke.md`: added follow-ups for CORS/cookie/session-bridge manual checks, cron/job auth negative checks, and safe bounded rate-limit smokes.
 - `docs/tasks/milestone6/08-milestone6-verification.md`: added release-gate checks that no audit follow-up remains only in this document, session-bridge behavior is covered, and production email gates remain explicit.
 
