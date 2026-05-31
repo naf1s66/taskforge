@@ -4,12 +4,12 @@ This document describes the development-only auth bypass that keeps the TaskForg
 
 ## Current default
 
-Right now the shared development examples enable the bypass by default:
+The shared development examples keep the bypass disabled by default:
 
 - `infra/env/web.env.example`
 - `infra/env/api.env.example`
 
-That is intentional for the current stage of the project. We are still in development, and local setup should prioritize a working dashboard, task board, and task mutations over strict production auth parity.
+That default keeps local Docker aligned with the normal session bridge path. We are still in development, so the bypass remains available when local auth wiring blocks the dashboard, task board, or task mutations.
 
 The bypass is also intended for short-lived Codex Cloud PR previews so automation can open the app and attach screenshots after code changes. It should not be treated as a staging or production authentication mode.
 
@@ -50,7 +50,7 @@ TF_DEV_BYPASS_CLIENT_SECRET=dev-bypass-client-secret
 
 ## Local development recommendation
 
-For local Docker and local manual runs, keep these enabled for now:
+For local Docker and local manual runs, prefer the normal session bridge path first. If local auth wiring is incomplete, enable these together in both apps:
 
 - `TF_DEV_BYPASS_AUTH=true`
 - matching `TF_DEV_BYPASS_CLIENT_SECRET` in web and API
@@ -61,7 +61,7 @@ You should still keep the normal bridge settings present as well:
 - `API_BASE_URL`
 - `NEXT_PUBLIC_API_BASE_URL`
 
-That way the app prefers the real cookie path when available, but it does not become unusable when local auth wiring is incomplete.
+That way the app can remain usable when local auth wiring is incomplete without making bypass mode the default path.
 
 ## Production expectation
 

@@ -1,0 +1,314 @@
+import type { Prisma, PrismaClient, TaskStatus } from '@prisma/client';
+
+import { taskWithTagsInclude, toTaskBoardItemDTO } from '../repositories/task-mapper';
+
+export interface DailyDigestTaskSummary {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  dueDate?: string;
+  updatedAt: string;
+  tags: string[];
+}
+
+export interface DailyDigestGroup {
+  key: 'overdue' | 'dueToday' | 'dueSoon' | 'recentlyUpdated' | 'blockedByStatus';
+  label: string;
+  total: number;
+  tasks: DailyDigestTaskSummary[];
+}
+
+export interface DailyDigestQueryResult {
+  generatedAt: string;
+  timezone: string;
+  window: {
+    startOfTodayUtc: string;
+    startOfTomorrowUtc: string;
+    dueSoonUntilUtc: string;
+    recentlyUpdatedSinceUtc: string;
+  };
+  totalTasksConsidered: number;
+  groups: DailyDigestGroup[];
+}
+
+export interface DailyDigestQueryOptions {
+  now?: Date;
+  timezone?: string;
+  dueSoonDays?: number;
+  recentlyUpdatedDays?: number;
+  maxTasksPerGroup?: number;
+}
+
+export class DailyDigestQueryService {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async queryForUser(userId: string, options: DailyDigestQueryOptions = {}): Promise<DailyDigestQueryResult> {
+    const now = options.now ?? new Date();
+    const timezone = options.timezone ?? (await this.resolveUserTimezone(userId));
+    const dueSoonDays = Math.max(1, options.dueSoonDays ?? 7);
+    const recentlyUpdatedDays = Math.max(1, options.recentlyUpdatedDays ?? 2);
+    const maxTasksPerGroup = Math.max(1, options.maxTasksPerGroup ?? 10);
+
+    const boundaries = computeUtcWindowBoundaries(now, timezone, dueSoonDays, recentlyUpdatedDays);
+    const where: Prisma.TaskWhereInput = {
+      userId,
+      OR: [
+        {
+          status: { not: 'DONE' },
+          dueDate: { lt: boundaries.dueSoonUntilUtc },
+        },
+        {
+          status: { not: 'DONE' },
+          updatedAt: { gte: boundaries.recentlyUpdatedSinceUtc },
+        },
+        {
+          status: 'TODO',
+        },
+      ],
+    };
+
+    const tasks = await this.prisma.task.findMany({
+      where,
+      include: taskWithTagsInclude,
+      orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    });
+
+    const taskSummaries = tasks.map(task => {
+      const boardItem = toTaskBoardItemDTO(task);
+      return {
+        id: boardItem.id,
+        title: boardItem.title,
+        status: boardItem.status as TaskStatus,
+        priority: boardItem.priority,
+        dueDate: boardItem.dueDate,
+        updatedAt: boardItem.updatedAt,
+        tags: boardItem.tags,
+      } satisfies DailyDigestTaskSummary;
+    });
+
+    const overdue = taskSummaries
+      .filter(task =>
+        Boolean(task.dueDate) && new Date(task.dueDate as string) < boundaries.startOfTodayUtc && task.status !== 'DONE')
+      .sort(compareDueDigestTasks);
+
+    const dueToday = taskSummaries
+      .filter(task => {
+        if (!task.dueDate || task.status === 'DONE') {
+          return false;
+        }
+        const due = new Date(task.dueDate);
+        return due >= boundaries.startOfTodayUtc && due < boundaries.startOfTomorrowUtc;
+      })
+      .sort(compareDueDigestTasks);
+
+    const dueSoon = taskSummaries
+      .filter(task => {
+        if (!task.dueDate || task.status === 'DONE') {
+          return false;
+        }
+        const due = new Date(task.dueDate);
+        return due >= boundaries.startOfTomorrowUtc && due < boundaries.dueSoonUntilUtc;
+      })
+      .sort(compareDueDigestTasks);
+
+    const recentlyUpdated = taskSummaries
+      .filter(task => new Date(task.updatedAt) >= boundaries.recentlyUpdatedSinceUtc && task.status !== 'DONE')
+      .sort(compareUpdatedDigestTasks);
+
+    const blockedByStatus = taskSummaries.filter(task => task.status === 'TODO').sort(compareBlockedDigestTasks);
+
+    return {
+      generatedAt: now.toISOString(),
+      timezone,
+      window: {
+        startOfTodayUtc: boundaries.startOfTodayUtc.toISOString(),
+        startOfTomorrowUtc: boundaries.startOfTomorrowUtc.toISOString(),
+        dueSoonUntilUtc: boundaries.dueSoonUntilUtc.toISOString(),
+        recentlyUpdatedSinceUtc: boundaries.recentlyUpdatedSinceUtc.toISOString(),
+      },
+      totalTasksConsidered: taskSummaries.length,
+      groups: [
+        { key: 'overdue', label: 'Overdue', total: overdue.length, tasks: overdue.slice(0, maxTasksPerGroup) },
+        { key: 'dueToday', label: 'Due today', total: dueToday.length, tasks: dueToday.slice(0, maxTasksPerGroup) },
+        { key: 'dueSoon', label: 'Due soon', total: dueSoon.length, tasks: dueSoon.slice(0, maxTasksPerGroup) },
+        {
+          key: 'recentlyUpdated',
+          label: 'Recently updated',
+          total: recentlyUpdated.length,
+          tasks: recentlyUpdated.slice(0, maxTasksPerGroup),
+        },
+        {
+          key: 'blockedByStatus',
+          label: 'Still todo',
+          total: blockedByStatus.length,
+          tasks: blockedByStatus.slice(0, maxTasksPerGroup),
+        },
+      ],
+    };
+  }
+
+  private async resolveUserTimezone(userId: string): Promise<string> {
+    const preference = await this.prisma.emailPreference.findUnique({
+      where: { userId },
+      select: { dailyDigestTimezone: true },
+    });
+
+    return preference?.dailyDigestTimezone ?? 'UTC';
+  }
+}
+
+const priorityRank: Record<DailyDigestTaskSummary['priority'], number> = {
+  HIGH: 0,
+  MEDIUM: 1,
+  LOW: 2,
+};
+
+function compareDueDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const leftDue = left.dueDate ? Date.parse(left.dueDate) : Number.POSITIVE_INFINITY;
+  const rightDue = right.dueDate ? Date.parse(right.dueDate) : Number.POSITIVE_INFINITY;
+  const dueDelta = leftDue - rightDue;
+  if (dueDelta !== 0) {
+    return dueDelta;
+  }
+
+  return comparePriorityThenUpdatedThenTitle(left, right);
+}
+
+function compareUpdatedDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  return compareDueDigestTasks(left, right);
+}
+
+function compareBlockedDigestTasks(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  return compareDueDigestTasks(left, right);
+}
+
+function comparePriorityThenUpdatedThenTitle(left: DailyDigestTaskSummary, right: DailyDigestTaskSummary): number {
+  const priorityDelta = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+
+  const updatedDelta = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+
+  const titleDelta = left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+export function computeUtcWindowBoundaries(
+  now: Date,
+  timezone: string,
+  dueSoonDays: number,
+  recentlyUpdatedDays: number,
+): {
+  startOfTodayUtc: Date;
+  startOfTomorrowUtc: Date;
+  dueSoonUntilUtc: Date;
+  recentlyUpdatedSinceUtc: Date;
+} {
+  const localDate = toLocalDateParts(now, timezone);
+  const startOfTodayUtc = localDateTimeToUtc(localDate.year, localDate.month, localDate.day, 0, timezone);
+  const startOfTomorrowUtc = localDateTimeToUtc(localDate.year, localDate.month, localDate.day + 1, 0, timezone);
+  const dueSoonUntilUtc = localDateTimeToUtc(
+    localDate.year,
+    localDate.month,
+    localDate.day + 1 + dueSoonDays,
+    0,
+    timezone,
+  );
+
+  return {
+    startOfTodayUtc,
+    startOfTomorrowUtc,
+    dueSoonUntilUtc,
+    recentlyUpdatedSinceUtc: addUtcDays(now, -recentlyUpdatedDays),
+  };
+}
+
+function toLocalDateParts(date: Date, timezone: string): { year: number; month: number; day: number } {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find(part => part.type === 'year')?.value);
+  const month = Number(parts.find(part => part.type === 'month')?.value);
+  const day = Number(parts.find(part => part.type === 'day')?.value);
+
+  if (!year || !month || !day) {
+    throw new Error(`Unable to compute local date parts for timezone ${timezone}`);
+  }
+
+  return { year, month, day };
+}
+
+export function localDateTimeToUtc(year: number, month: number, day: number, hour: number, timezone: string): Date {
+  const targetWallTimeUtc = Date.UTC(year, month - 1, day, hour, 0, 0);
+  let candidate = new Date(targetWallTimeUtc);
+
+  for (let attempts = 0; attempts < 4; attempts += 1) {
+    const offsetMs = getTimeZoneOffsetMs(candidate, timezone);
+    const next = new Date(targetWallTimeUtc - offsetMs);
+
+    if (next.getTime() === candidate.getTime()) {
+      return next;
+    }
+
+    candidate = next;
+  }
+
+  return candidate;
+}
+
+function getTimeZoneOffsetMs(date: Date, timezone: string): number {
+  const partsInTz = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(date);
+
+  const tzYear = Number(partsInTz.find(part => part.type === 'year')?.value);
+  const tzMonth = Number(partsInTz.find(part => part.type === 'month')?.value);
+  const tzDay = Number(partsInTz.find(part => part.type === 'day')?.value);
+  const tzHour = normalizeIntlHour(Number(partsInTz.find(part => part.type === 'hour')?.value));
+  const tzMinute = Number(partsInTz.find(part => part.type === 'minute')?.value);
+  const tzSecond = Number(partsInTz.find(part => part.type === 'second')?.value);
+
+  const asUtcFromTzView = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond);
+  return asUtcFromTzView - date.getTime();
+}
+
+function normalizeIntlHour(hour: number): number {
+  return hour === 24 ? 0 : hour;
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}

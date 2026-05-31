@@ -4,7 +4,8 @@ Full-stack task manager built with Next.js (TS), shadcn/ui, Tailwind, Framer Mot
 
 - PRD: `docs/PRD.md`
 - Agents: `docs/AGENTS.md`
-- ADRs: `docs/adr/`
+- ADRs: `docs/adr/`; production/deployment ADRs: `docs/prod/adr/`
+- Production runbooks: `docs/prod/`
 
 ## Structure
 ```
@@ -67,7 +68,7 @@ Note: `make up` builds and starts the Dockerized API/Web services, while the pnp
 For architectural details, see `docs/adr/0001-auth-strategy-nextauth-%2B-backend-jwt.md` and the PRD auth section in `docs/PRD.md#authentication`.
 
 ### Environment variables
-Keep `.env` files aligned with the templates in `infra/env/`. The table below summarizes the auth-related variables and their intended use.
+Keep `.env` files aligned with the templates in `infra/env/`. The table below summarizes the runtime variables and their intended use.
 
 | Variable | Scope | Dev default | Notes |
 | --- | --- | --- | --- |
@@ -76,12 +77,19 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `NEXTAUTH_SECRET` | `apps/web/.env` | `changeme` | Random 32+ character string generated with `openssl rand -hex 32`. In production this must be rotated and stored securely. |
 | `NEXTAUTH_URL` | `apps/web/.env` | `http://localhost:3000` | Match the public URL serving the Next.js app. When deploying, update to `https://<your-domain>`. |
 | `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
+| `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be origins without paths; set to the deployed web origin in production. |
 | `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Include the `/api/taskforge` prefix so callers can append `/v1/*` paths consistently. |
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
 | `GOOGLE_ID` / `GOOGLE_SECRET` | `apps/web/.env` | _(blank)_ | Same as above for Google OAuth. Configure OAuth consent screen and redirect URIs to match `NEXTAUTH_URL`. |
 | `TF_DEV_BYPASS_AUTH` | both | `false` | Development/test-only escape hatch for local auth issues. Set to `true` in both apps only when using the documented dev bypass flow. |
 | `TF_DEV_BYPASS_CLIENT_SECRET` | both | _(blank)_ | Shared HMAC secret for the dev bypass client token. Configure only with `TF_DEV_BYPASS_AUTH=true`; never set it in production. |
+| `SMTP_HOST` / `SMTP_PORT` | `apps/api/.env` | `mailhog` / `1025` | Local Docker sends through MailHog. Production uses Resend SMTP; see `infra/env/api.prod.env.example` and `docs/prod/resend-email-setup.md`. |
+| `SMTP_USER` / `SMTP_PASS` | `apps/api/.env` | _(blank)_ | Production Resend SMTP uses `SMTP_USER=resend` and stores the Resend API key in `SMTP_PASS`. Never commit real credentials. |
+| `EMAIL_FROM` | `apps/api/.env` | `TaskForge <noreply@taskforge.local>` | Production must use a sender on the verified Resend domain. |
+| `EMAIL_DAILY_SEND_LIMIT` | `apps/api/.env` | `90` | Daily digest budget guard. Keep at or below the Resend free daily limit unless the account is upgraded. |
+| `DIGEST_JOB_SECRET` | `apps/api/.env`, `apps/web/.env` | `dev-digest-job-secret` | Shared secret for the protected digest job endpoint and web cron proxy. Rotate and store securely in production. |
+| `CRON_SECRET` | `apps/web/.env` | `dev-cron-secret` | Vercel Cron bearer secret for `GET /api/cron/digest`; must differ from public/client secrets. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
@@ -90,7 +98,7 @@ For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskfo
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
 2. Update the secrets listed above. For Docker-based workflows keep the Postgres host as `db`; when running the dev servers directly (`pnpm -C apps/* dev`) point `DATABASE_URL` at `localhost` or your cloud instance.
-3. Restart the affected service after changing secrets (for example, `pnpm -C apps/web dev` or `make up`).
+3. The API server, digest CLI, and seed script load `apps/api/.env*` through `dotenv-flow`; restart the affected service after changing secrets (for example, `pnpm -C apps/api dev`, `pnpm -C apps/web dev`, or `make up`).
 
 ### OAuth providers
 - Configure any provider credentials that are available. Leaving the variables blank keeps the login screen in a safe "No providers configured" state.
@@ -109,6 +117,8 @@ pnpm -C apps/api prisma migrate dev
 ```
 
 Use `pnpm -C apps/api prisma migrate deploy` when applying the same migrations to managed environments or the Dockerised Postgres service.
+
+Before the first production database is created, development migrations may be squashed into a clean timestamped baseline. See [Database Migration Squash Before Production](docs/prod/database-migration-squash.md) for the rules and verification checklist.
 
 Seed the deterministic demo user (`demo@taskforge.dev` / `Demo1234!` by default) for QA flows:
 
@@ -141,6 +151,7 @@ Reusable HTTP request packs live in `apps/api/tests/`:
 - `auth.http` (auth smoke flows)
 - `tasks.http` (task CRUD and filters)
 - `kanban.http` (board fetch/move + tag list/create)
+- `email.http` (seeded email auth, preferences, digest preview, dry-run send, and guarded MailHog delivery)
 
 Use environment variables/placeholders instead of fixed hosts (`@apiBaseUrl`, `{{accessToken}}`) so the same files run against local, dev, and staging environments.
 
@@ -197,6 +208,78 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: planned future scope. MailHog remains in the local compose stack for SMTP work when the Nodemailer adapter is implemented.
+- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
+- Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment.
+
+## Email setup and local verification (Milestone 5)
+
+### Local development (MailHog)
+- Docker compose includes MailHog for SMTP capture (`mailhog:1025`) and inbox preview (`http://localhost:8025`).
+- Use env defaults from `infra/env/api.env.example`:
+  - `SMTP_HOST=mailhog`
+  - `SMTP_PORT=1025`
+  - `SMTP_USER=` / `SMTP_PASS=` (blank locally)
+  - `EMAIL_FROM=TaskForge <noreply@taskforge.local>`
+  - `EMAIL_DAILY_SEND_LIMIT=90`
+- Keep `DIGEST_JOB_SECRET` configured in both `apps/api/.env` and `apps/web/.env` so local protected digest routes can be exercised.
+
+### Production default (Resend SMTP)
+- `SMTP_HOST=smtp.resend.com`
+- `SMTP_PORT=587`
+- `SMTP_USER=resend`
+- `SMTP_PASS=<RESEND_API_KEY>`
+- `EMAIL_FROM=<verified sender on the Resend-verified domain>`
+- `EMAIL_DAILY_SEND_LIMIT=90` on Resend free tier (conservative buffer below the 100-email daily cap)
+
+Resend's free transactional plan is currently documented as 100 emails/day and 3,000 emails/month. Sent and received messages count toward quota, and multiple `To`, `CC`, or `BCC` recipients count separately, so TaskForge keeps the default application budget below the full daily provider cap.
+
+Also configure:
+- API: `DIGEST_JOB_SECRET`
+- Web: `CRON_SECRET`
+- Web: `DIGEST_JOB_SECRET` (must match API value)
+
+### Digest behavior summary
+- Daily digest execution is explicit (`/api/taskforge/v1/jobs/digest`) and can run as dry run or real send.
+- Digests are idempotent for the same user/date and skip users with disabled preferences, unverified/placeholder addresses, or non-matching digest hour.
+- Budget controls include `EMAIL_DAILY_SEND_LIMIT` and per-run `sendLimit`; budget/provider-quota skips are tracked in run results.
+
+### Local verification steps
+1. Start infra and seed data:
+   ```bash
+   make up
+   docker compose -f infra/docker-compose.yml exec api pnpm prisma migrate deploy
+   docker compose -f infra/docker-compose.yml exec api pnpm tsx prisma/seed.ts
+   ```
+   The Docker exec form uses the container's `DATABASE_URL` (`db:5432`) and avoids host/compose credential mismatches. If you intentionally run Prisma from the host, point `DATABASE_URL` at `localhost:5432` first.
+2. Run API and web checks:
+   ```bash
+   pnpm -C apps/api run lint:http
+   pnpm -C apps/api test -- daily-digest-runner.test.ts email-digest-route.test.ts auth.e2e.test.ts jobs-route.test.ts
+   pnpm -C apps/web test -- app/api/cron/digest/route.test.ts
+   ```
+3. Trigger a digest dry run locally:
+   ```bash
+   pnpm -C apps/api digest:run 2026-05-19 --dry-run
+   ```
+4. Exercise protected digest endpoint:
+   ```bash
+   curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
+     -H "content-type: application/json" \
+     -H "x-job-secret: dev-digest-job-secret" \
+     -d '{"digestDate":"2026-05-19","dryRun":true,"sendLimit":90}'
+   ```
+   Replace `dev-digest-job-secret` if your local env overrides `DIGEST_JOB_SECRET`.
+5. Run `apps/api/tests/email.http` in your HTTP client:
+   - Login as the seeded `demo@taskforge.dev` user.
+   - Read/update digest preferences.
+   - Preview the digest payload.
+   - Run the safe dry-run send request.
+6. To verify actual local SMTP capture, keep the target API local, confirm SMTP points to MailHog, set `@mailhogDeliveryDryRun = false` in `apps/api/tests/email.http`, and run only the "MailHog delivery opt-in" request. Verify one message in MailHog UI: `http://localhost:8025`.
+
+References:
+- Manual checklist: `docs/testing/milestone5-manual-checklist.md`
+- Automated checks: `docs/testing/milestone5-automated.md`
+- Production setup: `docs/prod/resend-email-setup.md`
+- Scheduler runbook: `docs/prod/digest-scheduler.md`

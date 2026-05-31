@@ -78,6 +78,11 @@ import {
   useTasksQuery,
   type TaskListItem,
 } from "@/lib/tasks-hooks";
+import {
+  useEmailPreferenceQuery,
+  useUpdateEmailPreferenceMutation,
+} from "@/lib/email-preferences-hooks";
+import { useDigestPreviewQuery } from "@/lib/digest-preview-hooks";
 import { cn } from "@/lib/utils";
 import { sanitizeTags } from "@/lib/task-tags";
 import { TaskTagSelector } from "@/components/tasks/task-tag-selector";
@@ -856,6 +861,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
   const workspaceBoardQuery = useTaskBoardQuery(undefined, {
     enabled: hasHydratedFilters,
   });
+  const emailPreferenceQuery = useEmailPreferenceQuery();
+  const updateEmailPreference = useUpdateEmailPreferenceMutation();
+  const digestPreviewQuery = useDigestPreviewQuery();
   const tagsQuery = useTagsQuery();
   const moveTask = useMoveTaskOnBoard();
   const { toast } = useToast();
@@ -1199,6 +1207,10 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     !boardQuery.isError &&
     visibleTaskCount === 0;
   const dragActive = Boolean(activeId);
+  const isDigestPreferenceDisabled =
+    !emailPreferenceQuery.isLoading &&
+    !emailPreferenceQuery.isError &&
+    !emailPreferenceQuery.data?.dailyDigestEnabled;
 
   const renderedTaskMap = useMemo(() => {
     const map = new Map<string, TaskListItem>();
@@ -1718,6 +1730,104 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
                   create it.
                 </p>
               ) : null}
+              <div className="rounded-lg border border-border/70 bg-background/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Daily digest emails</p>
+                    <p className="text-xs text-muted-foreground">
+                      Receive a daily task summary during the configured delivery window.
+                    </p>
+                    <p className="text-xs font-medium text-foreground">
+                      Status:{" "}
+                      {emailPreferenceQuery.isLoading
+                        ? "Loading"
+                        : emailPreferenceQuery.isError
+                          ? "Unavailable"
+                          : emailPreferenceQuery.data?.dailyDigestEnabled
+                            ? "Enabled"
+                            : "Disabled"}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      emailPreferenceQuery.data?.dailyDigestEnabled ? "default" : "secondary"
+                    }
+                    aria-label={
+                      emailPreferenceQuery.data?.dailyDigestEnabled
+                        ? "Turn daily digest emails off"
+                        : "Turn daily digest emails on"
+                    }
+                    aria-pressed={Boolean(emailPreferenceQuery.data?.dailyDigestEnabled)}
+                    disabled={
+                      emailPreferenceQuery.isLoading ||
+                      emailPreferenceQuery.isError ||
+                      updateEmailPreference.isPending
+                    }
+                    onClick={() =>
+                      updateEmailPreference.mutate(
+                        !(emailPreferenceQuery.data?.dailyDigestEnabled ?? false),
+                      )
+                    }
+                  >
+                    {updateEmailPreference.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving
+                      </>
+                    ) : emailPreferenceQuery.data?.dailyDigestEnabled ? (
+                      "Turn off"
+                    ) : (
+                      "Turn on"
+                    )}
+                  </Button>
+                </div>
+                <div className="mt-4 border-t border-border/60 pt-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">Next digest preview</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label="Refresh digest preview"
+                      className="h-7 px-2 text-xs"
+                      disabled={digestPreviewQuery.isLoading || digestPreviewQuery.isFetching}
+                      onClick={() => void digestPreviewQuery.refetch()}
+                    >
+                      <RefreshCcw className={cn("h-3.5 w-3.5", digestPreviewQuery.isFetching && "animate-spin")} />
+                      Refresh
+                    </Button>
+                  </div>
+                  {isDigestPreferenceDisabled ? (
+                    <p className="text-xs text-muted-foreground">
+                      Digest is currently disabled. Enable it to keep this preview aligned with your next scheduled send.
+                    </p>
+                  ) : null}
+                  {digestPreviewQuery.isLoading ? (
+                    <div className="space-y-2" role="status" aria-label="Loading digest preview">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </div>
+                  ) : digestPreviewQuery.isError ? (
+                    <p className="text-xs text-destructive">Digest preview is unavailable right now.</p>
+                  ) : digestPreviewQuery.data ? (
+                    <div className="space-y-2">
+                      {digestPreviewQuery.data.groups.map((group) => (
+                        <div key={group.key} className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{group.label}</span>
+                          <span className="font-medium text-foreground">{group.total}</span>
+                        </div>
+                      ))}
+                      {digestPreviewQuery.data.totalTasksConsidered === 0 ? (
+                        <p className="text-xs text-muted-foreground">No digest-worthy tasks right now.</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No preview data yet.</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>

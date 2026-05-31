@@ -8,6 +8,7 @@ import GitHub from 'next-auth/providers/github';
 import Google from 'next-auth/providers/google';
 
 import { getPrismaClient } from './prisma';
+import { scheduleWelcomeEmail } from './welcome-email';
 
 export type AuthProviderSummary = {
   id: string;
@@ -68,6 +69,15 @@ function normalizeEmail(value: string | null | undefined): string | null {
   }
 
   return value.trim().toLowerCase();
+}
+
+function dispatchWelcomeEmail(user: Pick<AdapterUser, 'id' | 'email'>) {
+  void scheduleWelcomeEmail({ id: user.id, email: user.email }).catch(error => {
+    console.error('[notifications] Welcome email scheduling failed', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 function mapAccountToPrisma(account: AdapterAccount) {
@@ -203,7 +213,11 @@ const adapter: Adapter = {
       throw new Error('Prisma adapter does not implement createUser');
     }
 
-    return baseAdapter.createUser(payload);
+    const created = await baseAdapter.createUser(payload);
+
+    dispatchWelcomeEmail(created);
+
+    return created;
   },
   async linkAccount(account: AdapterAccount) {
     const linked = await ensureAccountLink(account);

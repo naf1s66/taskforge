@@ -70,6 +70,52 @@ const authTokens: OpenAPIV3.SchemaObject = {
   },
 };
 
+const emailPreference: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    dailyDigestEnabled: {
+      type: 'boolean',
+      description: 'Whether the authenticated user receives daily digest emails.',
+    },
+    dailyDigestTimezone: {
+      type: 'string',
+      description: 'IANA timezone used to resolve digest date windows.',
+      example: 'UTC',
+    },
+  },
+  required: ['dailyDigestEnabled', 'dailyDigestTimezone'],
+  example: {
+    dailyDigestEnabled: false,
+    dailyDigestTimezone: 'UTC',
+  },
+};
+
+const emailPreferenceUpdateInput: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    dailyDigestEnabled: {
+      type: 'boolean',
+      description: 'Enable or disable daily digest emails for the authenticated user.',
+    },
+  },
+  required: ['dailyDigestEnabled'],
+  additionalProperties: false,
+  example: {
+    dailyDigestEnabled: true,
+  },
+};
+
+const emailPreferenceResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    emailPreference: { $ref: '#/components/schemas/EmailPreference' },
+  },
+  required: ['emailPreference'],
+  example: {
+    emailPreference: emailPreference.example as Record<string, unknown>,
+  },
+};
+
 const authSuccessExample = {
   user: authUser.example as Record<string, unknown>,
   tokens: authTokens.example as Record<string, unknown>,
@@ -97,7 +143,22 @@ const authMeSuccessExample = {
   value: { user: authUser.example as Record<string, unknown> },
 } satisfies OpenAPIV3.ExampleObject;
 
+const accountMeSuccessExample = {
+  value: {
+    user: authUser.example as Record<string, unknown>,
+    emailPreference: emailPreference.example as Record<string, unknown>,
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
 const authMeAnonymousExample = { value: { user: null } } satisfies OpenAPIV3.ExampleObject;
+
+const emailPreferenceUpdateExample = {
+  value: emailPreferenceUpdateInput.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const emailPreferenceResponseExample = {
+  value: emailPreferenceResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
 
 const authCredentialsExample = {
   value: authCredentials.example as Record<string, unknown>,
@@ -464,6 +525,171 @@ const taskDeletedResponse: OpenAPIV3.SchemaObject = {
   },
 };
 
+const dailyDigestTaskSummary: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    title: { type: 'string' },
+    status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+    priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    updatedAt: { type: 'string', format: 'date-time' },
+    tags: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['id', 'title', 'status', 'priority', 'updatedAt', 'tags'],
+  example: {
+    id: '4dce5dc0-0f19-4b9c-9c28-31a237a2b617',
+    title: 'Review launch checklist',
+    status: 'TODO',
+    priority: 'HIGH',
+    dueDate: '2026-05-21T12:00:00.000Z',
+    updatedAt: '2026-05-20T10:30:00.000Z',
+    tags: ['launch'],
+  },
+};
+
+const dailyDigestGroup: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    key: {
+      type: 'string',
+      enum: ['overdue', 'dueToday', 'dueSoon', 'recentlyUpdated', 'blockedByStatus'],
+    },
+    label: { type: 'string' },
+    total: { type: 'integer', minimum: 0 },
+    tasks: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/DailyDigestTaskSummary' },
+    },
+  },
+  required: ['key', 'label', 'total', 'tasks'],
+  example: {
+    key: 'dueToday',
+    label: 'Due today',
+    total: 1,
+    tasks: [dailyDigestTaskSummary.example as Record<string, unknown>],
+  },
+};
+
+const dailyDigestPreviewResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    generatedAt: { type: 'string', format: 'date-time' },
+    timezone: { type: 'string', example: 'America/New_York' },
+    window: {
+      type: 'object',
+      properties: {
+        startOfTodayUtc: { type: 'string', format: 'date-time' },
+        startOfTomorrowUtc: { type: 'string', format: 'date-time' },
+        dueSoonUntilUtc: { type: 'string', format: 'date-time' },
+        recentlyUpdatedSinceUtc: { type: 'string', format: 'date-time' },
+      },
+      required: ['startOfTodayUtc', 'startOfTomorrowUtc', 'dueSoonUntilUtc', 'recentlyUpdatedSinceUtc'],
+    },
+    totalTasksConsidered: { type: 'integer', minimum: 0 },
+    groups: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/DailyDigestGroup' },
+    },
+  },
+  required: ['generatedAt', 'timezone', 'window', 'totalTasksConsidered', 'groups'],
+  example: {
+    generatedAt: '2026-05-20T12:00:00.000Z',
+    timezone: 'America/New_York',
+    window: {
+      startOfTodayUtc: '2026-05-20T04:00:00.000Z',
+      startOfTomorrowUtc: '2026-05-21T04:00:00.000Z',
+      dueSoonUntilUtc: '2026-05-28T04:00:00.000Z',
+      recentlyUpdatedSinceUtc: '2026-05-18T12:00:00.000Z',
+    },
+    totalTasksConsidered: 1,
+    groups: [dailyDigestGroup.example as Record<string, unknown>],
+  },
+};
+
+const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    digestDate: {
+      type: 'string',
+      format: 'date',
+      description: 'Optional local digest calendar date. Defaults to today in the user digest timezone.',
+    },
+    digestHourUtc: {
+      type: 'integer',
+      minimum: 0,
+      maximum: 23,
+      description: 'Optional UTC hour filter. Users configured for a different hour are skipped.',
+    },
+    dryRun: {
+      description: 'When true, renders and reports the digest without sending email or recording delivery success.',
+      oneOf: [
+        { type: 'boolean' },
+        { type: 'string', enum: ['true', 'false', '1', '0'] },
+      ],
+      default: false,
+    },
+  },
+  example: {
+    digestDate: '2026-05-21',
+    digestHourUtc: 13,
+    dryRun: true,
+  },
+};
+
+const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    digestDate: {
+      type: 'string',
+      format: 'date',
+      nullable: true,
+      description: 'Explicit requested digest date, or null when a scheduled run derives local dates per user.',
+    },
+    digestDates: {
+      type: 'array',
+      items: { type: 'string', format: 'date' },
+      description: 'Local digest dates touched by the run.',
+    },
+    attempted: { type: 'integer', minimum: 0 },
+    sent: { type: 'integer', minimum: 0 },
+    skipped: { type: 'integer', minimum: 0 },
+    failed: { type: 'integer', minimum: 0 },
+    budgetSkipped: { type: 'integer', minimum: 0 },
+    providerQuotaSkipped: { type: 'integer', minimum: 0 },
+    duplicateSkipped: { type: 'integer', minimum: 0 },
+    preferenceSkipped: { type: 'integer', minimum: 0 },
+    noContentSkipped: { type: 'integer', minimum: 0 },
+  },
+  required: [
+    'digestDate',
+    'digestDates',
+    'attempted',
+    'sent',
+    'skipped',
+    'failed',
+    'budgetSkipped',
+    'providerQuotaSkipped',
+    'duplicateSkipped',
+    'preferenceSkipped',
+    'noContentSkipped',
+  ],
+  example: {
+    digestDate: '2026-05-21',
+    digestDates: ['2026-05-21'],
+    attempted: 1,
+    sent: 1,
+    skipped: 0,
+    failed: 0,
+    budgetSkipped: 0,
+    providerQuotaSkipped: 0,
+    duplicateSkipped: 0,
+    preferenceSkipped: 0,
+    noContentSkipped: 0,
+  },
+};
+
 const taskUpdateExample = {
   value: taskUpdateInput.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
@@ -482,6 +708,30 @@ const tagCreatedExample = {
 
 const tagListResponseExample = {
   value: tagListResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const dailyDigestPreviewExample = {
+  value: dailyDigestPreviewResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const dailyDigestSendRequestExample = {
+  value: dailyDigestSendRequest.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const dailyDigestRunExample = {
+  value: dailyDigestRunResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const dailyDigestDisabledExample = {
+  value: { error: 'Daily digest is disabled for this user.' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const digestDeliveryUnavailableExample = {
+  value: { error: 'Digest email delivery is not configured.' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const rateLimitedExample = {
+  value: { error: 'Too many requests, please try again later.' },
 } satisfies OpenAPIV3.ExampleObject;
 
 export const openApiDocument: OpenAPIV3.Document = {
@@ -527,6 +777,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             nullable: true,
             description: 'Authenticated user when available; `null` if unauthenticated.',
           },
+          emailPreference: {
+            allOf: [{ $ref: '#/components/schemas/EmailPreference' }],
+            description: 'Email preferences for the authenticated user. Present on `/api/taskforge/v1/me`.',
+          },
         },
         required: ['user'],
         example: authMeSuccessExample.value,
@@ -554,6 +808,14 @@ export const openApiDocument: OpenAPIV3.Document = {
       TaskUpdateInput: taskUpdateInput,
       TaskListResponse: taskListResponse,
       TaskDeleteResponse: taskDeletedResponse,
+      EmailPreference: emailPreference,
+      EmailPreferenceUpdateInput: emailPreferenceUpdateInput,
+      EmailPreferenceResponse: emailPreferenceResponse,
+      DailyDigestTaskSummary: dailyDigestTaskSummary,
+      DailyDigestGroup: dailyDigestGroup,
+      DailyDigestPreviewResponse: dailyDigestPreviewResponse,
+      DailyDigestSendRequest: dailyDigestSendRequest,
+      DailyDigestRunResponse: dailyDigestRunResponse,
     },
   },
   paths: {
@@ -750,18 +1012,18 @@ export const openApiDocument: OpenAPIV3.Document = {
     '/api/taskforge/v1/me': {
       get: {
         tags: ['Auth'],
-        summary: 'Alias for the authenticated user endpoint',
+        summary: 'Retrieve the authenticated user and account preferences',
         description:
-          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+          'Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie. Includes daily digest email preferences for signed-in users.',
         security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
-            description: 'Current user or null when not authenticated',
+            description: 'Current user and email preferences',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/AuthMeResponse' },
                 examples: {
-                  authenticated: authMeSuccessExample,
+                  authenticated: accountMeSuccessExample,
                   unauthenticated: authMeAnonymousExample,
                 },
               },
@@ -775,6 +1037,198 @@ export const openApiDocument: OpenAPIV3.Document = {
                 examples: {
                   unauthorized: unauthorizedExample,
                 },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/me/email-preferences': {
+      patch: {
+        tags: ['Auth'],
+        summary: 'Update email preferences for the authenticated user',
+        description:
+          'Enables or disables daily digest emails for the signed-in user. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/EmailPreferenceUpdateInput' },
+              examples: {
+                default: emailPreferenceUpdateExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Email preferences updated',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EmailPreferenceResponse' },
+                examples: {
+                  default: emailPreferenceResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Validation error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalid: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    '/api/taskforge/v1/email/digest/preview': {
+      get: {
+        tags: ['Email'],
+        summary: 'Preview digest payload for the authenticated user',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        parameters: [
+          {
+            name: 'timezone',
+            in: 'query',
+            schema: { type: 'string', maxLength: 100 },
+            description: 'Optional IANA timezone override for previewing date windows.',
+          },
+          {
+            name: 'dueSoonDays',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 30 },
+          },
+          {
+            name: 'recentlyUpdatedDays',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 30 },
+          },
+          {
+            name: 'maxTasksPerGroup',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 50 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Digest preview payload returned.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestPreviewResponse' },
+                examples: { default: dailyDigestPreviewExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters or digest timezone preference',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' }, examples: { unauthorized: unauthorizedExample } } },
+          },
+          '429': {
+            description: 'Digest endpoint rate limit exceeded',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { rateLimited: rateLimitedExample },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/taskforge/v1/email/digest/send': {
+      post: {
+        tags: ['Email'],
+        summary: 'Send or dry-run digest delivery for the authenticated user',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/DailyDigestSendRequest' },
+              examples: { default: dailyDigestSendRequestExample },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Digest run completed.',
+            headers: {
+              'x-taskforge-idempotency-key': {
+                description: 'Logical delivery idempotency key used to deduplicate the authenticated user and digest date.',
+                schema: { type: 'string', example: 'digest:2026-05-21:4cbb6f43-6c94-4f76-a36a-8f9f45770b8f' },
+              },
+            },
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
+                examples: { default: dailyDigestRunExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload or digest timezone preference',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Unauthorized',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' }, examples: { unauthorized: unauthorizedExample } } },
+          },
+          '409': {
+            description: 'Digest preference disabled',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { disabled: dailyDigestDisabledExample },
+              },
+            },
+          },
+          '429': {
+            description: 'Digest endpoint rate limit exceeded',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { rateLimited: rateLimitedExample },
+              },
+            },
+          },
+          '503': {
+            description: 'Digest delivery is not configured for real sends',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unavailable: digestDeliveryUnavailableExample },
               },
             },
           },
