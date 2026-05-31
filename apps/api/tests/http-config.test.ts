@@ -49,6 +49,9 @@ describe('http config', () => {
     expect(() => parseCorsAllowedOrigins('https://app.example.com/dashboard')).toThrow(
       'CORS_ALLOWED_ORIGINS entries must be origins without paths',
     );
+    expect(() => parseCorsAllowedOrigins('ftp://app.example.com')).toThrow(
+      'CORS_ALLOWED_ORIGINS entries must use http or https origins',
+    );
   });
 
   it('resolves default and configured CORS origins', () => {
@@ -56,9 +59,7 @@ describe('http config', () => {
       'http://localhost:3000',
       'http://127.0.0.1:3000',
     ]);
-    expect(getHttpServerConfig({ NODE_ENV: 'production' }).corsAllowedOrigins).toEqual([
-      'https://taskforge.app',
-    ]);
+    expect(getHttpServerConfig({ NODE_ENV: 'production' }).corsAllowedOrigins).toEqual([]);
     expect(getHttpServerConfig({
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: 'https://app.example.com',

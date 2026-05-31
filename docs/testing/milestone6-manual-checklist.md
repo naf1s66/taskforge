@@ -27,8 +27,10 @@ Use this checklist after the automated checks in `docs/testing/milestone6-automa
 ## CORS, Cookies, And Proxy
 
 - [ ] Local web origin can call the API with credentials.
+- [ ] Deployed web origin can authenticate in a real browser and authenticated API requests include cookies, pass preflight, and return JSON rather than a browser CORS failure.
 - [ ] An unlisted origin is rejected by CORS in a browser or equivalent controlled check.
-- [ ] Cookie domain behavior matches README and production docs for the chosen topology.
+- [ ] Cookie domain behavior matches README and production docs for the chosen topology, including `COOKIE_DOMAIN`, `SameSite=Lax`, `Secure`, `httpOnly`, and the seven-day API session cookie lifetime.
+- [ ] `/auth/session-bridge` remains `no-store`, sanitizes redirects, requires an authenticated web user, probes existing cookies, and sets the API cookie for the selected topology.
 - [ ] Trusted proxy settings match the deployment target and are not set broader than necessary.
 
 ## Rate Limits And Job Secrets
