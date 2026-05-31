@@ -22,3 +22,12 @@
 ## Verification
 - Run focused HTTP config tests after changes.
 - Confirm browser requests include credentials and do not fail preflight in the deployed target environment.
+
+## Baseline Audit Follow-ups
+- Decide whether the API should keep the production fallback `https://taskforge.app` or fail closed unless `CORS_ALLOWED_ORIGINS` is explicit in production; document the decision and add tests for both configured and fallback behavior.
+- Preserve local no-origin/curl behavior while proving malformed, pathful, and unlisted browser origins fail safely.
+- Document the selected cookie topology for same-origin, cross-subdomain, and preview deployments, including `COOKIE_DOMAIN`, `SameSite=Lax`, `Secure`, `httpOnly`, and the seven-day API session cookie lifetime.
+- Verify `/auth/session-bridge` cache, redirect sanitization, authenticated-user requirement, existing-cookie probe behavior, and cookie-setting behavior for the selected topology.
+- Add/verify `TRUST_PROXY` parsing and rate-limit IP tests for local defaults, `false`, hop count `1`, proxy lists, and invalid numeric/string values.
+- Verify README and production-doc entries for `TRUST_PROXY` stay aligned with `CORS_ALLOWED_ORIGINS` and cookie settings.
+- Add or verify a structured Express error handler so CORS and route errors do not fall through to default HTML/stack responses in production.

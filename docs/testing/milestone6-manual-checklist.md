@@ -13,6 +13,7 @@ Use this checklist after the automated checks in `docs/testing/milestone6-automa
 
 - [ ] Login/register still work in the browser.
 - [ ] Authenticated dashboard requests include credentials and reach the API successfully.
+- [ ] `/auth/session-bridge` only mints the API cookie for an authenticated web user and redirects only to sanitized same-site paths.
 - [ ] Logout clears both web and API-authenticated state.
 - [ ] Dev auth bypass is disabled unless explicitly testing a non-production bypass scenario.
 
@@ -34,6 +35,7 @@ Use this checklist after the automated checks in `docs/testing/milestone6-automa
 
 - [ ] Auth endpoints return bounded `429` behavior under the documented safe smoke.
 - [ ] Manual digest send rate limiting still protects the authenticated user path.
+- [ ] Rate-limit documentation matches the API deployment topology: single in-process limiter state or a shared store before horizontal scaling.
 - [ ] Protected digest job endpoint rejects missing and incorrect `DIGEST_JOB_SECRET`.
 - [ ] Web cron proxy rejects missing and incorrect `CRON_SECRET`.
 - [ ] Scheduled digest dry runs omit `digestDate` and derive user-local digest dates.
