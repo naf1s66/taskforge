@@ -28,9 +28,6 @@ const welcomeEmailSchema = sessionBridgeSchema;
 function getCookieOptions() {
   const domain = resolveCookieDomain({
     COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
-    NODE_ENV: process.env.NODE_ENV,
-    API_BASE_URL: process.env.API_BASE_URL,
-    NEXT_PUBLIC_API_BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL,
   });
 
   return {
@@ -45,6 +42,9 @@ function getCookieOptions() {
 const SESSION_COOKIE_NAME = getSessionCookieName();
 
 const noopLimiter: RequestHandler = (_req, _res, next) => next();
+const asyncRoute = (handler: RequestHandler): RequestHandler => (req, res, next) => {
+  void Promise.resolve(handler(req, res, next)).catch(next);
+};
 const authAttemptLimiter: RequestHandler =
   process.env.NODE_ENV === 'test'
     ? noopLimiter
@@ -149,7 +149,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
 
   const router = Router();
 
-  router.post('/register', authAttemptLimiter, async (req, res) => {
+  router.post('/register', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = registerSchema.safeParse(req.body);
     if (!parse.success) {
       return res.status(400).json({ error: 'Invalid payload', details: parse.error.flatten() });
@@ -187,9 +187,9 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
       tokens: issuedTokens,
     });
-  });
+  }));
 
-  router.post('/login', authAttemptLimiter, async (req, res) => {
+  router.post('/login', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = loginSchema.safeParse(req.body);
     if (!parse.success) {
       return res.status(400).json({ error: 'Invalid payload', details: parse.error.flatten() });
@@ -214,7 +214,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
       tokens: issuedTokens,
     });
-  });
+  }));
 
   router.post('/logout', authMiddleware, (_req, res) => {
     // Clear the HttpOnly cookie with same options used to set it
@@ -226,7 +226,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   });
 
   if (bridgeSecret) {
-    router.post('/welcome-email', async (req, res) => {
+    router.post('/welcome-email', asyncRoute(async (req, res) => {
       const providedSecret = req.get('x-session-bridge-secret');
 
       if (!providedSecret || providedSecret !== bridgeSecret) {
@@ -269,9 +269,9 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       });
 
       return res.status(202).json(result);
-    });
+    }));
 
-    router.post('/session-bridge', authAttemptLimiter, async (req, res) => {
+    router.post('/session-bridge', authAttemptLimiter, asyncRoute(async (req, res) => {
       const providedSecret = req.get('x-session-bridge-secret');
 
       if (!providedSecret || providedSecret !== bridgeSecret) {
@@ -308,14 +308,14 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
         user: { id: user.id, email: user.email, createdAt: user.createdAt.toISOString() },
         tokens: issuedTokens,
       });
-    });
+    }));
   }
 
   const refreshSchema = z.object({
     refreshToken: z.string().min(1),
   });
 
-  router.post('/refresh', authAttemptLimiter, async (req, res) => {
+  router.post('/refresh', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = refreshSchema.safeParse(req.body);
 
     if (!parse.success) {
@@ -340,7 +340,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
     } catch {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
-  });
+  }));
 
   router.get('/me', authMiddleware, (_req, res) => {
     const authUser = res.locals.user;

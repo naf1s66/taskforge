@@ -118,11 +118,12 @@ describe('createApp', () => {
 
     const app = createApp({ jwtSecret: 'test-secret', userStore: createPersistentUserStoreStub() });
 
-    await request(app)
+    const deniedResponse = await request(app)
       .get('/api/taskforge/v1/health')
       .set('Origin', 'https://evil.example.com')
       .expect('content-type', /json/)
       .expect(403, { error: 'CORS origin denied' });
+    expect(deniedResponse.headers['x-content-type-options']).toBe('nosniff');
 
     await request(app)
       .get('/api/taskforge/v1/health')
@@ -135,6 +136,22 @@ describe('createApp', () => {
       .set('Origin', 'https://app.example.com/dashboard')
       .expect('content-type', /json/)
       .expect(403, { error: 'CORS origin denied' });
+  });
+
+  it('returns structured production JSON for async route errors', async () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.DIGEST_JOB_SECRET;
+
+    const app = createApp({
+      jwtSecret: 'test-secret',
+      userStore: createFailingUserStoreStub(),
+    });
+
+    await request(app)
+      .post('/api/taskforge/v1/auth/login')
+      .send({ email: 'failure@example.com', password: 'Password123!' })
+      .expect('content-type', /json/)
+      .expect(500, { error: 'Internal server error' });
   });
 
   it('requires explicit configured CORS origins in production', async () => {
@@ -234,6 +251,21 @@ function createPersistentUserStoreStub(): UserStore {
     create: async () => undefined,
     findByEmail: async () => undefined,
     findById: async () => undefined,
+    clear: async () => undefined,
+  };
+}
+
+function createFailingUserStoreStub(): UserStore {
+  return {
+    create: async () => {
+      throw new Error('Database connection string leaked in error');
+    },
+    findByEmail: async () => {
+      throw new Error('Database connection string leaked in error');
+    },
+    findById: async () => {
+      throw new Error('Database connection string leaked in error');
+    },
     clear: async () => undefined,
   };
 }

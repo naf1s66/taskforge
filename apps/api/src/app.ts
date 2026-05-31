@@ -96,6 +96,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.use(express.json());
   app.use(cookieParser());
+  app.use(helmet());
   // Configure CORS to allow credentials with explicit origins
   app.use(cors({
     credentials: true,
@@ -114,7 +115,6 @@ export function createApp(options: CreateAppOptions = {}) {
       return callback(createCorsError('Origin is not allowed by CORS policy.'), false);
     },
   }));
-  app.use(helmet());
   app.use(rateLimit({
     windowMs: 60_000,
     max: 120,
@@ -176,23 +176,24 @@ export function createApp(options: CreateAppOptions = {}) {
     );
   }
 
-  app.use(authRouterFactory.authMiddleware);
-  app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
-  app.use('/api/taskforge/v1/tags', tagRoutes);
+  const protectedRouter = express.Router();
+  protectedRouter.use('/tasks', authRouterFactory.authMiddleware, createTaskRouter(taskRepository));
+  protectedRouter.use('/tags', authRouterFactory.authMiddleware, tagRoutes);
   const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
   const emailDigestRunner = new DailyDigestRunner({
     prisma: getOrCreatePrisma(),
     emailAdapter: digestEmailAdapter ?? { sendMail: () => Promise.resolve() },
   });
-  app.use(
-    '/api/taskforge/v1/email/digest',
+  protectedRouter.use(
+    '/email/digest',
+    authRouterFactory.authMiddleware,
     createEmailDigestRouter(getOrCreatePrisma(), {
       defaultSendLimit: options.digestDailySendLimit ?? 90,
       digestRunner: emailDigestRunner,
       sendConfigured: Boolean(digestEmailAdapter),
     }),
   );
-  app.get('/api/taskforge/v1/me', async (_req, res, next) => {
+  protectedRouter.get('/me', authRouterFactory.authMiddleware, async (_req, res, next) => {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }
       | undefined;
@@ -217,7 +218,7 @@ export function createApp(options: CreateAppOptions = {}) {
       return next(error);
     }
   });
-  app.patch('/api/taskforge/v1/me/email-preferences', async (req, res, next) => {
+  protectedRouter.patch('/me/email-preferences', authRouterFactory.authMiddleware, async (req, res, next) => {
     const user = res.locals.user as { id: string } | undefined;
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -244,6 +245,8 @@ export function createApp(options: CreateAppOptions = {}) {
       return next(error);
     }
   });
+
+  app.use('/api/taskforge/v1', protectedRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });
