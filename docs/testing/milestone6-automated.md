@@ -24,7 +24,8 @@ If Docker is available and CI is not the only Docker validation path, also run t
 ## Focus Areas
 
 - API security middleware and config parsing: Helmet, CORS, trusted proxy, body limits, cookies, and error handling.
-- Rate limits: auth routes, email digest/manual send, protected jobs, and any new global or route-specific limits.
+- Web auth route checks: `/api/auth/*`, `/auth/session-bridge`, cron proxy auth, cookie-setting behavior, redirect sanitization, and dev bypass production gating.
+- Rate limits: auth routes, email digest/manual send, protected jobs, global or route-specific limits, and the single-instance versus shared-store deployment decision.
 - OpenAPI: regenerated `docs/openapi.json` must match `apps/api/src/openapi.ts`.
 - HTTP packs: `pnpm -C apps/api run lint:http` must pass after any `.http` additions.
 - Docker: compose config must validate without real production secrets.

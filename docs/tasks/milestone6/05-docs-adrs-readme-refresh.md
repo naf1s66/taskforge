@@ -26,6 +26,7 @@
 ## Baseline Audit Follow-ups
 - Add `TRUST_PROXY` to the README environment reference with guidance to match the actual platform proxy chain and avoid trusting arbitrary forwarded headers.
 - Confirm README, `infra/env/*.example`, and `docs/prod` all name the same production placeholders for `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_SECRET`, `SESSION_BRIDGE_SECRET`, `DIGEST_JOB_SECRET`, `CRON_SECRET`, `COOKIE_DOMAIN`, and `TF_DEV_BYPASS_AUTH`.
-- Document that the web app has auth and cron API routes only; task/tag/board clients call the API directly rather than through general web proxy routes.
+- Document that the web app has auth, session-bridge, and cron server routes only; task/tag/board clients call the API directly rather than through general web proxy routes.
+- Document the rate-limit deployment assumption: either v1 runs a single API instance with in-process limiter state, or production uses a shared rate-limit store before horizontal scaling.
 - Preserve the production email gate language: real scheduled sends stay disabled until the production fact register is complete and manual-only Resend/observability checks pass.
 - Ensure the release docs distinguish local implementation from production enablement for digest scheduling, Resend, OAuth providers, and cross-subdomain cookies.

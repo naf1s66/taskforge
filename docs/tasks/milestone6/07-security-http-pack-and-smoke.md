@@ -28,4 +28,5 @@
 - Add safe local examples for missing/incorrect web cron `CRON_SECRET`, with placeholders only and no real Vercel or production secret values.
 - Include a browser/manual CORS preflight and credentialed-cookie checklist because `.http` clients cannot model browser CORS enforcement.
 - Include a bounded rate-limit smoke that stops after the expected `429` and warns against running it against shared production environments.
+- Include `/auth/session-bridge` checks for authenticated-user requirement, safe `from` redirect handling, API-cookie minting, and no-cache expectations if the local environment can run both apps.
 - Include logout same-origin checks and cookie-expiry verification for the web route if the local environment can run both apps.
