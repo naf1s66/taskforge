@@ -22,3 +22,11 @@
 ## Verification
 - Add or update API tests for `429` behavior where coverage is missing.
 - Use `docs/testing/milestone6-manual-checklist.md` for a browser/API smoke of important blocked paths.
+
+## Baseline Audit Follow-ups
+- Set and test an explicit JSON body-size limit instead of relying on Express' default `express.json()` limit.
+- Confirm task, tag, board, email preference, digest preview, and manual digest send schemas reject oversized payloads and unbounded query parameters.
+- Add focused tests for auth `429` behavior outside the `NODE_ENV=test` bypass or isolate limiter construction so deterministic tests can cover the production limiter settings.
+- Add negative tests for missing/wrong `DIGEST_JOB_SECRET` through both `Authorization: Bearer` and `x-job-secret`, ensuring error bodies and logs never echo supplied secret values.
+- Exercise rate limits with `TRUST_PROXY` disabled and enabled so untrusted clients cannot spoof `X-Forwarded-For` into separate buckets.
+- Confirm dev bypass remains impossible in production by testing `TF_DEV_BYPASS_AUTH=true` with `NODE_ENV=production` on both API middleware and web current-user resolution.
