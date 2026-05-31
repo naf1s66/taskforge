@@ -22,6 +22,12 @@ function sanitizeReturnPath(value: string | null): string {
   return trimmed;
 }
 
+function redirectNoStore(url: URL): NextResponse {
+  const response = NextResponse.redirect(url);
+  response.headers.set('Cache-Control', 'no-store');
+  return response;
+}
+
 type ApiSessionCookieProbe = 'valid' | 'invalid' | 'unknown';
 
 async function probeApiSessionCookie(token: string): Promise<ApiSessionCookieProbe> {
@@ -64,7 +70,7 @@ export async function GET(request: NextRequest) {
     !isSessionTokenExpired(existingCookie.value) &&
     existingCookieProbe !== 'invalid'
   ) {
-    return NextResponse.redirect(new URL(fromPath, request.nextUrl.origin));
+    return redirectNoStore(new URL(fromPath, request.nextUrl.origin));
   }
 
   const user = await getCurrentUser();
@@ -73,13 +79,13 @@ export async function GET(request: NextRequest) {
     const redirectUrl = new URL('/login', request.nextUrl.origin);
     redirectUrl.searchParams.set('from', fromPath);
     redirectUrl.searchParams.set('reason', 'session-bridge');
-    return NextResponse.redirect(redirectUrl);
+    return redirectNoStore(redirectUrl);
   }
 
   try {
     const accessToken = await getFreshBridgedAccessToken(user);
     const redirectUrl = new URL(fromPath, request.nextUrl.origin);
-    const response = NextResponse.redirect(redirectUrl);
+    const response = redirectNoStore(redirectUrl);
     const options = getSessionCookieOptions();
     response.cookies.set({ ...options, value: accessToken });
     return response;
@@ -88,6 +94,6 @@ export async function GET(request: NextRequest) {
     const redirectUrl = new URL('/login', request.nextUrl.origin);
     redirectUrl.searchParams.set('from', fromPath);
     redirectUrl.searchParams.set('reason', 'session-bridge');
-    return NextResponse.redirect(redirectUrl);
+    return redirectNoStore(redirectUrl);
   }
 }
