@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/components/ui/use-toast';
-import { sanitizeTags } from '@/lib/task-tags';
+import { sanitizeTaskInputTags } from '@/lib/task-tags';
 import {
   useTaskFromCache,
   useTaskRecordQuery,
@@ -188,7 +188,7 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
         status: values.status,
         priority: values.priority,
         dueDate: values.dueDate ?? null,
-        tags: sanitizeTags(values.tags),
+        tags: sanitizeTaskInputTags(values.tags),
       },
     });
   }

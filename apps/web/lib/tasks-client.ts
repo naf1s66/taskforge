@@ -13,6 +13,15 @@ import { z } from 'zod';
 import type { AsyncLocalStorage } from 'async_hooks';
 
 import { getApiBaseUrl } from './env';
+import {
+  isValidTaskTagLabel,
+  TASK_BOARD_TARGET_INDEX_MAX,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_QUERY_MAX_LENGTH,
+  TASK_TAG_LABEL_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+} from './task-limits';
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
 
@@ -30,6 +39,12 @@ const TaskPrioritySchema = z.union([z.literal('LOW'), z.literal('MEDIUM'), z.lit
 const QueryDateTimeSchema = z.string().datetime({ offset: true });
 
 const NonEmptyTrimmedString = z.string().trim().min(1);
+const TaskTitleString = NonEmptyTrimmedString.max(TASK_TITLE_MAX_LENGTH);
+const TaskDescriptionString = NonEmptyTrimmedString.max(TASK_DESCRIPTION_MAX_LENGTH);
+const TaskTagString = NonEmptyTrimmedString.refine(isValidTaskTagLabel, {
+  message: `Tag label must be ${TASK_TAG_LABEL_MAX_LENGTH} characters or fewer after normalization.`,
+});
+const TaskQueryString = NonEmptyTrimmedString.max(TASK_QUERY_MAX_LENGTH);
 
 const NullableDateString = z
   .string()
@@ -132,7 +147,7 @@ const BoardResponseSchema = z.object({
 const BoardMoveSchema = z.object({
   taskId: z.string().uuid(),
   targetStatus: TaskStatusSchema,
-  targetIndex: z.number().int().min(0),
+  targetIndex: z.number().int().min(0).max(TASK_BOARD_TARGET_INDEX_MAX),
 });
 
 const TaskListResponseSchema = z.object({
@@ -160,12 +175,12 @@ const TaskIdSchema = z.string().uuid({ message: 'Task id must be a valid UUID.' 
 
 const TaskCreateSchema = z
   .object({
-    title: NonEmptyTrimmedString,
-    description: NullableString,
+    title: TaskTitleString,
+    description: TaskDescriptionString.optional().nullable().transform((value) => value ?? undefined),
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
     dueDate: NullableDateString,
-    tags: z.array(NonEmptyTrimmedString).optional(),
+    tags: z.array(TaskTagString).max(TASK_TAGS_MAX_LENGTH).optional(),
   })
   .transform((value) => ({
     ...value,
@@ -174,12 +189,12 @@ const TaskCreateSchema = z
 
 const TaskUpdateSchema = z
   .object({
-    title: NonEmptyTrimmedString.optional(),
-    description: z.union([NonEmptyTrimmedString, z.null()]).optional(),
+    title: TaskTitleString.optional(),
+    description: z.union([TaskDescriptionString, z.null()]).optional(),
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
     dueDate: z.union([z.string().datetime(), z.null()]).optional(),
-    tags: z.array(NonEmptyTrimmedString).optional(),
+    tags: z.array(TaskTagString).max(TASK_TAGS_MAX_LENGTH).optional(),
   })
   .superRefine((value, ctx) => {
     if (Object.values(value).every((entry) => entry === undefined)) {
@@ -202,7 +217,7 @@ const TaskListQuerySchema = z
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
     tag: z
-      .union([NonEmptyTrimmedString, z.array(NonEmptyTrimmedString)])
+      .union([TaskTagString, z.array(TaskTagString).max(TASK_TAGS_MAX_LENGTH)])
       .optional()
       .transform((value) => {
         if (!value) {
@@ -210,7 +225,7 @@ const TaskListQuerySchema = z
         }
         return Array.isArray(value) ? value : [value];
       }),
-    q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
+    q: TaskQueryString.optional().transform((value) => value?.trim()),
     dueFrom: QueryDateTimeSchema.optional(),
     dueTo: QueryDateTimeSchema.optional(),
   })
@@ -233,7 +248,7 @@ const BoardQuerySchema = z
     status: TaskStatusSchema.optional(),
     priority: TaskPrioritySchema.optional(),
     tag: z
-      .union([NonEmptyTrimmedString, z.array(NonEmptyTrimmedString)])
+      .union([TaskTagString, z.array(TaskTagString).max(TASK_TAGS_MAX_LENGTH)])
       .optional()
       .transform((value) => {
         if (!value) {
@@ -241,7 +256,7 @@ const BoardQuerySchema = z
         }
         return Array.isArray(value) ? value : [value];
       }),
-    q: z.string().trim().min(1).optional().transform((value) => value?.trim()),
+    q: TaskQueryString.optional().transform((value) => value?.trim()),
     dueFrom: QueryDateTimeSchema.optional(),
     dueTo: QueryDateTimeSchema.optional(),
   })
