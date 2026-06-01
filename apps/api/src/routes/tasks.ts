@@ -9,6 +9,7 @@ import {
   TaskCreateSchema,
   TaskUpdateSchema,
 } from '../schemas/task';
+import { TagLabelSchema } from '../schemas/tag';
 import {
   createTaskRepository,
   type TaskCreateInput,
@@ -18,6 +19,10 @@ import {
 import { normalizeTagLabels } from '../repositories/task-mapper';
 
 const Rfc3339DateTimeSchema = z.string().datetime({ offset: true });
+const TaskTagFilterSchema = z.union([
+  TagLabelSchema,
+  z.array(TagLabelSchema).max(TASK_TAGS_MAX_LENGTH),
+]);
 
 const TaskListQuerySchema = z
   .object({
@@ -25,7 +30,7 @@ const TaskListQuerySchema = z
     pageSize: z.coerce.number().int().positive().max(100).default(20),
     status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
-    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1)).max(TASK_TAGS_MAX_LENGTH)]).optional(),
+    tag: TaskTagFilterSchema.optional(),
     q: z.string().trim().min(1).max(TASK_QUERY_MAX_LENGTH).optional(),
     dueFrom: Rfc3339DateTimeSchema.optional(),
     dueTo: Rfc3339DateTimeSchema.optional(),
@@ -49,7 +54,7 @@ const TaskBoardQuerySchema = z
   .object({
     status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).optional(),
     priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
-    tag: z.union([z.string().trim().min(1), z.array(z.string().trim().min(1)).max(TASK_TAGS_MAX_LENGTH)]).optional(),
+    tag: TaskTagFilterSchema.optional(),
     q: z.string().trim().min(1).max(TASK_QUERY_MAX_LENGTH).optional(),
     dueFrom: Rfc3339DateTimeSchema.optional(),
     dueTo: Rfc3339DateTimeSchema.optional(),

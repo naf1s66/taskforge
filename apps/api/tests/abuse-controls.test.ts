@@ -162,6 +162,14 @@ describe('abuse controls', () => {
       .set('Authorization', bearer)
       .expect(400);
     await agent
+      .get(`/api/taskforge/v1/tasks?tag=${'x'.repeat(65)}`)
+      .set('Authorization', bearer)
+      .expect(400);
+    await agent
+      .get(`/api/taskforge/v1/tasks/board?tag=${'x'.repeat(65)}`)
+      .set('Authorization', bearer)
+      .expect(400);
+    await agent
       .patch('/api/taskforge/v1/tasks/board/move')
       .set('Authorization', bearer)
       .send({
