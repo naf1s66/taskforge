@@ -67,6 +67,23 @@ export function createAuthAttemptLimiter(options: AuthRateLimitOptions = {}): Re
   });
 }
 
+export function createSessionBridgeLimiter(options: AuthRateLimitOptions = {}): RequestHandler {
+  if ((options.skipInTest ?? true) && process.env.NODE_ENV === 'test') {
+    return noopLimiter;
+  }
+
+  return rateLimit({
+    windowMs: options.windowMs ?? 60_000,
+    max: options.max ?? 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: req => req.ip ?? req.socket.remoteAddress ?? 'global',
+    handler: (_req, res) => {
+      res.status(429).json(AUTH_RATE_LIMIT_RESPONSE);
+    },
+  });
+}
+
 const asyncRoute = (handler: RequestHandler): RequestHandler => (req, res, next) => {
   void Promise.resolve(handler(req, res, next)).catch(next);
 };
@@ -84,6 +101,7 @@ export interface AuthRouterOptions {
   refreshTokenExpiresIn?: string | number;
   welcomeEmailService?: WelcomeEmailService;
   authRateLimit?: AuthRateLimitOptions | false;
+  sessionBridgeRateLimit?: AuthRateLimitOptions | false;
 }
 
 export function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -161,6 +179,9 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   const authAttemptLimiter = options.authRateLimit === false
     ? noopLimiter
     : createAuthAttemptLimiter(options.authRateLimit);
+  const sessionBridgeLimiter = options.sessionBridgeRateLimit === false
+    ? noopLimiter
+    : createSessionBridgeLimiter(options.sessionBridgeRateLimit);
 
   router.post('/register', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = registerSchema.safeParse(req.body);
@@ -284,7 +305,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
       return res.status(202).json(result);
     }));
 
-    router.post('/session-bridge', authAttemptLimiter, asyncRoute(async (req, res) => {
+    router.post('/session-bridge', sessionBridgeLimiter, asyncRoute(async (req, res) => {
       const providedSecret = req.get('x-session-bridge-secret');
 
       if (!providedSecret || providedSecret !== bridgeSecret) {

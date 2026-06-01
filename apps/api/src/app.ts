@@ -85,6 +85,7 @@ export interface CreateAppOptions {
   digestJobSecret?: string;
   digestDailySendLimit?: number;
   authRateLimit?: AuthRateLimitOptions | false;
+  sessionBridgeRateLimit?: AuthRateLimitOptions | false;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -154,6 +155,7 @@ export function createApp(options: CreateAppOptions = {}) {
     devBypassClientSecret: options.devBypassClientSecret,
     welcomeEmailService,
     authRateLimit: options.authRateLimit,
+    sessionBridgeRateLimit: options.sessionBridgeRateLimit,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 

@@ -25,6 +25,7 @@ export interface CreateTestAgentOptions {
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   welcomeEmailPendingAttemptStaleAfterMs?: number;
   authRateLimit?: CreateAppOptions['authRateLimit'];
+  sessionBridgeRateLimit?: CreateAppOptions['sessionBridgeRateLimit'];
   digestJobSecret?: string;
   digestDailySendLimit?: number;
 }
@@ -44,6 +45,7 @@ export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgent
     welcomeEmailDeliveryDispatcher: options.welcomeEmailDeliveryDispatcher ?? (task => task()),
     welcomeEmailPendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
     authRateLimit: options.authRateLimit,
+    sessionBridgeRateLimit: options.sessionBridgeRateLimit,
     digestJobSecret: options.digestJobSecret,
     digestDailySendLimit: options.digestDailySendLimit,
   });

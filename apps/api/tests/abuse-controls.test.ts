@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import express from 'express';
 import request from 'supertest';
 
@@ -46,6 +48,45 @@ describe('abuse controls', () => {
     const limited = await agent
       .post('/api/taskforge/v1/auth/login')
       .send({ email: 'nobody@example.com', password: 'Password123!' })
+      .expect(429);
+
+    expect(limited.body).toEqual({ error: 'Too many authentication attempts. Please try again later.' });
+    expect(limited.headers['ratelimit-limit']).toBe('2');
+  });
+
+  it('keeps the server-side session bridge on a separate auth limiter bucket', async () => {
+    const sessionBridgeSecret = 'test-bridge-secret';
+    const { agent, userStore } = createTestAgent({
+      sessionBridgeSecret,
+      authRateLimit: { max: 1, windowMs: 60_000, skipInTest: false },
+      sessionBridgeRateLimit: { max: 2, windowMs: 60_000, skipInTest: false },
+    });
+    const user = {
+      id: randomUUID(),
+      email: 'bridge-bucket@example.com',
+      passwordHash: null,
+      createdAt: new Date(),
+    };
+    await userStore.create(user);
+
+    await agent.post('/api/taskforge/v1/auth/login').send({ email: 'nobody@example.com', password: 'Password123!' }).expect(401);
+    await agent.post('/api/taskforge/v1/auth/login').send({ email: 'nobody@example.com', password: 'Password123!' }).expect(429);
+
+    const bridgePayload = { userId: user.id, email: user.email };
+    await agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send(bridgePayload)
+      .expect(200);
+    await agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send(bridgePayload)
+      .expect(200);
+    const limited = await agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send(bridgePayload)
       .expect(429);
 
     expect(limited.body).toEqual({ error: 'Too many authentication attempts. Please try again later.' });
