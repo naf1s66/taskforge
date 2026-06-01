@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useToast } from '@/components/ui/use-toast';
-import { sanitizeTags } from '@/lib/task-tags';
+import { sanitizeValidTaskTags } from '@/lib/task-tags';
 import { useTagsQuery } from '@/lib/tasks-hooks';
 
 import { TaskCreateDialog } from './task-create-dialog';
@@ -15,7 +15,7 @@ export function TaskDialogHost() {
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const { toast } = useToast();
   const tagsQuery = useTagsQuery();
-  const availableTags = sanitizeTags(tagsQuery.tags.map((tag) => tag.label));
+  const availableTags = sanitizeValidTaskTags(tagsQuery.tags.map((tag) => tag.label));
 
   const handleDocumentClick = useCallback(
     (event: MouseEvent) => {

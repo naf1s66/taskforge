@@ -50,4 +50,25 @@ describe('TaskTagSelector', () => {
 
     expect(screen.queryByRole('button', { name: 'Create "api"' })).not.toBeInTheDocument();
   });
+
+  it('enforces tag count and label length limits before creating tags', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <TaskTagSelector
+        value={Array.from({ length: 10 }, (_, index) => `tag-${index}`)}
+        onChange={onChange}
+        placeholder="Select tags"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Select tags' }));
+    const input = screen.getByRole('combobox');
+
+    expect(input).toHaveAttribute('maxLength', '64');
+    await user.type(input, 'new-tag{Enter}');
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

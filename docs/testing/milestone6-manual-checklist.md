@@ -37,6 +37,7 @@ Use this checklist after the automated checks in `docs/testing/milestone6-automa
 ## Rate Limits And Job Secrets
 
 - [ ] Auth endpoints return bounded `429` behavior under the documented safe smoke.
+- [ ] Oversized JSON bodies and overlong task/tag/filter payloads return explicit JSON errors rather than hanging or silently truncating data.
 - [ ] Manual digest send rate limiting still protects the authenticated user path.
 - [ ] Rate-limit documentation matches the API deployment topology: single in-process limiter state or a shared store before horizontal scaling.
 - [ ] Protected digest job endpoint rejects missing and incorrect `DIGEST_JOB_SECRET`.

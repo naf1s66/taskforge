@@ -1,3 +1,5 @@
+import { isValidTaskTagLabel, TASK_TAGS_MAX_LENGTH } from './task-limits';
+
 export function sanitizeTags(tags: string[] | undefined): string[] {
   if (!tags || tags.length === 0) {
     return [];
@@ -22,4 +24,13 @@ export function sanitizeTags(tags: string[] | undefined): string[] {
   }
 
   return normalized.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+export function sanitizeValidTaskTags(tags: string[] | undefined): string[] {
+  return sanitizeTags(tags)
+    .filter(isValidTaskTagLabel);
+}
+
+export function sanitizeTaskInputTags(tags: string[] | undefined): string[] {
+  return sanitizeValidTaskTags(tags).slice(0, TASK_TAGS_MAX_LENGTH);
 }

@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/components/ui/use-toast';
-import { sanitizeTags } from '@/lib/task-tags';
 import {
   useTaskFromCache,
   useTaskRecordQuery,
@@ -27,6 +26,7 @@ import {
   type TaskFormValues,
   applyTaskIssuesToForm,
 } from './task-form';
+import { taskFormValuesToUpdateInput } from './task-form-payload';
 
 interface TaskEditDialogProps {
   taskId: string | null;
@@ -182,14 +182,9 @@ export function TaskEditDialog({ taskId, open, onOpenChange, onTaskIdChange, ava
 
     updateTask.mutate({
       id: taskId,
-      input: {
-        title: values.title.trim(),
-        description: values.description?.trim() ? values.description.trim() : null,
-        status: values.status,
-        priority: values.priority,
-        dueDate: values.dueDate ?? null,
-        tags: sanitizeTags(values.tags),
-      },
+      input: taskFormValuesToUpdateInput(values, {
+        includeTags: Boolean(form.formState.dirtyFields.tags),
+      }),
     });
   }
   const lastUpdatedLabel = useMemo(() => {

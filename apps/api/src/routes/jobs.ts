@@ -1,4 +1,5 @@
 import { Router, type Request, type RequestHandler } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import type { DailyDigestRunner } from '../notifications/daily-digest-runner';
@@ -26,8 +27,8 @@ const runDigestSchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform(value => value === true || value === 'true' || value === '1'),
-  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0).safe()),
-});
+  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0).max(500)),
+}).strict();
 
 function isAuthorized(req: Request, secret: string): boolean {
   const jobSecret = req.get('x-job-secret');
@@ -38,11 +39,36 @@ function isAuthorized(req: Request, secret: string): boolean {
 export function createJobsRouter(runner: DailyDigestRunner, options: JobsRouterOptions) {
   const router = Router();
 
-  const handleDigestRun: RequestHandler = async (req, res, next) => {
+  const jobRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+    },
+  });
+
+  const unauthorizedJobAttemptRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: req => isAuthorized(req, options.secret),
+    handler: (_req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+    },
+  });
+
+  const requireJobSecret: RequestHandler = (req, res, next) => {
     if (!isAuthorized(req, options.secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    return next();
+  };
+
+  const handleDigestRun: RequestHandler = async (req, res, next) => {
     const payload: unknown = req.method === 'GET' ? req.query : req.body;
     const parsed = runDigestSchema.safeParse(payload);
     if (!parsed.success) {
@@ -63,8 +89,8 @@ export function createJobsRouter(runner: DailyDigestRunner, options: JobsRouterO
     }
   };
 
-  router.get('/digest', handleDigestRun);
-  router.post('/digest', handleDigestRun);
+  router.get('/digest', unauthorizedJobAttemptRateLimit, requireJobSecret, jobRateLimit, handleDigestRun);
+  router.post('/digest', unauthorizedJobAttemptRateLimit, requireJobSecret, jobRateLimit, handleDigestRun);
 
   return router;
 }

@@ -1,5 +1,14 @@
 import type { OpenAPIV3 } from 'openapi-types';
 
+import { TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
+
+import {
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_QUERY_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+} from './schemas/task';
+
 const errorResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -33,6 +42,32 @@ const authCredentials: OpenAPIV3.SchemaObject = {
   example: {
     email: 'user@example.com',
     password: 'StrongPassword123',
+  },
+};
+
+const authRefreshRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    refreshToken: { type: 'string', minLength: 1 },
+  },
+  required: ['refreshToken'],
+  additionalProperties: false,
+  example: {
+    refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token',
+  },
+};
+
+const sessionBridgeRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string', minLength: 1 },
+    email: { type: 'string', format: 'email' },
+  },
+  required: ['userId'],
+  additionalProperties: false,
+  example: {
+    userId: '26f26639-05ad-40b6-8248-379644dcdf18',
+    email: 'user@example.com',
   },
 };
 
@@ -125,6 +160,8 @@ const unauthorizedExample = { value: { error: 'Unauthorized' } } satisfies OpenA
 
 const invalidCredentialsExample = { value: { error: 'Invalid credentials' } } satisfies OpenAPIV3.ExampleObject;
 
+const invalidRefreshTokenExample = { value: { error: 'Invalid refresh token' } } satisfies OpenAPIV3.ExampleObject;
+
 const conflictExample = { value: { error: 'User already exists' } } satisfies OpenAPIV3.ExampleObject;
 
 const invalidPayloadExample = {
@@ -162,6 +199,14 @@ const emailPreferenceResponseExample = {
 
 const authCredentialsExample = {
   value: authCredentials.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const authRefreshRequestExample = {
+  value: authRefreshRequest.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const sessionBridgeRequestExample = {
+  value: sessionBridgeRequest.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
 const authSuccessResponseExample = {
@@ -226,7 +271,7 @@ const tagSummary: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Canonical lowercase tag label. Length limit applies after normalization.',
     },
     count: { type: 'integer', minimum: 0 },
@@ -245,7 +290,7 @@ const tagRecord: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Canonical lowercase tag label. Length limit applies after normalization.',
     },
   },
@@ -262,7 +307,7 @@ const tagCreateInput: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Tag label to create. Length limit applies after lowercase normalization.',
     },
   },
@@ -382,9 +427,14 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
   properties: {
     taskId: { type: 'string', format: 'uuid' },
     targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
-    targetIndex: { type: 'integer', minimum: 0 },
+    targetIndex: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Zero-based destination index in the target lane. The repository validates this against the lane length.',
+    },
   },
   required: ['taskId', 'targetStatus', 'targetIndex'],
+  additionalProperties: false,
   example: {
     taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
     targetStatus: 'DONE',
@@ -395,22 +445,24 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
 const taskCreateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
-        maxLength: 64,
+        maxLength: TAG_LABEL_MAX_LENGTH,
         description: 'Tag label. Length limit applies after lowercase normalization.',
       },
     },
   },
   required: ['title'],
+  additionalProperties: false,
   example: {
     title: 'Book product sync',
     description: 'Coordinate roadmap review with stakeholders',
@@ -424,17 +476,18 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
 const taskUpdateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
-        maxLength: 64,
+        maxLength: TAG_LABEL_MAX_LENGTH,
         description: 'Tag label. Length limit applies after lowercase normalization.',
       },
     },
@@ -638,6 +691,44 @@ const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
   },
 };
 
+const dailyDigestJobRunRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    digestDate: {
+      type: 'string',
+      format: 'date',
+      description: 'Optional local digest calendar date. When omitted, the job derives local dates per user.',
+    },
+    digestHourUtc: {
+      type: 'integer',
+      minimum: 0,
+      maximum: 23,
+      description: 'Optional UTC hour filter. Users configured for a different hour are skipped.',
+    },
+    dryRun: {
+      description: 'When true, reports the digest run without sending email or recording delivery success.',
+      oneOf: [
+        { type: 'boolean' },
+        { type: 'string', enum: ['true', 'false', '1', '0'] },
+      ],
+      default: false,
+    },
+    sendLimit: {
+      type: 'integer',
+      minimum: 0,
+      maximum: 500,
+      description: 'Optional per-run send cap. Defaults to the configured job send limit.',
+    },
+  },
+  example: {
+    digestDate: '2026-05-21',
+    digestHourUtc: 13,
+    dryRun: true,
+    sendLimit: 5,
+  },
+};
+
 const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -718,6 +809,10 @@ const dailyDigestSendRequestExample = {
   value: dailyDigestSendRequest.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const dailyDigestJobRunRequestExample = {
+  value: dailyDigestJobRunRequest.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 const dailyDigestRunExample = {
   value: dailyDigestRunResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
@@ -733,6 +828,30 @@ const digestDeliveryUnavailableExample = {
 const rateLimitedExample = {
   value: { error: 'Too many requests, please try again later.' },
 } satisfies OpenAPIV3.ExampleObject;
+
+const authRateLimitedExample = {
+  value: { error: 'Too many authentication attempts. Please try again later.' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const authRateLimitResponse: OpenAPIV3.ResponseObject = {
+  description: 'Authentication rate limit exceeded',
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/ErrorResponse' },
+      examples: { rateLimited: authRateLimitedExample },
+    },
+  },
+};
+
+const rateLimitResponse: OpenAPIV3.ResponseObject = {
+  description: 'Rate limit exceeded',
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/ErrorResponse' },
+      examples: { rateLimited: rateLimitedExample },
+    },
+  },
+};
 
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
@@ -756,9 +875,31 @@ export const openApiDocument: OpenAPIV3.Document = {
         description:
           'HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication.',
       },
+      sessionBridgeSecret: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-session-bridge-secret',
+        description:
+          'Shared server-side secret used by the web app to exchange a NextAuth session for API JWTs.',
+      },
+      jobSecretHeader: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-job-secret',
+        description: 'Shared secret required by protected background job routes.',
+      },
+      jobSecretBearer: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'shared-secret',
+        description:
+          'Alternative protected job authentication using `Authorization: Bearer <DIGEST_JOB_SECRET>`.',
+      },
     },
     schemas: {
       AuthCredentials: authCredentials,
+      AuthRefreshRequest: authRefreshRequest,
+      SessionBridgeRequest: sessionBridgeRequest,
       AuthTokens: authTokens,
       AuthSuccessResponse: {
         type: 'object',
@@ -815,6 +956,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       DailyDigestGroup: dailyDigestGroup,
       DailyDigestPreviewResponse: dailyDigestPreviewResponse,
       DailyDigestSendRequest: dailyDigestSendRequest,
+      DailyDigestJobRunRequest: dailyDigestJobRunRequest,
       DailyDigestRunResponse: dailyDigestRunResponse,
     },
   },
@@ -890,6 +1032,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': authRateLimitResponse,
         },
       },
     },
@@ -942,6 +1085,139 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': authRateLimitResponse,
+        },
+      },
+    },
+    '/api/taskforge/v1/auth/session-bridge': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Exchange a web session for API JWTs',
+        description:
+          'Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret` and returns the same auth token envelope as credential login.',
+        security: [{ sessionBridgeSecret: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/SessionBridgeRequest' },
+              examples: {
+                default: sessionBridgeRequestExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Session exchanged successfully',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthSuccessResponse' },
+                examples: {
+                  success: authSuccessResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect session bridge secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'User not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: { value: { error: 'User not found' } },
+                },
+              },
+            },
+          },
+          '409': {
+            description: 'User email mismatch',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  conflict: { value: { error: 'User email mismatch' } },
+                },
+              },
+            },
+          },
+          '429': authRateLimitResponse,
+        },
+      },
+    },
+    '/api/taskforge/v1/auth/refresh': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Refresh API JWTs',
+        description: 'Exchanges a valid refresh token for a new auth token pair.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthRefreshRequest' },
+              examples: {
+                default: authRefreshRequestExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Token pair refreshed successfully',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthSuccessResponse' },
+                examples: {
+                  success: authSuccessResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Invalid refresh token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidRefreshToken: invalidRefreshTokenExample,
+                },
+              },
+            },
+          },
+          '429': authRateLimitResponse,
         },
       },
     },
@@ -1235,6 +1511,117 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    '/api/taskforge/v1/jobs/digest': {
+      get: {
+        tags: ['Jobs'],
+        summary: 'Run the protected daily digest job',
+        description:
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
+        security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
+        parameters: [
+          {
+            name: 'digestDate',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+            description: 'Optional local digest calendar date.',
+          },
+          {
+            name: 'digestHourUtc',
+            in: 'query',
+            schema: { type: 'integer', minimum: 0, maximum: 23 },
+            description: 'Optional UTC hour filter.',
+          },
+          {
+            name: 'dryRun',
+            in: 'query',
+            schema: { type: 'string', enum: ['true', 'false', '1', '0'] },
+            description: 'When true or 1, reports the run without sending email.',
+          },
+          {
+            name: 'sendLimit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 0, maximum: 500 },
+            description: 'Optional per-run send cap.',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Digest job run completed.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
+                examples: { default: dailyDigestRunExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect job secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unauthorized: unauthorizedExample },
+              },
+            },
+          },
+          '429': rateLimitResponse,
+        },
+      },
+      post: {
+        tags: ['Jobs'],
+        summary: 'Run the protected daily digest job',
+        description:
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
+        security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/DailyDigestJobRunRequest' },
+              examples: { default: dailyDigestJobRunRequestExample },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Digest job run completed.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
+                examples: { default: dailyDigestRunExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect job secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unauthorized: unauthorizedExample },
+              },
+            },
+          },
+          '429': rateLimitResponse,
+        },
+      },
+    },
     '/api/taskforge/v1/tasks': {
       get: {
         tags: ['Tasks'],
@@ -1272,14 +1659,18 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: {
+              type: 'array',
+              maxItems: TASK_TAGS_MAX_LENGTH,
+              items: { type: 'string', minLength: 1, maxLength: TAG_LABEL_MAX_LENGTH },
+            },
             description:
               'Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {
@@ -1410,13 +1801,17 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: {
+              type: 'array',
+              maxItems: TASK_TAGS_MAX_LENGTH,
+              items: { type: 'string', minLength: 1, maxLength: TAG_LABEL_MAX_LENGTH },
+            },
             description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {

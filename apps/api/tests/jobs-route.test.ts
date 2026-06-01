@@ -112,6 +112,116 @@ describe('jobs router', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+
+
+  it('rejects missing and incorrect job secrets without logging or echoing supplied values', async () => {
+    const run = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const missing = await request(app).post('/jobs/digest').send({ digestDate: '2026-05-19' }).expect(401);
+    const wrongHeader = await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'definitely-wrong-secret')
+      .send({ digestDate: '2026-05-19' })
+      .expect(401);
+    const wrongBearer = await request(app)
+      .get('/jobs/digest?digestDate=2026-05-19')
+      .set('Authorization', 'Bearer definitely-wrong-bearer')
+      .expect(401);
+
+    expect(missing.body).toEqual({ error: 'Unauthorized' });
+    expect(wrongHeader.text).not.toContain('definitely-wrong-secret');
+    expect(wrongBearer.text).not.toContain('definitely-wrong-bearer');
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleWarn).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+
+    consoleError.mockRestore();
+    consoleWarn.mockRestore();
+  });
+
+  it('rate limits invalid job-secret attempts without spending the valid job budget', async () => {
+    const run = jest.fn().mockResolvedValue({ attempted: 1, sent: 1, skipped: 0, failed: 0 });
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    for (let index = 0; index < 5; index += 1) {
+      await request(app)
+        .post('/jobs/digest')
+        .set('x-job-secret', `wrong-secret-${index}`)
+        .send({ digestDate: '2026-05-19' })
+        .expect(401);
+    }
+
+    const limited = await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'wrong-secret-5')
+      .send({ digestDate: '2026-05-19' })
+      .expect(429);
+
+    expect(limited.body).toEqual({ error: 'Too many requests, please try again later.' });
+    expect(limited.headers['ratelimit-limit']).toBe('5');
+
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19' })
+      .expect(200);
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('rate limits valid protected job runs after secret validation', async () => {
+    const run = jest.fn().mockResolvedValue({ attempted: 0, sent: 0, skipped: 0, failed: 0 });
+    const app = express();
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    for (let index = 0; index < 5; index += 1) {
+      await request(app)
+        .get(`/jobs/digest?digestDate=2026-05-${20 + index}&dryRun=true`)
+        .set('Authorization', 'Bearer job-secret')
+        .expect(200);
+    }
+
+    const limited = await request(app)
+      .get('/jobs/digest?digestDate=2026-05-25&dryRun=true')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(429);
+
+    expect(limited.body).toEqual({ error: 'Too many requests, please try again later.' });
+    expect(limited.headers['ratelimit-limit']).toBe('5');
+    expect(run).toHaveBeenCalledTimes(5);
+  });
+
+  it('rejects unknown job query and body fields', async () => {
+    const run = jest.fn();
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    await request(app)
+      .get('/jobs/digest?digestDate=2026-05-19&unexpected=true')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(400);
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', unexpected: true })
+      .expect(400);
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19', sendLimit: 501 })
+      .expect(400);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('rejects blank string send limits instead of coercing them to zero', async () => {
     const run = jest.fn();
     const app = express();

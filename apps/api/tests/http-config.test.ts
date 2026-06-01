@@ -1,4 +1,10 @@
-import { getHttpServerConfig, parseCorsAllowedOrigins, parseTrustProxySetting } from '../src/config/http';
+import {
+  DEFAULT_JSON_BODY_LIMIT,
+  getHttpServerConfig,
+  parseCorsAllowedOrigins,
+  parseJsonBodyLimit,
+  parseTrustProxySetting,
+} from '../src/config/http';
 
 describe('http config', () => {
   it('leaves trust proxy unset when TRUST_PROXY is absent or blank', () => {
@@ -54,6 +60,17 @@ describe('http config', () => {
     );
   });
 
+
+
+  it('parses explicit JSON body size limits', () => {
+    expect(parseJsonBodyLimit(undefined)).toBe(DEFAULT_JSON_BODY_LIMIT);
+    expect(parseJsonBodyLimit(' 128KB ')).toBe('128kb');
+    expect(parseJsonBodyLimit('1024b')).toBe('1024b');
+    expect(parseJsonBodyLimit('1mb')).toBe('1mb');
+    expect(() => parseJsonBodyLimit('large')).toThrow('API_JSON_BODY_LIMIT must be a size');
+    expect(() => parseJsonBodyLimit('1gb')).toThrow('API_JSON_BODY_LIMIT must be a size');
+  });
+
   it('resolves default and configured CORS origins', () => {
     expect(getHttpServerConfig({ NODE_ENV: 'development' }).corsAllowedOrigins).toEqual([
       'http://localhost:3000',
@@ -64,5 +81,6 @@ describe('http config', () => {
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: 'https://app.example.com',
     }).corsAllowedOrigins).toEqual(['https://app.example.com']);
+    expect(getHttpServerConfig({ NODE_ENV: 'production', API_JSON_BODY_LIMIT: '32kb' }).jsonBodyLimit).toBe('32kb');
   });
 });

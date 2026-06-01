@@ -17,6 +17,24 @@
         "in": "cookie",
         "name": "tf_session",
         "description": "HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication."
+      },
+      "sessionBridgeSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-session-bridge-secret",
+        "description": "Shared server-side secret used by the web app to exchange a NextAuth session for API JWTs."
+      },
+      "jobSecretHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-job-secret",
+        "description": "Shared secret required by protected background job routes."
+      },
+      "jobSecretBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "shared-secret",
+        "description": "Alternative protected job authentication using `Authorization: Bearer <DIGEST_JOB_SECRET>`."
       }
     },
     "schemas": {
@@ -39,6 +57,43 @@
         "example": {
           "email": "user@example.com",
           "password": "StrongPassword123"
+        }
+      },
+      "AuthRefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token"
+        }
+      },
+      "SessionBridgeRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "userId": "26f26639-05ad-40b6-8248-379644dcdf18",
+          "email": "user@example.com"
         }
       },
       "AuthTokens": {
@@ -709,7 +764,8 @@
           },
           "targetIndex": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Zero-based destination index in the target lane. The repository validates this against the lane length."
           }
         },
         "required": [
@@ -717,6 +773,7 @@
           "targetStatus",
           "targetIndex"
         ],
+        "additionalProperties": false,
         "example": {
           "taskId": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
           "targetStatus": "DONE",
@@ -728,11 +785,13 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 160
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 5000
           },
           "status": {
             "type": "string",
@@ -756,6 +815,7 @@
           },
           "tags": {
             "type": "array",
+            "maxItems": 10,
             "items": {
               "type": "string",
               "minLength": 1,
@@ -767,6 +827,7 @@
         "required": [
           "title"
         ],
+        "additionalProperties": false,
         "example": {
           "title": "Book product sync",
           "description": "Coordinate roadmap review with stakeholders",
@@ -783,11 +844,13 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 160
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 5000
           },
           "status": {
             "type": "string",
@@ -811,6 +874,7 @@
           },
           "tags": {
             "type": "array",
+            "maxItems": 10,
             "items": {
               "type": "string",
               "minLength": 1,
@@ -1215,6 +1279,53 @@
           "dryRun": true
         }
       },
+      "DailyDigestJobRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "digestDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional local digest calendar date. When omitted, the job derives local dates per user."
+          },
+          "digestHourUtc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "description": "Optional UTC hour filter. Users configured for a different hour are skipped."
+          },
+          "dryRun": {
+            "description": "When true, reports the digest run without sending email or recording delivery success.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "1",
+                  "0"
+                ]
+              }
+            ],
+            "default": false
+          },
+          "sendLimit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500,
+            "description": "Optional per-run send cap. Defaults to the configured job send limit."
+          }
+        },
+        "example": {
+          "digestDate": "2026-05-21",
+          "digestHourUtc": 13,
+          "dryRun": true,
+          "sendLimit": 5
+        }
+      },
       "DailyDigestRunResponse": {
         "type": "object",
         "properties": {
@@ -1423,6 +1534,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Authentication rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1516,6 +1644,293 @@
                   "invalidCredentials": {
                     "value": {
                       "error": "Invalid credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/auth/session-bridge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange a web session for API JWTs",
+        "description": "Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret` and returns the same auth token envelope as credential login.",
+        "security": [
+          {
+            "sessionBridgeSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionBridgeRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "userId": "26f26639-05ad-40b6-8248-379644dcdf18",
+                    "email": "user@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session exchanged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "user": {
+                        "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+                        "email": "user@example.com",
+                        "createdAt": "2024-06-01T12:00:00.000Z"
+                      },
+                      "tokens": {
+                        "tokenType": "Bearer",
+                        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access-token",
+                        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token",
+                        "accessTokenExpiresAt": "2024-06-01T13:00:00.000Z",
+                        "refreshTokenExpiresAt": "2024-06-08T12:00:00.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect session bridge secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "User not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User email mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "conflict": {
+                    "value": {
+                      "error": "User email mismatch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh API JWTs",
+        "description": "Exchanges a valid refresh token for a new auth token pair.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token pair refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "user": {
+                        "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+                        "email": "user@example.com",
+                        "createdAt": "2024-06-01T12:00:00.000Z"
+                      },
+                      "tokens": {
+                        "tokenType": "Bearer",
+                        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access-token",
+                        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token",
+                        "accessTokenExpiresAt": "2024-06-01T13:00:00.000Z",
+                        "refreshTokenExpiresAt": "2024-06-08T12:00:00.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidRefreshToken": {
+                    "value": {
+                      "error": "Invalid refresh token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
                     }
                   }
                 }
@@ -2123,6 +2538,283 @@
         }
       }
     },
+    "/api/taskforge/v1/jobs/digest": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Run the protected daily digest job",
+        "description": "Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.",
+        "security": [
+          {
+            "jobSecretBearer": []
+          },
+          {
+            "jobSecretHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "digestDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Optional local digest calendar date."
+          },
+          {
+            "name": "digestHourUtc",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "description": "Optional UTC hour filter."
+          },
+          {
+            "name": "dryRun",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            },
+            "description": "When true or 1, reports the run without sending email."
+          },
+          {
+            "name": "sendLimit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "description": "Optional per-run send cap."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest job run completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyDigestRunResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "digestDate": "2026-05-21",
+                      "digestDates": [
+                        "2026-05-21"
+                      ],
+                      "attempted": 1,
+                      "sent": 1,
+                      "skipped": 0,
+                      "failed": 0,
+                      "budgetSkipped": 0,
+                      "providerQuotaSkipped": 0,
+                      "duplicateSkipped": 0,
+                      "preferenceSkipped": 0,
+                      "noContentSkipped": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect job secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Run the protected daily digest job",
+        "description": "Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.",
+        "security": [
+          {
+            "jobSecretBearer": []
+          },
+          {
+            "jobSecretHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyDigestJobRunRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "digestDate": "2026-05-21",
+                    "digestHourUtc": 13,
+                    "dryRun": true,
+                    "sendLimit": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Digest job run completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyDigestRunResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "digestDate": "2026-05-21",
+                      "digestDates": [
+                        "2026-05-21"
+                      ],
+                      "attempted": 1,
+                      "sent": 1,
+                      "skipped": 0,
+                      "failed": 0,
+                      "budgetSkipped": 0,
+                      "providerQuotaSkipped": 0,
+                      "duplicateSkipped": 0,
+                      "preferenceSkipped": 0,
+                      "noContentSkipped": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect job secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/taskforge/v1/tasks": {
       "get": {
         "tags": [
@@ -2193,8 +2885,11 @@
             "explode": true,
             "schema": {
               "type": "array",
+              "maxItems": 10,
               "items": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               }
             },
             "description": "Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
@@ -2204,7 +2899,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "description": "Case-insensitive search over the title and description."
           },
@@ -2482,8 +3178,11 @@
             "explode": true,
             "schema": {
               "type": "array",
+              "maxItems": 10,
               "items": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               }
             },
             "description": "Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
@@ -2493,7 +3192,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "description": "Case-insensitive search over the title and description."
           },

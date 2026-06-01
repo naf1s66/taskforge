@@ -9,6 +9,7 @@ import {
   getTaskBoard,
   listTags,
   listTasks,
+  moveTaskOnBoard,
   setBrowserTaskClientAuthState,
   TaskClientError,
   updateTask,
@@ -103,14 +104,42 @@ describe('tasks-client', () => {
     });
 
     it('throws a validation error when filters are invalid', async () => {
+      const fetchMock = vi.fn();
+
       await expect(
         listTasks(
           {
             page: 0,
           },
-          { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
         ),
       ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        listTasks(
+          {
+            q: 'x'.repeat(201),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        listTasks(
+          {
+            tag: 'x'.repeat(65),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        listTasks(
+          {
+            tag: Array.from({ length: 11 }, (_, index) => `tag-${index}`),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('attaches the dev bypass token header on the browser when present', async () => {
@@ -130,14 +159,53 @@ describe('tasks-client', () => {
 
   describe('createTask', () => {
     it('performs client-side validation before sending the request', async () => {
+      const fetchMock = vi.fn();
+
       await expect(
         createTask(
           {
             title: '   ',
           },
-          { baseUrl: API_BASE_URL, fetchImpl: vi.fn() },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
         ),
       ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        createTask(
+          {
+            title: 'x'.repeat(161),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        createTask(
+          {
+            title: 'Valid title',
+            description: 'x'.repeat(5_001),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        createTask(
+          {
+            title: 'Valid title',
+            tags: ['x'.repeat(65)],
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+      await expect(
+        createTask(
+          {
+            title: 'Valid title',
+            tags: Array.from({ length: 11 }, (_, index) => `tag-${index}`),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('sends the session cookie when running on the server', async () => {
@@ -286,6 +354,85 @@ describe('tasks-client', () => {
       ).rejects.toMatchObject({
         kind: 'validation' satisfies TaskClientError['kind'],
       });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects oversized board filters before sending a request', async () => {
+      const fetchMock = vi.fn();
+
+      await expect(
+        getTaskBoard(
+          {
+            q: 'x'.repeat(201),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({
+        kind: 'validation' satisfies TaskClientError['kind'],
+      });
+      await expect(
+        getTaskBoard(
+          {
+            tag: 'x'.repeat(65),
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({
+        kind: 'validation' satisfies TaskClientError['kind'],
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('moveTaskOnBoard', () => {
+    it('serializes large target indexes so the API can validate lane length', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          columns: [],
+          summary: {
+            totalsByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            overdueByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            totalTasks: 0,
+            totalOverdue: 0,
+          },
+          updatedAt: '2026-06-01T00:00:00.000Z',
+          generatedAt: '2026-06-01T00:00:00.000Z',
+        }),
+      );
+
+      await moveTaskOnBoard(
+        {
+          taskId: sampleTask.id,
+          targetStatus: 'DONE',
+          targetIndex: 1_001,
+        },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tasks/board/move`);
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        taskId: sampleTask.id,
+        targetStatus: 'DONE',
+        targetIndex: 1_001,
+      });
+    });
+
+    it('rejects negative target indexes before sending a request', async () => {
+      const fetchMock = vi.fn();
+
+      await expect(
+        moveTaskOnBoard(
+          {
+            taskId: sampleTask.id,
+            targetStatus: 'DONE',
+            targetIndex: -1,
+          },
+          { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+        ),
+      ).rejects.toMatchObject({ kind: 'validation' satisfies TaskClientError['kind'] });
 
       expect(fetchMock).not.toHaveBeenCalled();
     });
