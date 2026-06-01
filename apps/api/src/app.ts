@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import { PrismaUserStore, UserStore } from './auth/user-store';
 import { openApiDocument } from './openapi';
-import { createAuthRouter } from './routes/auth';
+import { createAuthRouter, type AuthRateLimitOptions } from './routes/auth';
 import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { createTaskRouter } from './routes/tasks';
@@ -84,6 +84,7 @@ export interface CreateAppOptions {
   digestEmailAdapter?: EmailAdapter;
   digestJobSecret?: string;
   digestDailySendLimit?: number;
+  authRateLimit?: AuthRateLimitOptions | false;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -94,7 +95,7 @@ export function createApp(options: CreateAppOptions = {}) {
   }
   const allowedCorsOrigins = httpConfig.corsAllowedOrigins;
 
-  app.use(express.json());
+  app.use(express.json({ limit: httpConfig.jsonBodyLimit }));
   app.use(cookieParser());
   app.use(helmet());
   // Configure CORS to allow credentials with explicit origins
@@ -152,6 +153,7 @@ export function createApp(options: CreateAppOptions = {}) {
     devBypassEnabled: options.devBypassEnabled,
     devBypassClientSecret: options.devBypassClientSecret,
     welcomeEmailService,
+    authRateLimit: options.authRateLimit,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 

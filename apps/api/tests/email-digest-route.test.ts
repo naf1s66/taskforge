@@ -49,8 +49,11 @@ describe('email digest routes', () => {
 
     await request(app).get('/email/digest/preview?dueSoonDays=0').expect(400);
     await request(app).get('/email/digest/preview?timezone=Not/A_Timezone').expect(400);
+    await request(app).get('/email/digest/preview?maxTasksPerGroup=51').expect(400);
+    await request(app).get('/email/digest/preview?unknown=true').expect(400);
     await request(app).post('/email/digest/send').send({ digestHourUtc: 99 }).expect(400);
     await request(app).post('/email/digest/send').send({ digestHourUtc: null }).expect(400);
+    await request(app).post('/email/digest/send').send({ dryRun: true, unknown: 'field' }).expect(400);
   });
 
   it('treats blank digest hour values as omitted', async () => {

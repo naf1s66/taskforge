@@ -33,7 +33,7 @@ const previewQuerySchema = z.object({
   dueSoonDays: optionalIntegerParam(z.coerce.number().int().min(1).max(30)),
   recentlyUpdatedDays: optionalIntegerParam(z.coerce.number().int().min(1).max(30)),
   maxTasksPerGroup: optionalIntegerParam(z.coerce.number().int().min(1).max(50)),
-});
+}).strict();
 
 const sendPayloadSchema = z.object({
   digestDate: dateOnlySchema.optional(),
@@ -60,11 +60,15 @@ export function createEmailDigestRouter(prisma: PrismaClient, options: EmailDige
   router.use(rateLimit({
     windowMs: 60_000,
     max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
     handler: (_req, res) => res.status(429).json(rateLimitErrorResponse),
   }));
   const manualSendRateLimit = rateLimit({
     windowMs: 60_000,
     max: 3,
+    standardHeaders: true,
+    legacyHeaders: false,
     keyGenerator: (req, res) => {
       const user = res.locals.user as AuthUser | undefined;
       return user?.id ? `manual-digest-send:${user.id}` : req.ip ?? req.socket.remoteAddress ?? 'unknown';

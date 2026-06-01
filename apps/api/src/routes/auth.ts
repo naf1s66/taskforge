@@ -41,26 +41,35 @@ function getCookieOptions() {
 
 const SESSION_COOKIE_NAME = getSessionCookieName();
 
+export interface AuthRateLimitOptions {
+  windowMs?: number;
+  max?: number;
+  skipInTest?: boolean;
+}
+
 const noopLimiter: RequestHandler = (_req, _res, next) => next();
+const AUTH_RATE_LIMIT_RESPONSE = { error: 'Too many authentication attempts. Please try again later.' };
+
+export function createAuthAttemptLimiter(options: AuthRateLimitOptions = {}): RequestHandler {
+  if ((options.skipInTest ?? true) && process.env.NODE_ENV === 'test') {
+    return noopLimiter;
+  }
+
+  return rateLimit({
+    windowMs: options.windowMs ?? 15 * 60 * 1000,
+    max: options.max ?? 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: req => req.ip ?? req.socket.remoteAddress ?? 'global',
+    handler: (_req, res) => {
+      res.status(429).json(AUTH_RATE_LIMIT_RESPONSE);
+    },
+  });
+}
+
 const asyncRoute = (handler: RequestHandler): RequestHandler => (req, res, next) => {
   void Promise.resolve(handler(req, res, next)).catch(next);
 };
-const authAttemptLimiter: RequestHandler =
-  process.env.NODE_ENV === 'test'
-    ? noopLimiter
-    : rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 5,
-        standardHeaders: true,
-        legacyHeaders: false,
-        keyGenerator: req => req.ip ?? req.socket.remoteAddress ?? 'global',
-        handler: (_req, res) => {
-          res
-            .status(429)
-            .json({ error: 'Too many authentication attempts. Please try again later.' });
-        },
-      });
-
 export interface AuthRouterOptions {
   userStore?: UserStore;
   passwordHasher?: PasswordHasher;
@@ -74,9 +83,10 @@ export interface AuthRouterOptions {
   accessTokenExpiresIn?: string | number;
   refreshTokenExpiresIn?: string | number;
   welcomeEmailService?: WelcomeEmailService;
+  authRateLimit?: AuthRateLimitOptions | false;
 }
 
-function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isDevBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
     (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') &&
     env.TF_DEV_BYPASS_AUTH === 'true'
@@ -148,6 +158,9 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
   });
 
   const router = Router();
+  const authAttemptLimiter = options.authRateLimit === false
+    ? noopLimiter
+    : createAuthAttemptLimiter(options.authRateLimit);
 
   router.post('/register', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = registerSchema.safeParse(req.body);

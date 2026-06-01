@@ -1,4 +1,5 @@
 import { Router, type Request, type RequestHandler } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import type { DailyDigestRunner } from '../notifications/daily-digest-runner';
@@ -26,8 +27,8 @@ const runDigestSchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .optional()
     .transform(value => value === true || value === 'true' || value === '1'),
-  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0).safe()),
-});
+  sendLimit: optionalIntegerParam(z.coerce.number().int().min(0).max(500)),
+}).strict();
 
 function isAuthorized(req: Request, secret: string): boolean {
   const jobSecret = req.get('x-job-secret');
@@ -37,6 +38,18 @@ function isAuthorized(req: Request, secret: string): boolean {
 
 export function createJobsRouter(runner: DailyDigestRunner, options: JobsRouterOptions) {
   const router = Router();
+
+  const jobRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+    },
+  });
+
+  router.use(jobRateLimit);
 
   const handleDigestRun: RequestHandler = async (req, res, next) => {
     if (!isAuthorized(req, options.secret)) {

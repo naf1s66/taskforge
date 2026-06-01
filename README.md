@@ -79,6 +79,7 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
 | `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be exact origins without paths, query strings, or fragments. Production fails closed when unset, so set every deployed web origin explicitly. |
 | `TRUST_PROXY` | `apps/api/.env` | _(unset)_ | Express trusted-proxy setting used for `req.ip` and IP-based rate limits behind platform proxies. Leave unset locally; in production match the actual proxy chain and avoid trusting arbitrary `X-Forwarded-*` headers. Prefer a hop count such as `1` only when exactly one trusted proxy scrubs forwarded headers. |
+| `API_JSON_BODY_LIMIT` | `apps/api/.env` | `64kb` | Explicit JSON request-body cap for the API. Keep this low for early deployment; task titles, descriptions, tags, filters, digest preview windows, and job parameters also have schema-level bounds. |
 | `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Include the `/api/taskforge` prefix so callers can append `/v1/*` paths consistently. |
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
@@ -240,6 +241,13 @@ Also configure:
 - API: `DIGEST_JOB_SECRET`
 - Web: `CRON_SECRET`
 - Web: `DIGEST_JOB_SECRET` (must match API value)
+
+### Rate limits and abuse controls
+- The API uses in-process Express rate limiters: a general `120 requests/minute` limiter, auth attempt limiting of `5 requests/15 minutes` per `req.ip`, email digest limiting of `10 requests/minute`, manual digest send limiting of `3 requests/minute` per authenticated user, and protected digest job limiting of `5 requests/minute`. All limiter responses use JSON `429` envelopes with rate-limit headers where configured.
+- The v1 production assumption is one API instance. If the API is horizontally scaled, add a shared `express-rate-limit` store such as Redis before increasing instance count; otherwise each instance keeps its own counters and effective limits reset per instance.
+- IP-based buckets depend on Express `req.ip`. Keep `TRUST_PROXY` unset unless the deployment has a known trusted proxy chain that scrubs forwarded headers; incorrect broad trust lets clients pick their own `X-Forwarded-For` bucket.
+- Rate limits are guardrails, not authentication. Protected job routes still require `DIGEST_JOB_SECRET` through `Authorization: Bearer <secret>` or `x-job-secret`, and error bodies/logs must never include submitted secret values.
+- `TF_DEV_BYPASS_AUTH=true` is ignored outside `development` and `test` in both API and web helpers; do not set bypass secrets in production.
 
 ### Digest behavior summary
 - Daily digest execution is explicit (`/api/taskforge/v1/jobs/digest`) and can run as dry run or real send.

@@ -1,5 +1,13 @@
 import type { OpenAPIV3 } from 'openapi-types';
 
+import {
+  TASK_BOARD_TARGET_INDEX_MAX,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_QUERY_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+} from './schemas/task';
+
 const errorResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -382,9 +390,10 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
   properties: {
     taskId: { type: 'string', format: 'uuid' },
     targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
-    targetIndex: { type: 'integer', minimum: 0 },
+    targetIndex: { type: 'integer', minimum: 0, maximum: TASK_BOARD_TARGET_INDEX_MAX },
   },
   required: ['taskId', 'targetStatus', 'targetIndex'],
+  additionalProperties: false,
   example: {
     taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
     targetStatus: 'DONE',
@@ -395,13 +404,14 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
 const taskCreateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
@@ -411,6 +421,7 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
     },
   },
   required: ['title'],
+  additionalProperties: false,
   example: {
     title: 'Book product sync',
     description: 'Coordinate roadmap review with stakeholders',
@@ -424,13 +435,14 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
 const taskUpdateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
@@ -1272,14 +1284,14 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: { type: 'array', maxItems: TASK_TAGS_MAX_LENGTH, items: { type: 'string' } },
             description:
               'Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {
@@ -1410,13 +1422,13 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: { type: 'array', maxItems: TASK_TAGS_MAX_LENGTH, items: { type: 'string' } },
             description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {

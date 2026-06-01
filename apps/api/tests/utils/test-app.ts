@@ -1,7 +1,7 @@
 import request, { type SuperTest, type Test } from 'supertest';
 
 import { PrismaUserStore, type UserStore } from '../../src/auth/user-store';
-import { createApp } from '../../src/app';
+import { createApp, type CreateAppOptions } from '../../src/app';
 import type { WelcomeEmailDeliveryDispatcher } from '../../src/notifications/welcome-email';
 import { createTaskRepository, type TaskRepository } from '../../src/repositories/task-repository';
 import type { EmailAdapter } from '../../src/email/types';
@@ -24,6 +24,9 @@ export interface CreateTestAgentOptions {
   welcomeEmailAdapter?: EmailAdapter;
   welcomeEmailDeliveryDispatcher?: WelcomeEmailDeliveryDispatcher;
   welcomeEmailPendingAttemptStaleAfterMs?: number;
+  authRateLimit?: CreateAppOptions['authRateLimit'];
+  digestJobSecret?: string;
+  digestDailySendLimit?: number;
 }
 
 export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgentContext {
@@ -40,6 +43,9 @@ export function createTestAgent(options: CreateTestAgentOptions = {}): TestAgent
     welcomeEmailAdapter: options.welcomeEmailAdapter ?? { sendMail: async () => undefined },
     welcomeEmailDeliveryDispatcher: options.welcomeEmailDeliveryDispatcher ?? (task => task()),
     welcomeEmailPendingAttemptStaleAfterMs: options.welcomeEmailPendingAttemptStaleAfterMs,
+    authRateLimit: options.authRateLimit,
+    digestJobSecret: options.digestJobSecret,
+    digestDailySendLimit: options.digestDailySendLimit,
   });
 
   return { agent: request(app), prisma, userStore, taskRepository };
