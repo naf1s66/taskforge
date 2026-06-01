@@ -246,7 +246,7 @@ Also configure:
 - The API uses in-process Express rate limiters: a general `120 requests/minute` limiter, credential and refresh auth attempt limiting of `5 requests/15 minutes` per `req.ip`, server-side session bridge limiting of `120 requests/minute` per `req.ip`, email digest limiting of `10 requests/minute`, manual digest send limiting of `3 requests/minute` per authenticated user, and protected digest job limiting of `5 requests/minute`. All limiter responses use JSON `429` envelopes with rate-limit headers where configured.
 - The v1 production assumption is one API instance. If the API is horizontally scaled, add a shared `express-rate-limit` store such as Redis before increasing instance count; otherwise each instance keeps its own counters and effective limits reset per instance.
 - IP-based buckets depend on Express `req.ip`. Keep `TRUST_PROXY` unset unless the deployment has a known trusted proxy chain that scrubs forwarded headers; incorrect broad trust lets clients pick their own `X-Forwarded-For` bucket.
-- Rate limits are guardrails, not authentication. Protected job routes still require `DIGEST_JOB_SECRET` through `Authorization: Bearer <secret>` or `x-job-secret`, and error bodies/logs must never include submitted secret values.
+- Rate limits are guardrails, not authentication. Protected job routes still require `DIGEST_JOB_SECRET` through `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect job secrets are throttled without spending the valid scheduler bucket, and error bodies/logs must never include submitted secret values.
 - `TF_DEV_BYPASS_AUTH=true` is ignored outside `development` and `test` in both API and web helpers; do not set bypass secrets in production.
 
 ### Digest behavior summary

@@ -144,19 +144,28 @@ describe('jobs router', () => {
     consoleWarn.mockRestore();
   });
 
-  it('does not spend job rate-limit budget on missing or incorrect secrets', async () => {
+  it('rate limits invalid job-secret attempts without spending the valid job budget', async () => {
     const run = jest.fn().mockResolvedValue({ attempted: 1, sent: 1, skipped: 0, failed: 0 });
     const app = express();
     app.use(express.json());
     app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
 
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       await request(app)
         .post('/jobs/digest')
         .set('x-job-secret', `wrong-secret-${index}`)
         .send({ digestDate: '2026-05-19' })
         .expect(401);
     }
+
+    const limited = await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'wrong-secret-5')
+      .send({ digestDate: '2026-05-19' })
+      .expect(429);
+
+    expect(limited.body).toEqual({ error: 'Too many requests, please try again later.' });
+    expect(limited.headers['ratelimit-limit']).toBe('5');
 
     await request(app)
       .post('/jobs/digest')

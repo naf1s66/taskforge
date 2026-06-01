@@ -21,7 +21,7 @@
 
 ## Verification
 - API abuse-control coverage verifies auth `429` behavior, separate session bridge limiting, JSON body limits, trusted-proxy `req.ip` behavior, task/tag bounds, email preference unknown-field rejection, and production dev-bypass denial.
-- Job route coverage verifies missing and incorrect `DIGEST_JOB_SECRET` through both `Authorization: Bearer` and `x-job-secret`, no secret echoing/logging, valid-job `429` behavior, strict payload/query validation, and auth-before-limiter ordering.
+- Job route coverage verifies missing and incorrect `DIGEST_JOB_SECRET` through both `Authorization: Bearer` and `x-job-secret`, no secret echoing/logging, invalid-attempt throttling that does not spend the valid scheduler bucket, valid-job `429` behavior, and strict payload/query validation.
 - Web client and component coverage verifies task title/description/tag/search/board-index bounds before requests are sent.
 - OpenAPI was regenerated from source so `docs/openapi.json` documents auth/session/job rate-limit and protected-secret behavior.
 - Completed checks:

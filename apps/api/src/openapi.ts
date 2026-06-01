@@ -1516,7 +1516,7 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ['Jobs'],
         summary: 'Run the protected daily digest job',
         description:
-          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; invalid secrets return `401` before the job rate limiter is evaluated.',
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
         security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
         parameters: [
           {
@@ -1579,7 +1579,7 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ['Jobs'],
         summary: 'Run the protected daily digest job',
         description:
-          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; invalid secrets return `401` before the job rate limiter is evaluated.',
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
         security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
         requestBody: {
           required: false,
