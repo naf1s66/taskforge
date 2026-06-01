@@ -77,8 +77,8 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `NEXTAUTH_SECRET` | `apps/web/.env` | `changeme` | Random 32+ character string generated with `openssl rand -hex 32`. In production this must be rotated and stored securely. |
 | `NEXTAUTH_URL` | `apps/web/.env` | `http://localhost:3000` | Match the public URL serving the Next.js app. When deploying, update to `https://<your-domain>`. |
 | `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
-| `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be origins without paths; set to the deployed web origin in production. |
-| `TRUST_PROXY` | `apps/api/.env` | _(unset)_ | Express trusted-proxy setting used for `req.ip` and IP-based rate limits behind platform proxies. Leave unset locally; in production match the actual proxy chain and avoid trusting arbitrary `X-Forwarded-*` headers. |
+| `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be exact origins without paths, query strings, or fragments. Production fails closed when unset, so set every deployed web origin explicitly. |
+| `TRUST_PROXY` | `apps/api/.env` | _(unset)_ | Express trusted-proxy setting used for `req.ip` and IP-based rate limits behind platform proxies. Leave unset locally; in production match the actual proxy chain and avoid trusting arbitrary `X-Forwarded-*` headers. Prefer a hop count such as `1` only when exactly one trusted proxy scrubs forwarded headers. |
 | `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Include the `/api/taskforge` prefix so callers can append `/v1/*` paths consistently. |
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
@@ -94,7 +94,7 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
-For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskforge.app`), set `COOKIE_DOMAIN` in both `.env` files so session cookies are shared correctly.
+The API session cookie is `httpOnly`, `SameSite=Lax`, seven days long, and `Secure` when `NODE_ENV=production`. The supported v1 browser-auth topology is same-site: either serve the API behind the web origin or use custom subdomains under the same parent domain, such as `app.example.com` and `api.example.com`. Leave `COOKIE_DOMAIN` unset for same-host/host-only cookies; set a shared parent domain such as `.example.com` only for deliberate cross-subdomain cookies. Raw unrelated platform domains such as a Vercel app calling a Render/Railway default host are not a supported production cookie topology for the OAuth session bridge. Preview deployments are not trusted automatically; add their exact origins to `CORS_ALLOWED_ORIGINS` or keep them isolated from the production API. See `docs/prod/browser-auth-deployment.md` for the full deployed browser checklist.
 
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.

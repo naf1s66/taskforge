@@ -10,6 +10,14 @@
     "apps/*",
     "packages/*"
   ],
+  "pnpm": {
+    "overrides": {
+      "baseline-browser-mapping": "2.10.33",
+      "browserslist": "4.28.2",
+      "caniuse-lite": "1.0.30001793",
+      "update-browserslist-db": "1.2.3"
+    }
+  },
   "scripts": {
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
