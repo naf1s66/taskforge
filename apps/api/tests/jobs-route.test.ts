@@ -144,6 +144,51 @@ describe('jobs router', () => {
     consoleWarn.mockRestore();
   });
 
+  it('does not spend job rate-limit budget on missing or incorrect secrets', async () => {
+    const run = jest.fn().mockResolvedValue({ attempted: 1, sent: 1, skipped: 0, failed: 0 });
+    const app = express();
+    app.use(express.json());
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    for (let index = 0; index < 6; index += 1) {
+      await request(app)
+        .post('/jobs/digest')
+        .set('x-job-secret', `wrong-secret-${index}`)
+        .send({ digestDate: '2026-05-19' })
+        .expect(401);
+    }
+
+    await request(app)
+      .post('/jobs/digest')
+      .set('x-job-secret', 'job-secret')
+      .send({ digestDate: '2026-05-19' })
+      .expect(200);
+
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('rate limits valid protected job runs after secret validation', async () => {
+    const run = jest.fn().mockResolvedValue({ attempted: 0, sent: 0, skipped: 0, failed: 0 });
+    const app = express();
+    app.use('/jobs', createJobsRouter(createRunner(run), { defaultSendLimit: 90, secret: 'job-secret' }));
+
+    for (let index = 0; index < 5; index += 1) {
+      await request(app)
+        .get(`/jobs/digest?digestDate=2026-05-${20 + index}&dryRun=true`)
+        .set('Authorization', 'Bearer job-secret')
+        .expect(200);
+    }
+
+    const limited = await request(app)
+      .get('/jobs/digest?digestDate=2026-05-25&dryRun=true')
+      .set('Authorization', 'Bearer job-secret')
+      .expect(429);
+
+    expect(limited.body).toEqual({ error: 'Too many requests, please try again later.' });
+    expect(limited.headers['ratelimit-limit']).toBe('5');
+    expect(run).toHaveBeenCalledTimes(5);
+  });
+
   it('rejects unknown job query and body fields', async () => {
     const run = jest.fn();
     const app = express();

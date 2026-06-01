@@ -49,13 +49,15 @@ export function createJobsRouter(runner: DailyDigestRunner, options: JobsRouterO
     },
   });
 
-  router.use(jobRateLimit);
-
-  const handleDigestRun: RequestHandler = async (req, res, next) => {
+  const requireJobSecret: RequestHandler = (req, res, next) => {
     if (!isAuthorized(req, options.secret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    return next();
+  };
+
+  const handleDigestRun: RequestHandler = async (req, res, next) => {
     const payload: unknown = req.method === 'GET' ? req.query : req.body;
     const parsed = runDigestSchema.safeParse(payload);
     if (!parsed.success) {
@@ -76,8 +78,8 @@ export function createJobsRouter(runner: DailyDigestRunner, options: JobsRouterO
     }
   };
 
-  router.get('/digest', handleDigestRun);
-  router.post('/digest', handleDigestRun);
+  router.get('/digest', requireJobSecret, jobRateLimit, handleDigestRun);
+  router.post('/digest', requireJobSecret, jobRateLimit, handleDigestRun);
 
   return router;
 }
