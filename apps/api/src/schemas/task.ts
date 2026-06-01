@@ -6,7 +6,6 @@ export const TASK_TITLE_MAX_LENGTH = 160;
 export const TASK_DESCRIPTION_MAX_LENGTH = 5_000;
 export const TASK_TAGS_MAX_LENGTH = 10;
 export const TASK_QUERY_MAX_LENGTH = 200;
-export const TASK_BOARD_TARGET_INDEX_MAX = 1_000;
 
 export const TaskTagsSchema = z.array(TagLabelSchema).max(TASK_TAGS_MAX_LENGTH);
 
@@ -37,5 +36,5 @@ export const TaskBoardMoveSchema = z.object({
     .trim()
     .uuid({ message: 'Invalid identifier' }),
   targetStatus: z.enum(['TODO', 'IN_PROGRESS', 'DONE']),
-  targetIndex: z.number().int().min(0).max(TASK_BOARD_TARGET_INDEX_MAX),
+  targetIndex: z.number().int().min(0),
 }).strict();

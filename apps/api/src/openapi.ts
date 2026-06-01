@@ -3,7 +3,6 @@ import type { OpenAPIV3 } from 'openapi-types';
 import { TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
 
 import {
-  TASK_BOARD_TARGET_INDEX_MAX,
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_QUERY_MAX_LENGTH,
   TASK_TAGS_MAX_LENGTH,
@@ -428,7 +427,11 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
   properties: {
     taskId: { type: 'string', format: 'uuid' },
     targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
-    targetIndex: { type: 'integer', minimum: 0, maximum: TASK_BOARD_TARGET_INDEX_MAX },
+    targetIndex: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Zero-based destination index in the target lane. The repository validates this against the lane length.',
+    },
   },
   required: ['taskId', 'targetStatus', 'targetIndex'],
   additionalProperties: false,

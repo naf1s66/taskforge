@@ -15,7 +15,6 @@ import type { AsyncLocalStorage } from 'async_hooks';
 import { getApiBaseUrl } from './env';
 import {
   isValidTaskTagLabel,
-  TASK_BOARD_TARGET_INDEX_MAX,
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_QUERY_MAX_LENGTH,
   TASK_TAG_LABEL_MAX_LENGTH,
@@ -147,7 +146,7 @@ const BoardResponseSchema = z.object({
 const BoardMoveSchema = z.object({
   taskId: z.string().uuid(),
   targetStatus: TaskStatusSchema,
-  targetIndex: z.number().int().min(0).max(TASK_BOARD_TARGET_INDEX_MAX),
+  targetIndex: z.number().int().min(0),
 });
 
 const TaskListResponseSchema = z.object({

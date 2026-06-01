@@ -387,7 +387,40 @@ describe('tasks-client', () => {
   });
 
   describe('moveTaskOnBoard', () => {
-    it('rejects oversized target indexes before sending a request', async () => {
+    it('serializes large target indexes so the API can validate lane length', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        jsonResponse({
+          columns: [],
+          summary: {
+            totalsByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            overdueByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+            totalTasks: 0,
+            totalOverdue: 0,
+          },
+          updatedAt: '2026-06-01T00:00:00.000Z',
+          generatedAt: '2026-06-01T00:00:00.000Z',
+        }),
+      );
+
+      await moveTaskOnBoard(
+        {
+          taskId: sampleTask.id,
+          targetStatus: 'DONE',
+          targetIndex: 1_001,
+        },
+        { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
+      );
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(`${API_BASE_URL}/v1/tasks/board/move`);
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        taskId: sampleTask.id,
+        targetStatus: 'DONE',
+        targetIndex: 1_001,
+      });
+    });
+
+    it('rejects negative target indexes before sending a request', async () => {
       const fetchMock = vi.fn();
 
       await expect(
@@ -395,7 +428,7 @@ describe('tasks-client', () => {
           {
             taskId: sampleTask.id,
             targetStatus: 'DONE',
-            targetIndex: 1_001,
+            targetIndex: -1,
           },
           { baseUrl: API_BASE_URL, fetchImpl: fetchMock },
         ),

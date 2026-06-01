@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import express from 'express';
 import request from 'supertest';
+import type { BoardReadModelDTO } from '@taskforge/shared';
 
 import { createApp } from '../src/app';
 import { createAuthAttemptLimiter, isDevBypassEnabled } from '../src/routes/auth';
+import type { TaskRepository } from '../src/repositories/task-repository';
 import { createTestAgent } from './utils/test-app';
 import { registerTestUser } from './utils/auth';
 
@@ -20,6 +22,18 @@ function createLimitedProbeApp(trustProxy?: boolean | number) {
   );
   return app;
 }
+
+const emptyBoard: BoardReadModelDTO = {
+  columns: [],
+  summary: {
+    totalsByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+    overdueByStatus: { TODO: 0, IN_PROGRESS: 0, DONE: 0 },
+    totalTasks: 0,
+    totalOverdue: 0,
+  },
+  updatedAt: '2026-06-01T00:00:00.000Z',
+  generatedAt: '2026-06-01T00:00:00.000Z',
+};
 
 describe('abuse controls', () => {
   const originalJsonBodyLimit = process.env.API_JSON_BODY_LIMIT;
@@ -175,7 +189,7 @@ describe('abuse controls', () => {
       .send({
         taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
         targetStatus: 'DONE',
-        targetIndex: 1_001,
+        targetIndex: -1,
       })
       .expect(400);
     await agent
@@ -183,6 +197,34 @@ describe('abuse controls', () => {
       .set('Authorization', bearer)
       .send({ label: 'x'.repeat(65) })
       .expect(400);
+  });
+
+  it('allows large board target indexes through schema validation for lane-length checks', async () => {
+    const moveTaskOnBoard = jest.fn().mockResolvedValue({ status: 'ok', board: emptyBoard });
+    const taskRepository = {
+      listTasks: jest.fn(),
+      getTask: jest.fn(),
+      getTaskBoard: jest.fn(),
+      moveTaskOnBoard,
+      createTask: jest.fn(),
+      updateTask: jest.fn(),
+      deleteTask: jest.fn(),
+    } as unknown as TaskRepository;
+    const { agent } = createTestAgent({ taskRepository });
+    const auth = await registerTestUser(agent, { email: 'large-board-index@example.com' });
+    const payload = {
+      taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
+      targetStatus: 'DONE',
+      targetIndex: 1_001,
+    };
+
+    await agent
+      .patch('/api/taskforge/v1/tasks/board/move')
+      .set('Authorization', `Bearer ${auth.tokens.accessToken}`)
+      .send(payload)
+      .expect(200);
+
+    expect(moveTaskOnBoard).toHaveBeenCalledWith(expect.any(String), payload);
   });
 
   it('rejects unknown email preference fields', async () => {

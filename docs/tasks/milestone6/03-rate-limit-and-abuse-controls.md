@@ -39,7 +39,7 @@
 
 ## Baseline Audit Follow-ups
 - [x] Set and test an explicit JSON body-size limit instead of relying on Express' default `express.json()` limit.
-- [x] Confirm task, tag, board, email preference, digest preview, and manual digest send schemas reject oversized payloads and unbounded query parameters, with explicit limits for task titles/descriptions, query text, tag array length, tag label length, `pageSize`, board `targetIndex`, digest preview windows, and unknown query/body fields.
+- [x] Confirm task, tag, board, email preference, digest preview, and manual digest send schemas reject oversized payloads and unbounded query parameters, with explicit limits for task titles/descriptions, query text, tag array length, tag label length, `pageSize`, digest preview windows, and unknown query/body fields. Board `targetIndex` remains a nonnegative integer at the schema layer and is bounded against the actual lane length in repository validation.
 - [x] Add focused tests for auth `429` behavior outside the `NODE_ENV=test` bypass or isolate limiter construction so deterministic tests can cover the production limiter settings.
 - [x] Add negative tests for missing/wrong `DIGEST_JOB_SECRET` through both `Authorization: Bearer` and `x-job-secret`, ensuring error bodies and logs never echo supplied secret values.
 - [x] Exercise rate limits with `TRUST_PROXY` disabled and enabled so untrusted clients cannot spoof `X-Forwarded-For` into separate buckets.

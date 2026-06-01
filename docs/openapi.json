@@ -765,7 +765,7 @@
           "targetIndex": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 1000
+            "description": "Zero-based destination index in the target lane. The repository validates this against the lane length."
           }
         },
         "required": [
