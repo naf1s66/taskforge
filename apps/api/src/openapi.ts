@@ -1319,7 +1319,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Auth'],
         summary: 'Invalidate the current JWT token',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Clears the `tf_session` cookie for authenticated callers. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Logged out',

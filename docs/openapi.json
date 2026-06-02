@@ -2144,9 +2144,13 @@
           "Auth"
         ],
         "summary": "Invalidate the current JWT token",
+        "description": "Clears the `tf_session` cookie for authenticated callers. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "responses": {
