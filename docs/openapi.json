@@ -361,8 +361,7 @@
             "type": "string"
           },
           "description": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
           "status": {
             "type": "string",
@@ -382,8 +381,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "tags": {
             "type": "array",
@@ -456,8 +454,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "tags": {
             "type": "array",
@@ -1130,8 +1127,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
