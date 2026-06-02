@@ -21,7 +21,7 @@ const loginSchema = registerSchema;
 const sessionBridgeSchema = z.object({
   userId: z.string().min(1),
   email: z.string().email().optional(),
-});
+}).strict();
 const welcomeEmailSchema = sessionBridgeSchema;
 
 // Helper function to get cookie options
@@ -347,7 +347,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}) {
 
   const refreshSchema = z.object({
     refreshToken: z.string().min(1),
-  });
+  }).strict();
 
   router.post('/refresh', authAttemptLimiter, asyncRoute(async (req, res) => {
     const parse = refreshSchema.safeParse(req.body);
