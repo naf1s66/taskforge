@@ -1497,6 +1497,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1597,16 +1614,21 @@
             }
           },
           "429": {
-            "description": "Authentication rate limit exceeded",
+            "description": "Authentication or global rate limit exceeded",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "rateLimited": {
+                  "authRateLimited": {
                     "value": {
                       "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1712,16 +1734,21 @@
             }
           },
           "429": {
-            "description": "Authentication rate limit exceeded",
+            "description": "Authentication or global rate limit exceeded",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "rateLimited": {
+                  "authRateLimited": {
                     "value": {
                       "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1867,16 +1894,21 @@
             }
           },
           "429": {
-            "description": "Authentication rate limit exceeded",
+            "description": "Authentication or global rate limit exceeded",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "rateLimited": {
+                  "authRateLimited": {
                     "value": {
                       "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2015,6 +2047,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2115,16 +2164,21 @@
             }
           },
           "429": {
-            "description": "Authentication rate limit exceeded",
+            "description": "Authentication or global rate limit exceeded",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "rateLimited": {
+                  "authRateLimited": {
                     "value": {
                       "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2178,6 +2232,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2240,6 +2311,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2296,6 +2384,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2394,6 +2499,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2509,17 +2631,22 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "invalidPayload": {
+                  "invalidQueryParameters": {
                     "value": {
-                      "error": "Invalid payload",
+                      "error": "Invalid query parameters",
                       "details": {
                         "fieldErrors": {
-                          "email": [
-                            "Invalid email address"
+                          "dueSoonDays": [
+                            "Number must be greater than or equal to 1"
                           ]
                         },
                         "formErrors": []
                       }
+                    }
+                  },
+                  "invalidDigestTimezonePreference": {
+                    "value": {
+                      "error": "Invalid digest timezone preference."
                     }
                   }
                 }
@@ -2654,6 +2781,11 @@
                         },
                         "formErrors": []
                       }
+                    }
+                  },
+                  "invalidDigestTimezonePreference": {
+                    "value": {
+                      "error": "Invalid digest timezone preference."
                     }
                   }
                 }
@@ -3207,6 +3339,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -3313,6 +3462,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -3521,6 +3687,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3688,6 +3871,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3792,6 +3992,23 @@
                   "notFound": {
                     "value": {
                       "error": "Not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -3942,6 +4159,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4039,6 +4273,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4087,6 +4338,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
                 }
               }
             }
@@ -4159,6 +4427,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
                 }
               }
             }

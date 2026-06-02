@@ -168,6 +168,22 @@ const invalidPayloadExample = {
   value: errorResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const invalidQueryParametersExample = {
+  value: {
+    error: 'Invalid query parameters',
+    details: {
+      fieldErrors: {
+        dueSoonDays: ['Number must be greater than or equal to 1'],
+      },
+      formErrors: [],
+    },
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
+const invalidDigestTimezonePreferenceExample = {
+  value: { error: 'Invalid digest timezone preference.' },
+} satisfies OpenAPIV3.ExampleObject;
+
 const invalidIdentifierExample = {
   value: { error: 'Invalid identifier' },
 } satisfies OpenAPIV3.ExampleObject;
@@ -858,11 +874,14 @@ const authRateLimitedExample = {
 } satisfies OpenAPIV3.ExampleObject;
 
 const authRateLimitResponse: OpenAPIV3.ResponseObject = {
-  description: 'Authentication rate limit exceeded',
+  description: 'Authentication or global rate limit exceeded',
   content: {
     'application/json': {
       schema: { $ref: '#/components/schemas/ErrorResponse' },
-      examples: { rateLimited: authRateLimitedExample },
+      examples: {
+        authRateLimited: authRateLimitedExample,
+        rateLimited: rateLimitedExample,
+      },
     },
   },
 };
@@ -1006,6 +1025,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1258,6 +1278,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1345,6 +1366,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1378,6 +1400,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1411,6 +1434,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1466,6 +1490,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1513,7 +1538,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
-                examples: { invalidPayload: invalidPayloadExample },
+                examples: {
+                  invalidQueryParameters: invalidQueryParametersExample,
+                  invalidDigestTimezonePreference: invalidDigestTimezonePreferenceExample,
+                },
               },
             },
           },
@@ -1568,7 +1596,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
-                examples: { invalidPayload: invalidPayloadExample },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                  invalidDigestTimezonePreference: invalidDigestTimezonePreferenceExample,
+                },
               },
             },
           },
@@ -1815,6 +1846,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       post: {
@@ -1868,6 +1900,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1962,6 +1995,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -2034,6 +2068,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -2097,6 +2132,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       patch: {
@@ -2170,6 +2206,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       delete: {
@@ -2231,6 +2268,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -2261,6 +2299,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       post: {
@@ -2308,6 +2347,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
