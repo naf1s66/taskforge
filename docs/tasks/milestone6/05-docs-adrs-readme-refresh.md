@@ -4,15 +4,15 @@
 - Bring project documentation into alignment with the release-candidate implementation.
 - Make deployment, verification, and known gates clear enough for a reviewer to operate without private context.
 
-**Status:** Planned.
+**Status:** Completed.
 
 ## Acceptance Criteria
-- [ ] README reflects the current setup, env vars, Docker workflow, test commands, HTTP packs, and production caveats.
-- [ ] PRD milestone status matches shipped behavior through Milestone 6 and clearly separates pending Day 7 deployment work.
-- [ ] ADRs capture any final security, deployment, CORS, trusted proxy, Docker build, or release-gate decisions.
-- [ ] Production docs include exact placeholder locations for deployment facts without committing real secrets.
-- [ ] Milestone task docs for Milestones 1-6 are internally consistent and do not advertise unshipped behavior as complete.
-- [ ] Testing docs include Milestone 6 automated and manual verification steps.
+- [x] README reflects the current setup, env vars, Docker workflow, test commands, HTTP packs, and production caveats.
+- [x] PRD milestone status matches shipped behavior through Milestone 6 and clearly separates pending Day 7 deployment work.
+- [x] ADRs capture any final security, deployment, CORS, trusted proxy, Docker build, or release-gate decisions.
+- [x] Production docs include exact placeholder locations for deployment facts without committing real secrets.
+- [x] Milestone task docs for Milestones 1-6 are internally consistent and do not advertise unshipped behavior as complete.
+- [x] Testing docs include Milestone 6 automated and manual verification steps.
 
 ## Notes
 - Preserve the distinction between "implemented locally" and "enabled in production", especially for email scheduling.
@@ -30,3 +30,11 @@
 - Document the rate-limit deployment assumption: either v1 runs a single API instance with in-process limiter state, or production uses a shared rate-limit store before horizontal scaling.
 - Preserve the production email gate language: real scheduled sends stay disabled until the production fact register is complete and manual-only Resend/observability checks pass.
 - Ensure the release docs distinguish local implementation from production enablement for digest scheduling, Resend, OAuth providers, and cross-subdomain cookies.
+
+
+## Completion Notes
+- README now documents env placeholders, direct browser-to-API task/tag/board access, Docker/compose validation commands, production caveats, and the local-implemented versus production-enabled split for OAuth, Resend, digest scheduling, and cookies.
+- PRD now tracks Days 1-6 as shipped locally/release-candidate work and keeps Day 7 deployment provisioning pending.
+- Production docs now include a placeholder map for `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_SECRET`, `SESSION_BRIDGE_SECRET`, `DIGEST_JOB_SECRET`, `CRON_SECRET`, `COOKIE_DOMAIN`, and `TF_DEV_BYPASS_AUTH` without real secrets.
+- ADR 0008 records the final release-candidate gates for browser routing, CORS/cookies, trusted proxy, rate-limit topology, Docker build validation, and email enablement.
+- Milestone 6 Docker image build validation remains a release gate unless CI or the release log proves both image builds.

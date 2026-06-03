@@ -2,6 +2,8 @@
 
 Production and pre-launch operations docs live here. Milestone/task planning files stay under `docs/tasks`.
 
+## Runbooks and ADRs
+
 - `resend-email-setup.md` - Resend SMTP account, DNS, sender, and smoke-test checklist for pre-launch email enablement.
 - `email-production-rollout.md` - production email fact register, enablement gates, manual production smoke, and post-production TODOs.
 - `digest-scheduler.md` - protected digest job endpoint, Vercel Cron proxy, dry-run, and rollout checklist.
@@ -12,3 +14,30 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 - `adr/0004-hosting-vercel-render-neon.md` - accepted hosting topology decision.
 - `adr/0006-digest-scheduler-invocation.md` - accepted free-tier digest scheduler invocation decision.
 - `adr/0007-email-observability-rollout-decisions.md` - accepted monitoring, budget exhaustion, and scheduled-send enablement decisions for production email rollout.
+- `adr/0008-release-candidate-security-and-deployment-gates.md` - accepted Milestone 6 release-candidate security/deployment gate decisions.
+
+## Production placeholder map
+
+Do not commit real secrets. Replace these placeholders in the deployment provider secret managers or production environment forms, not in git-tracked files.
+
+| Fact | Placeholder/location | Required production value |
+| --- | --- | --- |
+| Browser origins allowed by API | `infra/env/api.prod.env.example`: `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>` | Exact deployed web origin list, comma-separated, origins only. |
+| Web public URL | `infra/env/web.prod.env.example`: `NEXTAUTH_URL=https://<APP_DOMAIN>` | Exact HTTPS web origin used by browsers and OAuth callbacks. |
+| Web auth secret | `infra/env/web.prod.env.example`: `NEXTAUTH_SECRET=<ROTATED_NEXTAUTH_SECRET>` | 32+ random bytes, stored only in web secret manager. |
+| API/web session bridge secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `SESSION_BRIDGE_SECRET=<ROTATED_SESSION_BRIDGE_SECRET>` | Same strong random value in API and web only. |
+| Digest job secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>` | Same strong random value; authorizes API job endpoint. |
+| Vercel cron secret | `infra/env/web.prod.env.example`: `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>` | Strong random value used only by Vercel Cron/web route. |
+| Cookie domain | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: commented `# COOKIE_DOMAIN=.example.com` | Leave unset for host-only cookies; set the shared parent domain only for deliberate same-site cross-subdomain auth. |
+| Dev auth bypass | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `TF_DEV_BYPASS_AUTH=false` | Must remain false in production; do not configure bypass client secrets. |
+| Trusted proxy chain | `infra/env/api.prod.env.example`: `TRUST_PROXY=1` with comments | Match the real platform proxy chain. Use `1` only when exactly one trusted proxy scrubs forwarded headers. |
+| API base URLs used by web | `infra/env/web.prod.env.example`: `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge` | Exact API origin plus `/api/taskforge`; browser calls task/tag/board routes directly. |
+| Resend SMTP secret | `infra/env/api.prod.env.example`: `SMTP_PASS=<RESEND_API_KEY>` | API secret manager only; never web/browser/repository. |
+
+## Production enablement boundaries
+
+- OAuth providers are implemented but production-enabled only after real provider apps, callback URLs, and secrets are configured.
+- Digest scheduling is implemented but real scheduled sends remain disabled until `email-production-rollout.md` has no `<TBD before enablement>` values and manual-only Resend/observability checks pass.
+- Resend is the production SMTP default, but real provider sends require a verified sending domain and safe sender/recipient checks.
+- Cross-subdomain cookies are supported only when `COOKIE_DOMAIN` is deliberately set to a shared parent domain; unrelated platform domains are not a supported production browser-auth topology.
+- Rate limits use in-process state for v1. Run one API instance or add a shared rate-limit store before horizontal scaling.

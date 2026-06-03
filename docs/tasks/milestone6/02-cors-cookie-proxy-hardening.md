@@ -33,7 +33,7 @@
 - API route errors now use structured JSON, and unmatched API routes no longer fall through to Express' default HTML response.
 
 ## Baseline Audit Follow-ups
-- Decide whether the API should keep the production fallback `https://taskforge.app` or fail closed unless `CORS_ALLOWED_ORIGINS` is explicit in production; document the decision and add tests for both configured and fallback behavior.
+- [x] Production CORS fails closed unless `CORS_ALLOWED_ORIGINS` is explicit; the old hard-coded fallback origin was removed and configured/local-default behavior is covered by tests.
 - Preserve local no-origin/curl behavior while proving malformed, pathful, and unlisted browser origins fail safely.
 - Document the selected cookie topology for same-origin, cross-subdomain, and preview deployments, including `COOKIE_DOMAIN`, `SameSite=Lax`, `Secure`, `httpOnly`, and the seven-day API session cookie lifetime.
 - Verify `/auth/session-bridge` cache, redirect sanitization, authenticated-user requirement, existing-cookie probe behavior, and cookie-setting behavior for the selected topology.

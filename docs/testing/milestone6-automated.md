@@ -16,19 +16,21 @@ pnpm -C apps/web test
 pnpm -C apps/api build
 pnpm -C apps/web build
 docker compose -f infra/docker-compose.yml config --quiet
+docker build -f apps/api/Dockerfile -t taskforge-api:local .
+docker build -f apps/web/Dockerfile -t taskforge-web:local .
 git diff --check
 ```
 
-If Docker is available and CI is not the only Docker validation path, also run the API and web image builds documented by `docs/tasks/milestone6/06-ci-docker-builds.md`.
+If Docker is unavailable in the review environment, record that as an environment limitation and require CI or another release log to prove both image builds before Day 7 sign-off.
 
 ## Focus Areas
 
 - API security middleware and config parsing: Helmet, CORS, trusted proxy, body limits, cookies, and error handling.
-- Web auth route checks: `/api/auth/*`, `/auth/session-bridge`, cron proxy auth, cookie-setting behavior, redirect sanitization, and dev bypass production gating.
+- Web auth route checks: `/api/auth/*`, `/auth/session-bridge`, cron proxy auth, cookie-setting behavior, redirect sanitization, and dev bypass production gating. The web app should not grow general `/tasks`, `/tags`, or `/board` proxy routes; clients call the API directly.
 - Rate limits: auth routes, email digest/manual send, protected jobs, global or route-specific limits, and the single-instance versus shared-store deployment decision.
 - OpenAPI: regenerated `docs/openapi.json` must match `apps/api/src/openapi.ts`.
 - HTTP packs: `pnpm -C apps/api run lint:http` must pass after any `.http` additions.
-- Docker: compose config must validate without real production secrets.
+- Docker: compose config and API/web image builds must validate without real production secrets.
 - Email safety: automated tests must use mocks, fakes, MailHog, or dry runs only.
 
 ## Suggested Focused Commands
