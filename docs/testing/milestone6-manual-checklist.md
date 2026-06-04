@@ -48,6 +48,7 @@ Use this checklist after the automated checks in `docs/testing/milestone6-automa
 
 - [ ] `docker compose -f infra/docker-compose.yml config --quiet` passes.
 - [ ] API and web Docker images build locally (`docker build -f apps/api/Dockerfile -t taskforge-api:local .` and `docker build -f apps/web/Dockerfile -t taskforge-web:local .`) or CI build logs show successful image builds.
+- [ ] Any Alpine optional native binding failures in Docker logs are confirmed non-fatal; the build exits `0` and exports/names the requested image.
 - [ ] Docker startup docs still match the actual ports and service names.
 
 ## Docs And Release Gate

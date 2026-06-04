@@ -23,6 +23,8 @@ git diff --check
 
 If Docker is unavailable in the review environment, record that as an environment limitation and require CI or another release log to prove both image builds before Day 7 sign-off.
 
+Docker image builds may print non-fatal optional native binding failures for transitive packages such as `cpu-features` or `ssh2` on Alpine when Python/compiler tooling is absent. Record the build as passed only if the command exits `0` and the requested image is exported/named.
+
 ## Focus Areas
 
 - API security middleware and config parsing: Helmet, CORS, trusted proxy, body limits, cookies, and error handling.
