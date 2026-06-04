@@ -92,10 +92,15 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `EMAIL_DAILY_SEND_LIMIT` | `apps/api/.env` | `90` | Daily digest budget guard. Keep at or below the Resend free daily limit unless the account is upgraded. |
 | `DIGEST_JOB_SECRET` | `apps/api/.env`, `apps/web/.env` | `dev-digest-job-secret` | Shared secret for the protected digest job endpoint and web cron proxy. Rotate and store securely in production. |
 | `CRON_SECRET` | `apps/web/.env` | `dev-cron-secret` | Vercel Cron bearer secret for `GET /api/cron/digest`; must differ from public/client secrets. |
+| `COOKIE_DOMAIN` | both (optional) | _(unset)_ | Host-only cookie by default. Set `.example.com` only when app/API subdomains intentionally share the same parent domain. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
 The API session cookie is `httpOnly`, `SameSite=Lax`, seven days long, and `Secure` when `NODE_ENV=production`. The supported v1 browser-auth topology is same-site: either serve the API behind the web origin or use custom subdomains under the same parent domain, such as `app.example.com` and `api.example.com`. Leave `COOKIE_DOMAIN` unset for same-host/host-only cookies; set a shared parent domain such as `.example.com` only for deliberate cross-subdomain cookies. Raw unrelated platform domains such as a Vercel app calling a Render/Railway default host are not a supported production cookie topology for the OAuth session bridge. Preview deployments are not trusted automatically; add their exact origins to `CORS_ALLOWED_ORIGINS` or keep them isolated from the production API. See `docs/prod/browser-auth-deployment.md` for the full deployed browser checklist.
+
+### Web server routes and API data access
+- The Next.js app owns only auth/session infrastructure server routes: NextAuth (`/api/auth/[...nextauth]`), API-backed auth helpers (`/api/auth/me`, `/api/auth/logout`), the OAuth/API cookie handoff route (`/auth/session-bridge`), and the scheduler proxy (`/api/cron/digest`).
+- Task, tag, board, email preference, and digest preview/manual-send clients call the Express API directly through `NEXT_PUBLIC_API_BASE_URL` in the browser or `API_BASE_URL` on the server. There is no general-purpose Next.js proxy for `/tasks`, `/tags`, or `/board`; keep CORS and cookie settings correct for direct browser-to-API calls.
 
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
@@ -205,15 +210,18 @@ pnpm -C apps/api run lint:http
 - `make ci` - local CI rehearsal: install, lint, typecheck, test, and build.
 - `make migrate` / `make seed` - database operations.
 - `make swagger` - export OpenAPI.
+- `docker compose -f infra/docker-compose.yml config --quiet` - validate compose without starting services.
+- `docker build -f apps/api/Dockerfile -t taskforge-api:local .` and `docker build -f apps/web/Dockerfile -t taskforge-web:local .` - local Docker image build checks for release-gate debugging.
+  Alpine image installs may print non-fatal optional native binding failures for packages such as `cpu-features` or `ssh2` when Python/compiler tooling is absent. Treat the Docker gate as passed only when the build exits `0` and exports/names the requested image.
 
 ## Deploy Targets (free tiers)
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
 - Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
-- Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
+- Digest scheduling: protected API job endpoint invoked by a free scheduler. The code path exists locally and in the release candidate, but production scheduled sends stay disabled until the production email fact register is complete and manual-only Resend/observability checks pass. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
-Task data persists via Prisma. Run migrations before exercising the API in any environment.
+Task data persists via Prisma. Run migrations before exercising the API in any environment. Day 7 deployment still must supply real managed-service facts for `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>`, `NEXTAUTH_URL=https://<APP_DOMAIN>`, `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXTAUTH_SECRET=<ROTATED_NEXTAUTH_SECRET>`, `SESSION_BRIDGE_SECRET=<ROTATED_SESSION_BRIDGE_SECRET>`, `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>`, `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>`, `COOKIE_DOMAIN=.example.com` only when needed, and `TF_DEV_BYPASS_AUTH=false`. Exact placeholder locations are listed in `docs/prod/README.md`.
 
 ## Email setup and local verification (Milestone 5)
 
