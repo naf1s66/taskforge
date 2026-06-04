@@ -22,17 +22,25 @@ Do not commit real secrets. Replace these placeholders in the deployment provide
 
 | Fact | Placeholder/location | Required production value |
 | --- | --- | --- |
+| API runtime port | `infra/env/api.prod.env.example`: `PORT=4000` | Platform service port, or the platform-provided override if the host requires one. |
 | Browser origins allowed by API | `infra/env/api.prod.env.example`: `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>` | Exact deployed web origin list, comma-separated, origins only. |
+| API JSON body limit | `infra/env/api.prod.env.example`: `API_JSON_BODY_LIMIT=64kb` | Keep the low default unless a reviewed production payload need requires a larger cap. |
+| Managed database URL | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `DATABASE_URL=<MANAGED_POSTGRES_URL>` | Same managed Postgres connection string or provider-specific pooled/direct values for API, web NextAuth, and migrations. |
+| API JWT signing secrets | `infra/env/api.prod.env.example`: `JWT_SECRET=<ROTATED_API_JWT_SECRET>`, `JWT_REFRESH_SECRET=<ROTATED_API_REFRESH_SECRET>` | Strong random values stored only in the API secret manager. |
+| API runtime mode | `infra/env/api.prod.env.example`: `NODE_ENV=production` | Must be production for secure cookies, production CORS behavior, and production-only guardrails. |
 | Web public URL | `infra/env/web.prod.env.example`: `NEXTAUTH_URL=https://<APP_DOMAIN>` | Exact HTTPS web origin used by browsers and OAuth callbacks. |
 | Web auth secret | `infra/env/web.prod.env.example`: `NEXTAUTH_SECRET=<ROTATED_NEXTAUTH_SECRET>` | 32+ random bytes, stored only in web secret manager. |
+| OAuth provider apps | `infra/env/web.prod.env.example`: `GITHUB_ID=`, `GITHUB_SECRET=`, `GOOGLE_ID=`, `GOOGLE_SECRET=` | Real provider client IDs/secrets only after callback URLs match `NEXTAUTH_URL`; leave blank to keep a provider disabled. |
 | API/web session bridge secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `SESSION_BRIDGE_SECRET=<ROTATED_SESSION_BRIDGE_SECRET>` | Same strong random value in API and web only. |
 | Digest job secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>` | Same strong random value; authorizes API job endpoint. |
 | Vercel cron secret | `infra/env/web.prod.env.example`: `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>` | Strong random value used only by Vercel Cron/web route. |
 | Cookie domain | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: commented `# COOKIE_DOMAIN=.example.com` | Leave unset for host-only cookies; set the shared parent domain only for deliberate same-site cross-subdomain auth. |
 | Dev auth bypass | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `TF_DEV_BYPASS_AUTH=false` | Must remain false in production; do not configure bypass client secrets. |
+| Dev bypass client secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `TF_DEV_BYPASS_CLIENT_SECRET=` | Must remain blank in production. |
 | Trusted proxy chain | `infra/env/api.prod.env.example`: `TRUST_PROXY=1` with comments | Match the real platform proxy chain. Use `1` only when exactly one trusted proxy scrubs forwarded headers. |
 | API base URLs used by web | `infra/env/web.prod.env.example`: `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge` | Exact API origin plus `/api/taskforge`; browser calls task/tag/board routes directly. |
-| Resend SMTP secret | `infra/env/api.prod.env.example`: `SMTP_PASS=<RESEND_API_KEY>` | API secret manager only; never web/browser/repository. |
+| Resend SMTP transport | `infra/env/api.prod.env.example`: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`, `SMTP_PASS=<RESEND_API_KEY>` | API secret manager only for `SMTP_PASS`; never web/browser/repository. |
+| Production email sender and budget | `infra/env/api.prod.env.example`: `EMAIL_FROM=<VERIFIED_SENDER_ON_RESEND_DOMAIN>`, `EMAIL_DAILY_SEND_LIMIT=90` | Sender on the verified Resend domain; keep the conservative budget unless the account/rollout plan changes. |
 
 ## Production enablement boundaries
 
