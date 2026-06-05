@@ -115,6 +115,20 @@ client.test('me rejects unauthenticated requests', () => {
 });
 %}
 
+### Email - preference update without credentials is rejected
+PATCH {{apiBaseUrl}}/me/email-preferences
+Content-Type: application/json
+
+{
+  "dailyDigestEnabled": true
+}
+
+> {%
+client.test('email preference update rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
 ### Email - digest preview without credentials is rejected
 GET {{apiBaseUrl}}/email/digest/preview
 
