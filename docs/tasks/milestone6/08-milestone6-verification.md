@@ -33,5 +33,5 @@
 ## Current Release-Candidate State
 - Documentation gates for README, PRD, ADRs, production placeholders, and Milestone 6 testing references have been refreshed.
 - Final automated command execution and manual browser/deployment-path smoke remain pending until the release reviewer runs `docs/testing/milestone6-automated.md` and `docs/testing/milestone6-manual-checklist.md`.
-- Docker image-build evidence remains required before Day 7 sign-off unless CI is updated to build both images.
+- Docker image-build evidence is now covered by CI compose validation plus API/web image builds; final sign-off should inspect the latest CI run or repeat the documented local Docker commands if CI evidence is unavailable.
 - Production email scheduled sends remain disabled unless all production fact-register placeholders are filled and manual-only Resend/observability checks pass.
