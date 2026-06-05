@@ -1,0 +1,222 @@
+@apiBaseUrl = http://localhost:4000/api/taskforge/v1
+@webBaseUrl = http://localhost:3000
+@accessToken = replace-with-access-token
+@wrongAccessToken = replace-with-invalid-access-token
+@taskId = replace-with-task-id
+@digestDate = 2026-05-26
+@wrongDigestJobSecret = replace-with-wrong-digest-job-secret
+@wrongCronSecret = replace-with-wrong-cron-secret
+@allowedOrigin = http://localhost:3000
+@unlistedOrigin = http://127.0.0.1:3999
+
+### Security smoke pack overview
+# Safe by default: this file uses placeholders only and never includes real production secrets or recipients.
+# Start the local stack with `make up`, run auth.http register/login, then paste the returned access token above.
+# Expected unauthorized responses are usually 401 JSON envelopes unless noted. Stop after confirming the expected status.
+# Browser-only checks for CORS preflight enforcement, credentialed cookies, session bridge redirects, logout cookie expiry,
+# and bounded rate-limit smoke steps live in docs/testing/milestone6-manual-checklist.md.
+
+### Auth - current user without credentials is rejected
+GET {{apiBaseUrl}}/auth/me
+
+> {%
+client.test('auth/me rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Auth - current user with an incorrect bearer token is rejected
+GET {{apiBaseUrl}}/auth/me
+Authorization: Bearer {{wrongAccessToken}}
+
+> {%
+client.test('auth/me rejects incorrect bearer tokens', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Tasks - list without credentials is rejected
+GET {{apiBaseUrl}}/tasks
+
+> {%
+client.test('tasks list rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Tasks - create without credentials is rejected
+POST {{apiBaseUrl}}/tasks
+Content-Type: application/json
+
+{
+  "title": "Unauthorized task smoke"
+}
+
+> {%
+client.test('task create rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Board - read model without credentials is rejected
+GET {{apiBaseUrl}}/tasks/board
+
+> {%
+client.test('board read model rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Board - move without credentials is rejected
+PATCH {{apiBaseUrl}}/tasks/board/move
+Content-Type: application/json
+
+{
+  "taskId": "{{taskId}}",
+  "targetStatus": "DONE",
+  "targetIndex": 0
+}
+
+> {%
+client.test('board move rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Tags - list without credentials is rejected
+GET {{apiBaseUrl}}/tags
+
+> {%
+client.test('tags list rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Tags - create without credentials is rejected
+POST {{apiBaseUrl}}/tags
+Content-Type: application/json
+
+{
+  "label": "unauthorized tag smoke"
+}
+
+> {%
+client.test('tag create rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Email - me snapshot without credentials is rejected
+GET {{apiBaseUrl}}/me
+
+> {%
+client.test('me rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Email - digest preview without credentials is rejected
+GET {{apiBaseUrl}}/email/digest/preview
+
+> {%
+client.test('digest preview rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Email - manual digest send without credentials is rejected
+POST {{apiBaseUrl}}/email/digest/send
+Content-Type: application/json
+
+{
+  "digestDate": "{{digestDate}}",
+  "dryRun": true
+}
+
+> {%
+client.test('manual digest send rejects unauthenticated requests', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Job - digest GET without DIGEST_JOB_SECRET is rejected
+GET {{apiBaseUrl}}/jobs/digest?dryRun=true&sendLimit=0
+
+> {%
+client.test('digest job GET rejects missing job secret', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Job - digest POST without DIGEST_JOB_SECRET is rejected
+POST {{apiBaseUrl}}/jobs/digest
+Content-Type: application/json
+
+{
+  "dryRun": true,
+  "sendLimit": 0
+}
+
+> {%
+client.test('digest job POST rejects missing job secret', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Job - digest GET with incorrect Authorization bearer secret is rejected
+GET {{apiBaseUrl}}/jobs/digest?dryRun=true&sendLimit=0
+Authorization: Bearer {{wrongDigestJobSecret}}
+
+> {%
+client.test('digest job GET rejects incorrect bearer job secret', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Job - digest POST with incorrect x-job-secret is rejected
+POST {{apiBaseUrl}}/jobs/digest
+Content-Type: application/json
+x-job-secret: {{wrongDigestJobSecret}}
+
+{
+  "dryRun": true,
+  "sendLimit": 0
+}
+
+> {%
+client.test('digest job POST rejects incorrect x-job-secret', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Cron proxy - missing CRON_SECRET bearer is rejected by the web route
+# Requires apps/web running with CRON_SECRET configured. This does not call the API when the bearer token is missing.
+GET {{webBaseUrl}}/api/cron/digest?dryRun=true&sendLimit=0
+
+> {%
+client.test('web cron proxy rejects missing cron bearer', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### Cron proxy - incorrect CRON_SECRET bearer is rejected by the web route
+# Requires apps/web running with CRON_SECRET configured. Use a wrong placeholder only.
+GET {{webBaseUrl}}/api/cron/digest?dryRun=true&sendLimit=0
+Authorization: Bearer {{wrongCronSecret}}
+
+> {%
+client.test('web cron proxy rejects incorrect cron bearer', () => {
+  client.assert(response.status === 401, 'expected 401 Unauthorized');
+});
+%}
+
+### CORS observation only - allowed local origin health request
+# HTTP clients can show CORS headers, but they do not enforce browser preflight or credential rules.
+# Complete the browser/manual checklist before approving CORS or cookie behavior.
+GET {{apiBaseUrl}}/health
+Origin: {{allowedOrigin}}
+
+### CORS observation only - unlisted origin probe
+# In a browser this should be rejected by CORS policy. Treat this as a header observation only.
+GET {{apiBaseUrl}}/health
+Origin: {{unlistedOrigin}}
