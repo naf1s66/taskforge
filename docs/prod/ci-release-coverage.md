@@ -7,8 +7,9 @@ Milestone 6 CI validates Docker as a release gate without deploy credentials:
 - `docker compose -f infra/docker-compose.yml config --quiet`
 - API image build from the repository root with `apps/api/Dockerfile`
 - web image build from the repository root with `apps/web/Dockerfile`
+- `pnpm -C apps/api gen:openapi` plus `git diff --exit-code -- docs/openapi.json`
 
-These checks must continue to use safe placeholder values. They must not require Resend, OAuth, production database, scheduler, or deployment-provider secrets.
+These checks must continue to use safe placeholder values. They must not require Resend, OAuth, production database, scheduler, or deployment-provider secrets. The OpenAPI artifact check must fail CI when `apps/api/src/openapi.ts` and the committed `docs/openapi.json` drift apart.
 
 ## v1 production trigger requirement
 
