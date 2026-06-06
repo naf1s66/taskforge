@@ -11,7 +11,7 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 - `database-migration-squash.md` - rules for squashing development Prisma migrations before the first production database exists.
 - `dev-auth-bypass.md` - development bypass behavior and the production expectation that it stays disabled.
 - `browser-auth-deployment.md` - deployed browser CORS, cookie-domain, session-bridge, and trusted-proxy runbook.
-- `ci-release-coverage.md` - CI Docker gate behavior and the v1 requirement to cover all pull requests.
+- `ci-release-coverage.md` - CI Docker/OpenAPI gate behavior and the v1 requirement to cover all pull requests.
 - `adr/0004-hosting-vercel-render-neon.md` - accepted hosting topology decision.
 - `adr/0006-digest-scheduler-invocation.md` - accepted free-tier digest scheduler invocation decision.
 - `adr/0007-email-observability-rollout-decisions.md` - accepted monitoring, budget exhaustion, and scheduled-send enablement decisions for production email rollout.

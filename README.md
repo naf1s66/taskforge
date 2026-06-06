@@ -209,7 +209,7 @@ pnpm -C apps/api run lint:http
 - `make build` - build API and web packages.
 - `make ci` - local CI rehearsal: install, lint, typecheck, test, and build.
 - `make migrate` / `make seed` - database operations.
-- `make swagger` - export OpenAPI.
+- `make swagger` - export OpenAPI. CI also runs `pnpm -C apps/api gen:openapi` followed by `git diff --exit-code -- docs/openapi.json` to catch stale generated artifacts.
 - `docker compose -f infra/docker-compose.yml config --quiet` - validate compose without starting services.
 - `docker build -f apps/api/Dockerfile -t taskforge-api:local .` and `docker build -f apps/web/Dockerfile -t taskforge-web:local .` - local Docker image build checks for release-gate debugging.
   Alpine image installs may print non-fatal optional native binding failures for packages such as `cpu-features` or `ssh2` when Python/compiler tooling is absent. Treat the Docker gate as passed only when the build exits `0` and exports/names the requested image.

@@ -31,7 +31,7 @@
   `tf_session` HttpOnly cookies, and exposes a `session-bridge` endpoint for trusted frontends.
 - DB: Neon/Supabase Postgres; Prisma migrations + seed.
 - Email: provider-neutral Nodemailer SMTP adapter; MailHog is available in local compose, and production configuration defaults to Resend SMTP once the sending domain and DNS are verified. Daily digest scheduling uses a protected API job endpoint invoked through the web app's Vercel Cron proxy when available, with GitHub Actions schedule as the free fallback.
-- Infra: Dockerfiles + docker-compose; CI with GitHub Actions for lint/typecheck/tests/build. Docker image-build validation is a release gate documented for Milestone 6 and must either run locally or be added to CI before Day 7 release sign-off.
+- Infra: Dockerfiles + docker-compose; CI with GitHub Actions for lint/typecheck/tests/build, Docker compose validation, API/web Docker image builds, and generated OpenAPI artifact drift checks before Day 7 release sign-off.
 
 ## Data Model (Prisma Sketch)
 ```prisma
@@ -230,7 +230,7 @@ sequenceDiagram
 | **Day 3** | Shipped locally | `/tasks` CRUD, list search/due/priority filters, Zod + tests; FE list + filter UI + dialogs; OpenAPI draft. | Web task clients call the API directly; there is no general Next.js task proxy. |
 | **Day 4** | Shipped locally | Kanban DnD, `/tags`, board filters/search, optimistic UI, `.http` pack. | Manual board order and sorted-mode drag behavior are intentionally different. |
 | **Day 5** | Implemented locally; production sends gated | Welcome email, digest preferences, preview/manual send, guarded scheduler path. | Resend, real scheduled sends, and production digest schedule stay disabled until the fact register and observability gates pass. |
-| **Day 6** | Hardening/docs release-candidate, with explicit release gates | Helmet/CORS/rate-limit, trusted proxy/cookie docs, OpenAPI finalization, README/ADR refresh, Docker/compose validation docs. | v1 rate limits assume one API instance or a shared rate-limit store before horizontal scaling; CI Docker image builds are not complete unless the workflow or release log shows them. |
+| **Day 6** | Hardening/docs release-candidate, with explicit release gates | Helmet/CORS/rate-limit, trusted proxy/cookie docs, OpenAPI finalization, README/ADR refresh, Docker/compose validation, image builds, and generated OpenAPI artifact checks. | v1 rate limits assume one API instance or a shared rate-limit store before horizontal scaling; current CI proves Docker image builds and OpenAPI artifact freshness for this release branch. |
 | **Day 7** | Pending deployment work | Provision Neon/Supabase; deploy API (Render/Railway) + Web (Vercel); configure real env facts; smoke test; v1 release. | Must fill production placeholders without committing secrets and preserve the local-implemented vs production-enabled distinction for OAuth, Resend, digest scheduling, and cross-subdomain cookies. |
 
 ## Authentication Experience

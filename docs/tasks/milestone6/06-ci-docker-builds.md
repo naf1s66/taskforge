@@ -17,7 +17,7 @@
 ## Notes
 - Keep Docker build validation separate from deploy credentials.
 - If full image builds are too slow for every PR, document the chosen trigger and why it is acceptable.
-- CI should keep running lint, typecheck, tests, OpenAPI generation checks, and HTTP lint alongside Docker validation.
+- CI should keep running lint, typecheck, tests, the generated OpenAPI artifact drift check, and HTTP lint alongside Docker validation.
 
 ## Verification
 - Run local Docker builds when Docker is available.
@@ -25,7 +25,7 @@
 
 
 ## Current Release-Candidate State
-- CI now validates compose configuration and builds both Docker images before dependency install, Prisma generation/migrations, lint, typecheck, API tests, frontend tests, and package builds.
+- CI now validates compose configuration and builds both Docker images before dependency install, Prisma generation/migrations, lint, typecheck, API tests, frontend tests, package builds, and the generated OpenAPI artifact drift check.
 - The CI Docker steps use the repository-root build context, safe placeholder `DATABASE_URL` build arguments, and no Resend, OAuth, production database, scheduler, or deployment-provider secrets.
 - CI pull-request branch coverage is sufficient for the current release-candidate workflow. Before production v1 release work begins, broaden CI to cover all pull requests as documented in `docs/prod/ci-release-coverage.md`.
 - Build cache is intentionally simple for v1: rely on Docker layer caching from manifest-first Dockerfile copies and revisit registry/BuildKit cache only if build time becomes a release blocker.

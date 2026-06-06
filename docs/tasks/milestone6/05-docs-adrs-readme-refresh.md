@@ -37,4 +37,4 @@
 - PRD now tracks Days 1-6 as shipped locally/release-candidate work and keeps Day 7 deployment provisioning pending.
 - Production docs now include a placeholder map for `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_SECRET`, `SESSION_BRIDGE_SECRET`, `DIGEST_JOB_SECRET`, `CRON_SECRET`, `COOKIE_DOMAIN`, and `TF_DEV_BYPASS_AUTH` without real secrets.
 - ADR 0008 records the final release-candidate gates for browser routing, CORS/cookies, trusted proxy, rate-limit topology, Docker build validation, and email enablement.
-- Milestone 6 Docker image build validation remains a release gate unless CI or the release log proves both image builds.
+- CI now proves the Milestone 6 Docker image build gate and generated OpenAPI artifact drift gate; Day 7 release sign-off still needs real deployment facts and production smoke evidence.
