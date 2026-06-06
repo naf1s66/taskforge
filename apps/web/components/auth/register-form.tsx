@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/env';
+import { sanitizeReturnPath } from '@/lib/auth-return-path';
 
 const registerSchema = z
   .object({
@@ -33,23 +34,6 @@ const registerSchema = z
 
 type RegisterValues = z.infer<typeof registerSchema>;
 
-function sanitizeReturnPath(value: string | null | undefined) {
-  if (!value) {
-    return '/dashboard';
-  }
-
-  try {
-    const decoded = decodeURIComponent(value);
-    if (decoded.startsWith('/') && !decoded.startsWith('//')) {
-      return decoded;
-    }
-  } catch {
-    // ignore decode errors and fall back to default
-  }
-
-  return '/dashboard';
-}
-
 export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,7 +41,7 @@ export function RegisterForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fromParam = searchParams?.get('from');
-  const redirectPath = useMemo(() => sanitizeReturnPath(fromParam), [fromParam]);
+  const redirectPath = useMemo(() => sanitizeReturnPath(fromParam, '/dashboard'), [fromParam]);
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),

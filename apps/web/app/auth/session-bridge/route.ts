@@ -7,25 +7,26 @@ import {
   isSessionTokenExpired,
 } from '@/lib/session-bridge';
 import { getCurrentUser } from '@/lib/server-auth';
+import { sanitizeReturnPath } from '@/lib/auth-return-path';
 
-function sanitizeReturnPath(value: string | null): string {
-  if (!value) {
-    return '/';
-  }
-
-  const trimmed = value.trim();
-
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
-    return '/';
-  }
-
-  return trimmed;
-}
-
-function redirectNoStore(url: URL): NextResponse {
-  const response = NextResponse.redirect(url);
+function redirectNoStore(location: string): NextResponse {
+  const response = new NextResponse(null, {
+    status: 307,
+    headers: {
+      Location: location,
+    },
+  });
   response.headers.set('Cache-Control', 'no-store');
   return response;
+}
+
+function createLoginLocation(fromPath: string): string {
+  const searchParams = new URLSearchParams({
+    from: fromPath,
+    reason: 'session-bridge',
+  });
+
+  return `/login?${searchParams.toString()}`;
 }
 
 type ApiSessionCookieProbe = 'valid' | 'invalid' | 'unknown';
@@ -70,30 +71,23 @@ export async function GET(request: NextRequest) {
     !isSessionTokenExpired(existingCookie.value) &&
     existingCookieProbe !== 'invalid'
   ) {
-    return redirectNoStore(new URL(fromPath, request.nextUrl.origin));
+    return redirectNoStore(fromPath);
   }
 
   const user = await getCurrentUser();
 
   if (!user) {
-    const redirectUrl = new URL('/login', request.nextUrl.origin);
-    redirectUrl.searchParams.set('from', fromPath);
-    redirectUrl.searchParams.set('reason', 'session-bridge');
-    return redirectNoStore(redirectUrl);
+    return redirectNoStore(createLoginLocation(fromPath));
   }
 
   try {
     const accessToken = await getFreshBridgedAccessToken(user);
-    const redirectUrl = new URL(fromPath, request.nextUrl.origin);
-    const response = redirectNoStore(redirectUrl);
+    const response = redirectNoStore(fromPath);
     const options = getSessionCookieOptions();
     response.cookies.set({ ...options, value: accessToken });
     return response;
   } catch (error) {
     console.error('[auth] Failed to ensure API session', error);
-    const redirectUrl = new URL('/login', request.nextUrl.origin);
-    redirectUrl.searchParams.set('from', fromPath);
-    redirectUrl.searchParams.set('reason', 'session-bridge');
-    return redirectNoStore(redirectUrl);
+    return redirectNoStore(createLoginLocation(fromPath));
   }
 }

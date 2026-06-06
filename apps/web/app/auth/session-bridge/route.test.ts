@@ -53,12 +53,29 @@ describe('/auth/session-bridge', () => {
     const { GET } = await import('./route');
 
     const response = await GET(createRequest('/auth/session-bridge?from=%2F%2Fevil.test%2Fdashboard'));
-    const location = new URL(response.headers.get('location') ?? '');
+    const locationHeader = response.headers.get('location') ?? '';
+    const location = new URL(locationHeader, 'https://app.test');
 
+    expect(locationHeader).toBe('/login?from=%2F&reason=session-bridge');
     expect(location.origin).toBe('https://app.test');
     expect(location.pathname).toBe('/login');
     expect(location.searchParams.get('from')).toBe('/');
     expect(location.searchParams.get('reason')).toBe('session-bridge');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.getFreshBridgedAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects encoded backslash return paths that resolve as external URLs', async () => {
+    const { GET } = await import('./route');
+
+    const response = await GET(createRequest('/auth/session-bridge?from=%2F%5Cevil.test%2Fdashboard'));
+    const locationHeader = response.headers.get('location') ?? '';
+    const location = new URL(locationHeader, 'https://app.test');
+
+    expect(locationHeader).toBe('/login?from=%2F&reason=session-bridge');
+    expect(location.origin).toBe('https://app.test');
+    expect(location.searchParams.get('from')).toBe('/');
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(fetch).not.toHaveBeenCalled();
     expect(mocks.getFreshBridgedAccessToken).not.toHaveBeenCalled();
@@ -71,8 +88,10 @@ describe('/auth/session-bridge', () => {
     const response = await GET(createRequest('/auth/session-bridge?from=/dashboard', {
       cookie: 'taskforge_session=existing-token',
     }));
-    const location = new URL(response.headers.get('location') ?? '');
+    const locationHeader = response.headers.get('location') ?? '';
+    const location = new URL(locationHeader, 'https://app.test');
 
+    expect(locationHeader).toBe('/dashboard');
     expect(location.pathname).toBe('/dashboard');
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -92,9 +111,11 @@ describe('/auth/session-bridge', () => {
     const { GET } = await import('./route');
 
     const response = await GET(createRequest('/auth/session-bridge?from=/dashboard'));
-    const location = new URL(response.headers.get('location') ?? '');
+    const locationHeader = response.headers.get('location') ?? '';
+    const location = new URL(locationHeader, 'https://app.test');
     const setCookie = response.headers.get('set-cookie') ?? '';
 
+    expect(locationHeader).toBe('/dashboard');
     expect(location.pathname).toBe('/dashboard');
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(mocks.getFreshBridgedAccessToken).toHaveBeenCalledWith({ id: 'user-1', email: 'user@example.com' });

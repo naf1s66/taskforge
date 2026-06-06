@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { getApiUrl } from '@/lib/env';
 import type { AuthProviderSummary } from '@/lib/auth-config';
+import { sanitizeReturnPath } from '@/lib/auth-return-path';
 
 const loginSchema = z.object({
   email: z
@@ -29,23 +30,6 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-function sanitizeReturnPath(value: string | null | undefined) {
-  if (!value) {
-    return '/dashboard';
-  }
-
-  try {
-    const decoded = decodeURIComponent(value);
-    if (decoded.startsWith('/') && !decoded.startsWith('//')) {
-      return decoded;
-    }
-  } catch {
-    // ignore decode failures and fall back to default
-  }
-
-  return '/dashboard';
-}
-
 type LoginFormProps = {
   providers: ReadonlyArray<AuthProviderSummary>;
 };
@@ -59,7 +43,7 @@ export function LoginForm({ providers }: LoginFormProps) {
 
   const fromParam = searchParams?.get('from');
   const reasonParam = searchParams?.get('reason');
-  const redirectPath = useMemo(() => sanitizeReturnPath(fromParam), [fromParam]);
+  const redirectPath = useMemo(() => sanitizeReturnPath(fromParam, '/dashboard'), [fromParam]);
   const reasonMessage = useMemo(() => {
     if (!reasonParam) {
       return null;
