@@ -90,6 +90,29 @@ describe('LoginForm', () => {
     expect(mockRouter.refresh).toHaveBeenCalled();
   });
 
+  it('falls back instead of redirecting to an encoded backslash path', async () => {
+    searchParamsString = 'from=%2F%5Cevil.example%2Fdashboard';
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        user: { email: 'demo@taskforge.dev' },
+        tokens: { accessToken: 'token' },
+      }),
+    } as Response);
+
+    render(<LoginForm providers={providers} />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/email/i), 'demo@taskforge.dev');
+    await user.type(screen.getByLabelText(/password/i), 'Demo1234!');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(mockRouter.push).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
   it('shows validation feedback when the API rejects credentials', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

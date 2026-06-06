@@ -7,20 +7,7 @@ import {
   isSessionTokenExpired,
 } from '@/lib/session-bridge';
 import { getCurrentUser } from '@/lib/server-auth';
-
-function sanitizeReturnPath(value: string | null): string {
-  if (!value) {
-    return '/';
-  }
-
-  const trimmed = value.trim();
-
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
-    return '/';
-  }
-
-  return trimmed;
-}
+import { sanitizeReturnPath } from '@/lib/auth-return-path';
 
 function redirectNoStore(location: string): NextResponse {
   const response = new NextResponse(null, {

@@ -66,6 +66,21 @@ describe('/auth/session-bridge', () => {
     expect(mocks.getFreshBridgedAccessToken).not.toHaveBeenCalled();
   });
 
+  it('rejects encoded backslash return paths that resolve as external URLs', async () => {
+    const { GET } = await import('./route');
+
+    const response = await GET(createRequest('/auth/session-bridge?from=%2F%5Cevil.test%2Fdashboard'));
+    const locationHeader = response.headers.get('location') ?? '';
+    const location = new URL(locationHeader, 'https://app.test');
+
+    expect(locationHeader).toBe('/login?from=%2F&reason=session-bridge');
+    expect(location.origin).toBe('https://app.test');
+    expect(location.searchParams.get('from')).toBe('/');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.getFreshBridgedAccessToken).not.toHaveBeenCalled();
+  });
+
   it('probes a non-expired existing API cookie before redirecting without minting', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ user: { id: 'user-1' } }), { status: 200 }));
     const { GET } = await import('./route');
