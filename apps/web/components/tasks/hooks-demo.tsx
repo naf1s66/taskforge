@@ -39,7 +39,8 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUS_OPTIONS,
 } from '@/lib/task-copy';
-import { sanitizeTags } from '@/lib/task-tags';
+import { sanitizeTaskInputTags, sanitizeValidTaskTags } from '@/lib/task-tags';
+import { TASK_QUERY_MAX_LENGTH } from '@/lib/task-limits';
 
 const FILTER_STORAGE_KEY = 'taskforge.tasksDemo.filters';
 
@@ -256,11 +257,11 @@ function parseFiltersFromSearchParams(
   }
 
   if (search?.trim()) {
-    next.search = search.trim();
+    next.search = search.trim().slice(0, TASK_QUERY_MAX_LENGTH);
   }
 
   if (tags.length > 0) {
-    next.tags = sanitizeTags(tags);
+    next.tags = sanitizeTaskInputTags(tags);
   }
 
   return Object.keys(next).length > 0 ? next : null;
@@ -293,11 +294,11 @@ function readFiltersFromStorage(): Partial<TaskFilterState> | null {
     }
 
     if (Array.isArray(parsed.tags)) {
-      next.tags = sanitizeTags(parsed.tags);
+      next.tags = sanitizeTaskInputTags(parsed.tags);
     }
 
     if (typeof parsed.search === 'string' && parsed.search.trim()) {
-      next.search = parsed.search.trim();
+      next.search = parsed.search.trim().slice(0, TASK_QUERY_MAX_LENGTH);
     }
 
     const dueFromDay =
@@ -697,7 +698,7 @@ export function TasksHooksDemo() {
   const deleteTask = useDeleteTask();
 
   const hasMutationError = createTask.error ?? updateTask.error ?? deleteTask.error;
-  const [availableTags, setAvailableTags] = useState<string[]>(() => sanitizeTags(filters.tags));
+  const [availableTags, setAvailableTags] = useState<string[]>(() => sanitizeValidTaskTags(filters.tags));
 
   const mergeAvailableTags = useCallback((items: TaskListItem[] | undefined) => {
     if (!items || items.length === 0) {
@@ -714,7 +715,7 @@ export function TasksHooksDemo() {
     }
 
     setAvailableTags((previous) => {
-      const next = sanitizeTags([...previous, ...collected]);
+      const next = sanitizeValidTaskTags([...previous, ...collected]);
       if (next.length === previous.length && next.every((tag, index) => tag === previous[index])) {
         return previous;
       }
@@ -842,10 +843,11 @@ export function TasksHooksDemo() {
                   value={filters.search}
                   placeholder="Search by title or description"
                   className="pl-9"
+                  maxLength={TASK_QUERY_MAX_LENGTH}
                   onChange={(event) =>
                     setFilters((previous) => ({
                       ...previous,
-                      search: event.target.value,
+                      search: event.target.value.slice(0, TASK_QUERY_MAX_LENGTH),
                     }))
                   }
                 />

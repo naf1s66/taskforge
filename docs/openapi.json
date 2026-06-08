@@ -17,6 +17,24 @@
         "in": "cookie",
         "name": "tf_session",
         "description": "HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication."
+      },
+      "sessionBridgeSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-session-bridge-secret",
+        "description": "Shared server-side secret used by the web app to exchange a NextAuth session for API JWTs."
+      },
+      "jobSecretHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-job-secret",
+        "description": "Shared secret required by protected background job routes."
+      },
+      "jobSecretBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "shared-secret",
+        "description": "Alternative protected job authentication using `Authorization: Bearer <DIGEST_JOB_SECRET>`."
       }
     },
     "schemas": {
@@ -39,6 +57,69 @@
         "example": {
           "email": "user@example.com",
           "password": "StrongPassword123"
+        }
+      },
+      "AuthRefreshRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token"
+        }
+      },
+      "SessionBridgeRequest": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "userId"
+        ],
+        "additionalProperties": false,
+        "example": {
+          "userId": "26f26639-05ad-40b6-8248-379644dcdf18",
+          "email": "user@example.com"
+        }
+      },
+      "WelcomeEmailResponse": {
+        "type": "object",
+        "properties": {
+          "deliveryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Notification delivery record id when a welcome email service is configured."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "sent",
+              "failed",
+              "skipped"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "example": {
+          "deliveryId": "1f2d1a2a-b9e1-4e52-83a0-f9b8d8e4c201",
+          "status": "queued"
         }
       },
       "AuthTokens": {
@@ -139,45 +220,31 @@
         "type": "object",
         "properties": {
           "user": {
-            "allOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "createdAt": {
-                    "type": "string",
-                    "format": "date-time"
-                  }
-                },
-                "required": [
-                  "id",
-                  "email",
-                  "createdAt"
-                ],
-                "example": {
-                  "id": "26f26639-05ad-40b6-8248-379644dcdf18",
-                  "email": "user@example.com",
-                  "createdAt": "2024-06-01T12:00:00.000Z"
-                }
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
               }
+            },
+            "required": [
+              "id",
+              "email",
+              "createdAt"
             ],
-            "nullable": true,
-            "description": "Authenticated user when available; `null` if unauthenticated."
-          },
-          "emailPreference": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/EmailPreference"
-              }
-            ],
-            "description": "Email preferences for the authenticated user. Present on `/api/taskforge/v1/me`."
+            "example": {
+              "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+              "email": "user@example.com",
+              "createdAt": "2024-06-01T12:00:00.000Z"
+            }
           }
         },
         "required": [
@@ -188,6 +255,56 @@
             "id": "26f26639-05ad-40b6-8248-379644dcdf18",
             "email": "user@example.com",
             "createdAt": "2024-06-01T12:00:00.000Z"
+          }
+        }
+      },
+      "AccountMeResponse": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "email",
+              "createdAt"
+            ],
+            "example": {
+              "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+              "email": "user@example.com",
+              "createdAt": "2024-06-01T12:00:00.000Z"
+            }
+          },
+          "emailPreference": {
+            "$ref": "#/components/schemas/EmailPreference"
+          }
+        },
+        "required": [
+          "user",
+          "emailPreference"
+        ],
+        "example": {
+          "user": {
+            "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+            "email": "user@example.com",
+            "createdAt": "2024-06-01T12:00:00.000Z"
+          },
+          "emailPreference": {
+            "dailyDigestEnabled": false,
+            "dailyDigestTimezone": "UTC"
           }
         }
       },
@@ -244,8 +361,7 @@
             "type": "string"
           },
           "description": {
-            "type": "string",
-            "nullable": true
+            "type": "string"
           },
           "status": {
             "type": "string",
@@ -265,8 +381,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "tags": {
             "type": "array",
@@ -339,8 +454,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "tags": {
             "type": "array",
@@ -709,7 +823,8 @@
           },
           "targetIndex": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Zero-based destination index in the target lane. The repository validates this against the lane length."
           }
         },
         "required": [
@@ -717,6 +832,7 @@
           "targetStatus",
           "targetIndex"
         ],
+        "additionalProperties": false,
         "example": {
           "taskId": "9e22c508-1383-4609-9bbd-2e09b7a2d108",
           "targetStatus": "DONE",
@@ -728,11 +844,13 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 160
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 5000
           },
           "status": {
             "type": "string",
@@ -756,6 +874,7 @@
           },
           "tags": {
             "type": "array",
+            "maxItems": 10,
             "items": {
               "type": "string",
               "minLength": 1,
@@ -767,6 +886,7 @@
         "required": [
           "title"
         ],
+        "additionalProperties": false,
         "example": {
           "title": "Book product sync",
           "description": "Coordinate roadmap review with stakeholders",
@@ -783,11 +903,14 @@
         "properties": {
           "title": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 160
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 5000,
+            "nullable": true
           },
           "status": {
             "type": "string",
@@ -807,10 +930,12 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "nullable": true
           },
           "tags": {
             "type": "array",
+            "maxItems": 10,
             "items": {
               "type": "string",
               "minLength": 1,
@@ -823,7 +948,8 @@
         "example": {
           "status": "IN_PROGRESS",
           "priority": "MEDIUM",
-          "dueDate": "2024-07-12T20:00:00.000Z",
+          "description": null,
+          "dueDate": null,
           "tags": [
             "planning",
             "proposal"
@@ -1001,8 +1127,7 @@
           },
           "dueDate": {
             "type": "string",
-            "format": "date-time",
-            "nullable": true
+            "format": "date-time"
           },
           "updatedAt": {
             "type": "string",
@@ -1182,7 +1307,7 @@
           "digestDate": {
             "type": "string",
             "format": "date",
-            "description": "Optional local digest calendar date. Defaults to today in the user digest timezone."
+            "description": "Optional local digest calendar date (YYYY-MM-DD). When omitted, manual sends default to today in the authenticated user's saved digest timezone, so the same UTC instant can resolve to different local digest dates for different users."
           },
           "digestHourUtc": {
             "type": "integer",
@@ -1215,6 +1340,53 @@
           "dryRun": true
         }
       },
+      "DailyDigestJobRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "digestDate": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional local digest calendar date (YYYY-MM-DD). When omitted for scheduled jobs, each user is evaluated against their own saved dailyDigestTimezone and the response digestDate is null while digestDates lists every local date touched."
+          },
+          "digestHourUtc": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "description": "Optional UTC hour filter. Users configured for a different hour are skipped."
+          },
+          "dryRun": {
+            "description": "When true, reports the digest run without sending email or recording delivery success.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "1",
+                  "0"
+                ]
+              }
+            ],
+            "default": false
+          },
+          "sendLimit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500,
+            "description": "Optional per-run send cap. Defaults to the configured job send limit."
+          }
+        },
+        "example": {
+          "digestDate": "2026-05-21",
+          "digestHourUtc": 13,
+          "dryRun": true,
+          "sendLimit": 5
+        }
+      },
       "DailyDigestRunResponse": {
         "type": "object",
         "properties": {
@@ -1222,7 +1394,7 @@
             "type": "string",
             "format": "date",
             "nullable": true,
-            "description": "Explicit requested digest date, or null when a scheduled run derives local dates per user."
+            "description": "Explicit requested digest date. Null means the run omitted digestDate and resolved per-user local digest dates from each user's daily digest timezone; see digestDates for the concrete dates touched."
           },
           "digestDates": {
             "type": "array",
@@ -1230,7 +1402,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Local digest dates touched by the run."
+            "description": "Concrete per-user local digest dates touched by the run. Scheduled jobs without digestDate can include multiple dates when users span timezones."
           },
           "attempted": {
             "type": "integer",
@@ -1322,6 +1494,23 @@
                   "required": [
                     "ok"
                   ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
                 }
               }
             }
@@ -1418,6 +1607,28 @@
                   "conflict": {
                     "value": {
                       "error": "User already exists"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication or global rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "authRateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1521,6 +1732,458 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Authentication or global rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "authRateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/auth/session-bridge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange a web session for API JWTs",
+        "description": "Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret` and returns the same auth token envelope as credential login.",
+        "security": [
+          {
+            "sessionBridgeSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionBridgeRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "userId": "26f26639-05ad-40b6-8248-379644dcdf18",
+                    "email": "user@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session exchanged successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "user": {
+                        "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+                        "email": "user@example.com",
+                        "createdAt": "2024-06-01T12:00:00.000Z"
+                      },
+                      "tokens": {
+                        "tokenType": "Bearer",
+                        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access-token",
+                        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token",
+                        "accessTokenExpiresAt": "2024-06-01T13:00:00.000Z",
+                        "refreshTokenExpiresAt": "2024-06-08T12:00:00.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect session bridge secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "User not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User email mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "conflict": {
+                    "value": {
+                      "error": "User email mismatch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication or global rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "authRateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/auth/welcome-email": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Schedule or send a welcome email for a bridged session user",
+        "description": "Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret`. Returns 202 because delivery may be queued asynchronously, skipped if already delivered, or skipped when no welcome email service is configured.",
+        "security": [
+          {
+            "sessionBridgeSecret": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionBridgeRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "userId": "26f26639-05ad-40b6-8248-379644dcdf18",
+                    "email": "user@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Welcome email accepted, queued, sent, failed, or skipped.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WelcomeEmailResponse"
+                },
+                "examples": {
+                  "queued": {
+                    "value": {
+                      "deliveryId": "1f2d1a2a-b9e1-4e52-83a0-f9b8d8e4c201",
+                      "status": "queued"
+                    }
+                  },
+                  "skippedWithoutService": {
+                    "value": {
+                      "status": "skipped"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect session bridge secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "notFound": {
+                    "value": {
+                      "error": "User not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User email mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "conflict": {
+                    "value": {
+                      "error": "User email mismatch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh API JWTs",
+        "description": "Exchanges a valid refresh token for a new auth token pair.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token pair refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSuccessResponse"
+                },
+                "examples": {
+                  "success": {
+                    "value": {
+                      "user": {
+                        "id": "26f26639-05ad-40b6-8248-379644dcdf18",
+                        "email": "user@example.com",
+                        "createdAt": "2024-06-01T12:00:00.000Z"
+                      },
+                      "tokens": {
+                        "tokenType": "Bearer",
+                        "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access-token",
+                        "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token",
+                        "accessTokenExpiresAt": "2024-06-01T13:00:00.000Z",
+                        "refreshTokenExpiresAt": "2024-06-08T12:00:00.000Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidRefreshToken": {
+                    "value": {
+                      "error": "Invalid refresh token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Authentication or global rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "authRateLimited": {
+                    "value": {
+                      "error": "Too many authentication attempts. Please try again later."
+                    }
+                  },
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1531,9 +2194,13 @@
           "Auth"
         ],
         "summary": "Invalidate the current JWT token",
+        "description": "Clears the `tf_session` cookie for authenticated callers. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.",
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
           }
         ],
         "responses": {
@@ -1565,6 +2232,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1627,6 +2311,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1652,7 +2353,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthMeResponse"
+                  "$ref": "#/components/schemas/AccountMeResponse"
                 },
                 "examples": {
                   "authenticated": {
@@ -1666,11 +2367,6 @@
                         "dailyDigestEnabled": false,
                         "dailyDigestTimezone": "UTC"
                       }
-                    }
-                  },
-                  "unauthenticated": {
-                    "value": {
-                      "user": null
                     }
                   }
                 }
@@ -1688,6 +2384,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1786,6 +2499,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -1901,17 +2631,22 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "examples": {
-                  "invalidPayload": {
+                  "invalidQueryParameters": {
                     "value": {
-                      "error": "Invalid payload",
+                      "error": "Invalid query parameters",
                       "details": {
                         "fieldErrors": {
-                          "email": [
-                            "Invalid email address"
+                          "dueSoonDays": [
+                            "Number must be greater than or equal to 1"
                           ]
                         },
                         "formErrors": []
                       }
+                    }
+                  },
+                  "invalidDigestTimezonePreference": {
+                    "value": {
+                      "error": "Invalid digest timezone preference."
                     }
                   }
                 }
@@ -2047,6 +2782,11 @@
                         "formErrors": []
                       }
                     }
+                  },
+                  "invalidDigestTimezonePreference": {
+                    "value": {
+                      "error": "Invalid digest timezone preference."
+                    }
                   }
                 }
               }
@@ -2114,6 +2854,283 @@
                   "unavailable": {
                     "value": {
                       "error": "Digest email delivery is not configured."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/taskforge/v1/jobs/digest": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Run the protected daily digest job",
+        "description": "Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.",
+        "security": [
+          {
+            "jobSecretBearer": []
+          },
+          {
+            "jobSecretHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "digestDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Optional local digest calendar date (YYYY-MM-DD). Omit for scheduled runs so each user is evaluated in their configured digest timezone."
+          },
+          {
+            "name": "digestHourUtc",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "description": "Optional UTC hour filter. Users configured for a different hour are skipped."
+          },
+          {
+            "name": "dryRun",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            },
+            "description": "When true or 1, renders and reports the run without sending email or recording delivery success."
+          },
+          {
+            "name": "sendLimit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "description": "Optional per-run send cap. Defaults to the configured job send limit."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest job run completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyDigestRunResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "digestDate": "2026-05-21",
+                      "digestDates": [
+                        "2026-05-21"
+                      ],
+                      "attempted": 1,
+                      "sent": 1,
+                      "skipped": 0,
+                      "failed": 0,
+                      "budgetSkipped": 0,
+                      "providerQuotaSkipped": 0,
+                      "duplicateSkipped": 0,
+                      "preferenceSkipped": 0,
+                      "noContentSkipped": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect job secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Run the protected daily digest job",
+        "description": "Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.",
+        "security": [
+          {
+            "jobSecretBearer": []
+          },
+          {
+            "jobSecretHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyDigestJobRunRequest"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "digestDate": "2026-05-21",
+                    "digestHourUtc": 13,
+                    "dryRun": true,
+                    "sendLimit": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Digest job run completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyDigestRunResponse"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "digestDate": "2026-05-21",
+                      "digestDates": [
+                        "2026-05-21"
+                      ],
+                      "attempted": 1,
+                      "sent": 1,
+                      "skipped": 0,
+                      "failed": 0,
+                      "budgetSkipped": 0,
+                      "providerQuotaSkipped": 0,
+                      "duplicateSkipped": 0,
+                      "preferenceSkipped": 0,
+                      "noContentSkipped": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalidPayload": {
+                    "value": {
+                      "error": "Invalid payload",
+                      "details": {
+                        "fieldErrors": {
+                          "email": [
+                            "Invalid email address"
+                          ]
+                        },
+                        "formErrors": []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or incorrect job secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2193,8 +3210,11 @@
             "explode": true,
             "schema": {
               "type": "array",
+              "maxItems": 10,
               "items": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               }
             },
             "description": "Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
@@ -2204,7 +3224,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "description": "Case-insensitive search over the title and description."
           },
@@ -2313,6 +3334,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2429,6 +3467,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2482,8 +3537,11 @@
             "explode": true,
             "schema": {
               "type": "array",
+              "maxItems": 10,
               "items": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               }
             },
             "description": "Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags."
@@ -2493,7 +3551,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "description": "Case-insensitive search over the title and description."
           },
@@ -2623,6 +3682,23 @@
                   "unauthorized": {
                     "value": {
                       "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
                     }
                   }
                 }
@@ -2795,6 +3871,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2904,6 +3997,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -2944,7 +4054,8 @@
                   "value": {
                     "status": "IN_PROGRESS",
                     "priority": "MEDIUM",
-                    "dueDate": "2024-07-12T20:00:00.000Z",
+                    "description": null,
+                    "dueDate": null,
                     "tags": [
                       "planning",
                       "proposal"
@@ -3048,6 +4159,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -3145,6 +4273,23 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3193,6 +4338,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
                 }
               }
             }
@@ -3265,6 +4427,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rateLimited": {
+                    "value": {
+                      "error": "Too many requests, please try again later."
+                    }
+                  }
                 }
               }
             }

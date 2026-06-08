@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Form } from '@/components/ui/form';
 import { useToast } from '@/components/ui/use-toast';
-import { sanitizeTags } from '@/lib/task-tags';
+import { sanitizeTaskInputTags } from '@/lib/task-tags';
 import { useCreateTask, toTaskOperationError } from '@/lib/tasks-hooks';
 import type { TaskRecordDTO } from '@/lib/tasks-client';
 
@@ -92,7 +92,7 @@ export function TaskCreateDialog({ trigger, availableTags = [], onCreated, open,
       status: values.status,
       priority: values.priority,
       dueDate: values.dueDate,
-      tags: sanitizeTags(values.tags),
+      tags: sanitizeTaskInputTags(values.tags),
     });
   }
 

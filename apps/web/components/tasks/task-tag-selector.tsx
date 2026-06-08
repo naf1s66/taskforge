@@ -8,6 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { sanitizeTags } from '@/lib/task-tags';
+import {
+  isValidTaskTagLabel,
+  TASK_TAG_LABEL_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+} from '@/lib/task-limits';
 
 interface TaskTagSelectorProps {
   value: string[];
@@ -16,6 +21,8 @@ interface TaskTagSelectorProps {
   placeholder?: string;
   emptyHint?: string;
   ariaLabel?: string;
+  maxTags?: number;
+  maxTagLength?: number;
 }
 
 type CommandInputProps = ComponentPropsWithoutRef<typeof CommandInput>;
@@ -55,13 +62,19 @@ export function TaskTagSelector({
   placeholder = 'Select tags',
   emptyHint = 'Use tags to organize related work.',
   ariaLabel,
+  maxTags = TASK_TAGS_MAX_LENGTH,
+  maxTagLength = TASK_TAG_LABEL_MAX_LENGTH,
 }: TaskTagSelectorProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [debouncedInput, setDebouncedInput] = useState('');
 
   const normalizedSelected = useMemo(() => value.map((tag) => tag.toLowerCase()), [value]);
-  const options = useMemo(() => sanitizeTags([...availableTags, ...value]), [availableTags, value]);
+  const selectedTags = useMemo(() => sanitizeTags(value), [value]);
+  const options = useMemo(
+    () => sanitizeTags([...availableTags, ...value]).filter(isValidTaskTagLabel),
+    [availableTags, value],
+  );
   const filteredOptions = useMemo(() => {
     if (!debouncedInput.trim()) {
       return options;
@@ -76,8 +89,13 @@ export function TaskTagSelector({
       return false;
     }
 
-    return !options.some((tag) => tag.toLowerCase() === search);
-  }, [inputValue, options]);
+    return (
+      selectedTags.length < maxTags &&
+      inputValue.trim().length <= maxTagLength &&
+      isValidTaskTagLabel(inputValue) &&
+      !options.some((tag) => tag.toLowerCase() === search)
+    );
+  }, [inputValue, maxTagLength, maxTags, options, selectedTags.length]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -88,7 +106,7 @@ export function TaskTagSelector({
   }, [inputValue]);
 
   const buttonLabel =
-    value.length > 0 ? `${value.length} tag${value.length === 1 ? '' : 's'} selected` : placeholder;
+    selectedTags.length > 0 ? `${selectedTags.length} tag${selectedTags.length === 1 ? '' : 's'} selected` : placeholder;
 
   function toggleTag(tag: string) {
     const trimmed = tag.trim();
@@ -99,8 +117,10 @@ export function TaskTagSelector({
     const key = trimmed.toLowerCase();
     if (normalizedSelected.includes(key)) {
       onChange(value.filter((existing) => existing.toLowerCase() !== key));
+    } else if (selectedTags.length >= maxTags || trimmed.length > maxTagLength || !isValidTaskTagLabel(trimmed)) {
+      return;
     } else {
-      onChange(sanitizeTags([...value, trimmed]));
+      onChange(sanitizeTags([...value, trimmed]).slice(0, maxTags));
     }
 
     setInputValue('');
@@ -166,6 +186,7 @@ export function TaskTagSelector({
               onValueChange={setInputValue}
               placeholder="Search or create tags"
               aria-label="Search available tags"
+              maxLength={maxTagLength}
               canCreate={canCreateTag}
               onCreate={handleCreateTag}
               onKeyDown={handleInputKeyDown}
@@ -183,7 +204,13 @@ export function TaskTagSelector({
               </CommandEmpty>
               <CommandGroup heading="Tags">
                 {filteredOptions.map((tag) => (
-                  <CommandItem key={tag} value={tag} onSelect={(value) => toggleTag(value)} aria-checked={isTagSelected(tag)}>
+                  <CommandItem
+                    key={tag}
+                    value={tag}
+                    onSelect={(value) => toggleTag(value)}
+                    aria-checked={isTagSelected(tag)}
+                    disabled={!isTagSelected(tag) && selectedTags.length >= maxTags}
+                  >
                     <span className="flex-1 text-sm capitalize">{tag}</span>
                     {isTagSelected(tag) ? <span className="text-xs text-primary">Selected</span> : null}
                   </CommandItem>

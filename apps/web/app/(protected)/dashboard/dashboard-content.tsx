@@ -84,7 +84,8 @@ import {
 } from "@/lib/email-preferences-hooks";
 import { useDigestPreviewQuery } from "@/lib/digest-preview-hooks";
 import { cn } from "@/lib/utils";
-import { sanitizeTags } from "@/lib/task-tags";
+import { sanitizeTaskInputTags, sanitizeValidTaskTags } from "@/lib/task-tags";
+import { TASK_QUERY_MAX_LENGTH } from "@/lib/task-limits";
 import { TaskTagSelector } from "@/components/tasks/task-tag-selector";
 
 import type { DashboardUser } from "./types";
@@ -232,7 +233,7 @@ function normalizeDueWindow(value: string | null | undefined): DueWindow | null 
 }
 
 function parseBoardFiltersFromSearchParams(searchParams: URLSearchParams): BoardFilterState {
-  const state = createDefaultBoardFilterState(sanitizeTags(searchParams.getAll("tag")));
+  const state = createDefaultBoardFilterState(sanitizeTaskInputTags(searchParams.getAll("tag")));
   const status = searchParams.get("status");
   const priority = searchParams.get("priority");
   const dueWindow = normalizeDueWindow(searchParams.get("dueWindow"));
@@ -255,7 +256,7 @@ function parseBoardFiltersFromSearchParams(searchParams: URLSearchParams): Board
     state.customDueRange = { dueFrom, dueTo };
   }
 
-  state.searchQuery = searchParams.get("q") ?? "";
+  state.searchQuery = (searchParams.get("q") ?? "").slice(0, TASK_QUERY_MAX_LENGTH);
   return state;
 }
 
@@ -315,8 +316,10 @@ function readBoardFiltersFromStorage(): BoardFilterState | null {
       };
     }
 
-    state.searchQuery = typeof parsed.searchQuery === "string" ? parsed.searchQuery : "";
-    state.tagFilters = Array.isArray(parsed.tagFilters) ? sanitizeTags(parsed.tagFilters) : [];
+    state.searchQuery = typeof parsed.searchQuery === "string"
+      ? parsed.searchQuery.slice(0, TASK_QUERY_MAX_LENGTH)
+      : "";
+    state.tagFilters = Array.isArray(parsed.tagFilters) ? sanitizeTaskInputTags(parsed.tagFilters) : [];
     return state;
   } catch {
     return null;
@@ -1168,7 +1171,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
 
   const handleTagFiltersChange = useCallback(
     (nextTags: string[]) => {
-      const nextTagFilters = sanitizeTags(nextTags);
+      const nextTagFilters = sanitizeTaskInputTags(nextTags);
       setTagFilters((previous) =>
         previous.length === nextTagFilters.length &&
         previous.every((value, index) => value === nextTagFilters[index])
@@ -1188,7 +1191,7 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
     for (const tag of tagFilters) {
       collected.push(tag);
     }
-    return sanitizeTags(collected);
+    return sanitizeValidTaskTags(collected);
   }, [tagFilters, tagsQuery.tags]);
 
   const firstName = user.name?.split(" ")[0] ?? "there";
@@ -1894,8 +1897,9 @@ export function DashboardContent({ user }: { user: DashboardUser }) {
             <Input
               id="board-task-search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value.slice(0, TASK_QUERY_MAX_LENGTH))}
               placeholder="Search title or description"
+              maxLength={TASK_QUERY_MAX_LENGTH}
               className="h-9 w-64"
             />
             <DropdownMenu>

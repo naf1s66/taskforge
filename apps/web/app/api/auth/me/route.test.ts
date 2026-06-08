@@ -4,6 +4,7 @@ const cookieGet = vi.fn();
 const getCurrentUser = vi.fn();
 const getFreshBridgedAccessToken = vi.fn();
 const getBridgedAccessToken = vi.fn();
+let devBypassEnabled = true;
 
 vi.mock('next/headers', () => ({
   cookies: () => ({
@@ -17,7 +18,7 @@ vi.mock('@/lib/env', () => ({
 }));
 
 vi.mock('@/lib/dev-auth-bypass', () => ({
-  isDevAuthBypassEnabled: () => true,
+  isDevAuthBypassEnabled: () => devBypassEnabled,
 }));
 
 vi.mock('@/lib/server-auth', () => ({
@@ -56,6 +57,7 @@ describe('/api/auth/me', () => {
         }),
       }),
     );
+    devBypassEnabled = true;
     cookieGet.mockReturnValue({ value: 'stale-api-cookie' });
     getCurrentUser.mockResolvedValue({
       id: 'dev-bypass-user',
@@ -100,5 +102,23 @@ describe('/api/auth/me', () => {
       '[auth] Failed to bridge dev bypass session',
       expect.any(Error),
     );
+  });
+
+  it('does not resolve a current user through dev bypass when the bypass helper is disabled', async () => {
+    devBypassEnabled = false;
+    const { GET } = await import('./route');
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(getCurrentUser).not.toHaveBeenCalled();
+    expect(getFreshBridgedAccessToken).not.toHaveBeenCalled();
+    expect(getBridgedAccessToken).not.toHaveBeenCalled();
+    expect(body).toEqual({
+      user: {
+        id: 'stale-cookie-user',
+        email: 'stale@example.com',
+      },
+    });
   });
 });

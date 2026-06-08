@@ -1,6 +1,6 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { type ErrorRequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import { PrismaUserStore, UserStore } from './auth/user-store';
 import { openApiDocument } from './openapi';
-import { createAuthRouter } from './routes/auth';
+import { createAuthRouter, type AuthRateLimitOptions } from './routes/auth';
 import { getPrismaClient } from './prisma';
 import { router as tagRoutes } from './routes/tags';
 import { createTaskRouter } from './routes/tasks';
@@ -19,6 +19,53 @@ import { DailyDigestRunner } from './notifications/daily-digest-runner';
 import { createJobsRouter } from './routes/jobs';
 import { createEmailDigestRouter } from './routes/email-digest';
 import { getHttpServerConfig } from './config/http';
+
+const CORS_ERROR_CODE = 'CORS_ORIGIN_DENIED';
+
+function isValidBrowserOriginHeader(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.pathname === '/' &&
+      !parsed.search &&
+      !parsed.hash &&
+      parsed.origin === origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+function createCorsError(message: string): Error {
+  const error = new Error(message);
+  Object.assign(error, { status: 403, code: CORS_ERROR_CODE });
+  return error;
+}
+
+interface HttpErrorShape {
+  status?: unknown;
+  code?: unknown;
+}
+
+function getHttpErrorShape(error: unknown): HttpErrorShape {
+  return error && typeof error === 'object' ? error as HttpErrorShape : {};
+}
+
+const errorHandler: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
+  const errorShape = getHttpErrorShape(error);
+  const status = typeof errorShape.status === 'number' && errorShape.status >= 400 && errorShape.status < 600
+    ? errorShape.status
+    : 500;
+  const isCorsError = errorShape.code === CORS_ERROR_CODE;
+  const message = status === 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : error instanceof Error
+      ? error.message
+      : 'Internal server error';
+
+  res.status(status).json({ error: isCorsError ? 'CORS origin denied' : message });
+};
 
 const EmailPreferenceUpdateSchema = z.object({
   dailyDigestEnabled: z.boolean(),
@@ -37,6 +84,8 @@ export interface CreateAppOptions {
   digestEmailAdapter?: EmailAdapter;
   digestJobSecret?: string;
   digestDailySendLimit?: number;
+  authRateLimit?: AuthRateLimitOptions | false;
+  sessionBridgeRateLimit?: AuthRateLimitOptions | false;
 }
 
 export function createApp(options: CreateAppOptions = {}) {
@@ -47,32 +96,36 @@ export function createApp(options: CreateAppOptions = {}) {
   }
   const allowedCorsOrigins = httpConfig.corsAllowedOrigins;
 
-  app.use(express.json());
+  app.use(express.json({ limit: httpConfig.jsonBodyLimit }));
   app.use(cookieParser());
+  app.use(helmet());
   // Configure CORS to allow credentials with explicit origins
   app.use(cors({
     credentials: true,
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
+      // Preserve non-browser clients such as curl, health checks, and server-to-server calls.
       if (!origin) return callback(null, true);
-      
-      // Check if the origin is allowed
+
+      if (!isValidBrowserOriginHeader(origin)) {
+        return callback(createCorsError('Malformed Origin header.'), false);
+      }
+
       if (allowedCorsOrigins.includes(origin)) {
         return callback(null, true);
       }
-      
-      // For development, also allow any localhost origin
-      if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
-        return callback(null, true);
-      }
-      
-      // Reject the request
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
+
+      return callback(createCorsError('Origin is not allowed by CORS policy.'), false);
+    },
   }));
-  app.use(helmet());
-  app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+  app.use(rateLimit({
+    windowMs: 60_000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later.' });
+    },
+  }));
 
   app.get('/api/taskforge/v1/health', (_req, res) => res.json({ ok: true }));
 
@@ -101,6 +154,8 @@ export function createApp(options: CreateAppOptions = {}) {
     devBypassEnabled: options.devBypassEnabled,
     devBypassClientSecret: options.devBypassClientSecret,
     welcomeEmailService,
+    authRateLimit: options.authRateLimit,
+    sessionBridgeRateLimit: options.sessionBridgeRateLimit,
   });
   app.use('/api/taskforge/v1/auth', authRouterFactory.router);
 
@@ -125,23 +180,24 @@ export function createApp(options: CreateAppOptions = {}) {
     );
   }
 
-  app.use(authRouterFactory.authMiddleware);
-  app.use('/api/taskforge/v1/tasks', createTaskRouter(taskRepository));
-  app.use('/api/taskforge/v1/tags', tagRoutes);
+  const protectedRouter = express.Router();
+  protectedRouter.use('/tasks', authRouterFactory.authMiddleware, createTaskRouter(taskRepository));
+  protectedRouter.use('/tags', authRouterFactory.authMiddleware, tagRoutes);
   const digestEmailAdapter = options.digestEmailAdapter ?? options.welcomeEmailAdapter;
   const emailDigestRunner = new DailyDigestRunner({
     prisma: getOrCreatePrisma(),
     emailAdapter: digestEmailAdapter ?? { sendMail: () => Promise.resolve() },
   });
-  app.use(
-    '/api/taskforge/v1/email/digest',
+  protectedRouter.use(
+    '/email/digest',
+    authRouterFactory.authMiddleware,
     createEmailDigestRouter(getOrCreatePrisma(), {
       defaultSendLimit: options.digestDailySendLimit ?? 90,
       digestRunner: emailDigestRunner,
       sendConfigured: Boolean(digestEmailAdapter),
     }),
   );
-  app.get('/api/taskforge/v1/me', async (_req, res, next) => {
+  protectedRouter.get('/me', authRouterFactory.authMiddleware, async (_req, res, next) => {
     const user = res.locals.user as
       | { id: string; email: string; createdAt: string }
       | undefined;
@@ -166,7 +222,7 @@ export function createApp(options: CreateAppOptions = {}) {
       return next(error);
     }
   });
-  app.patch('/api/taskforge/v1/me/email-preferences', async (req, res, next) => {
+  protectedRouter.patch('/me/email-preferences', authRouterFactory.authMiddleware, async (req, res, next) => {
     const user = res.locals.user as { id: string } | undefined;
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -193,6 +249,13 @@ export function createApp(options: CreateAppOptions = {}) {
       return next(error);
     }
   });
+
+  app.use('/api/taskforge/v1', protectedRouter);
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+  app.use(errorHandler);
 
   return app;
 }

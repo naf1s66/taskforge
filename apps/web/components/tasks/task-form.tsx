@@ -12,22 +12,35 @@ import { TaskDueDatePicker } from '@/components/tasks/task-due-date-picker';
 import { TaskTagSelector } from '@/components/tasks/task-tag-selector';
 import { TASK_PRIORITY_FORM_OPTIONS, TASK_PRIORITY_LABELS, TASK_STATUS_FORM_OPTIONS, TASK_STATUS_LABELS } from '@/lib/task-copy';
 import type { TaskRecordDTO } from '@/lib/tasks-client';
-import { sanitizeTags } from '@/lib/task-tags';
+import { sanitizeTaskInputTags, sanitizeValidTaskTags } from '@/lib/task-tags';
+import {
+  isValidTaskTagLabel,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_TAG_LABEL_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+} from '@/lib/task-limits';
 
 export const taskFormSchema = z.object({
   title: z
     .string({ required_error: 'Title is required' })
     .trim()
-    .min(3, 'Title must be at least 3 characters long'),
+    .min(3, 'Title must be at least 3 characters long')
+    .max(TASK_TITLE_MAX_LENGTH, `Title must be ${TASK_TITLE_MAX_LENGTH} characters or fewer`),
   description: z
     .string()
-    .max(2000, 'Description must be 2000 characters or fewer')
+    .max(TASK_DESCRIPTION_MAX_LENGTH, `Description must be ${TASK_DESCRIPTION_MAX_LENGTH} characters or fewer`)
     .transform((value) => value.trim())
     .optional(),
   status: z.enum(['TODO', 'IN_PROGRESS', 'DONE']).default('TODO'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   dueDate: z.string().datetime().optional(),
-  tags: z.array(z.string().trim().min(1)).default([]),
+  tags: z
+    .array(z.string().trim().min(1).refine(isValidTaskTagLabel, {
+      message: `Tag label must be ${TASK_TAG_LABEL_MAX_LENGTH} characters or fewer`,
+    }))
+    .max(TASK_TAGS_MAX_LENGTH, `Use ${TASK_TAGS_MAX_LENGTH} tags or fewer`)
+    .default([]),
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
@@ -52,7 +65,7 @@ export function taskRecordToFormValues(task?: TaskRecordDTO | null): TaskFormVal
     status: task.status ?? 'TODO',
     priority: task.priority ?? 'MEDIUM',
     dueDate: task.dueDate ?? undefined,
-    tags: sanitizeTags(task.tags ?? []),
+    tags: sanitizeTaskInputTags(task.tags ?? []),
   } satisfies TaskFormValues;
 }
 
@@ -81,7 +94,10 @@ interface TaskFormFieldsProps {
 }
 
 export function TaskFormFields({ form, availableTags = [] }: TaskFormFieldsProps) {
-  const sanitizedTags = useMemo(() => sanitizeTags(availableTags), [availableTags]);
+  const sanitizedTags = useMemo(
+    () => sanitizeValidTaskTags(availableTags),
+    [availableTags],
+  );
 
   return (
     <>
@@ -92,7 +108,12 @@ export function TaskFormFields({ form, availableTags = [] }: TaskFormFieldsProps
           <FormItem>
             <FormLabel>Title</FormLabel>
             <FormControl>
-              <Input placeholder="Plan launch campaign" autoComplete="off" {...field} />
+              <Input
+                placeholder="Plan launch campaign"
+                autoComplete="off"
+                maxLength={TASK_TITLE_MAX_LENGTH}
+                {...field}
+              />
             </FormControl>
             <FormDescription>Required. Use a clear, action-oriented title.</FormDescription>
             <FormMessage />
@@ -106,9 +127,13 @@ export function TaskFormFields({ form, availableTags = [] }: TaskFormFieldsProps
           <FormItem>
             <FormLabel>Description</FormLabel>
             <FormControl>
-              <Textarea placeholder="Outline the context, goals, or acceptance criteria" {...field} />
+              <Textarea
+                placeholder="Outline the context, goals, or acceptance criteria"
+                maxLength={TASK_DESCRIPTION_MAX_LENGTH}
+                {...field}
+              />
             </FormControl>
-            <FormDescription>Optional. Keep it under 2000 characters.</FormDescription>
+            <FormDescription>Optional. Keep it under {TASK_DESCRIPTION_MAX_LENGTH} characters.</FormDescription>
             <FormMessage />
           </FormItem>
         )}
@@ -192,9 +217,11 @@ export function TaskFormFields({ form, availableTags = [] }: TaskFormFieldsProps
                 availableTags={sanitizedTags}
                 placeholder="Add tags"
                 emptyHint="Tags are optional. Use them to group related work."
+                maxTags={TASK_TAGS_MAX_LENGTH}
+                maxTagLength={TASK_TAG_LABEL_MAX_LENGTH}
               />
             </FormControl>
-            <FormDescription>Optional. Tags help with filtering and reporting.</FormDescription>
+            <FormDescription>Optional. Use up to {TASK_TAGS_MAX_LENGTH} tags.</FormDescription>
             <FormMessage />
           </FormItem>
         )}

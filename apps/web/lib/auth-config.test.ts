@@ -45,6 +45,10 @@ vi.mock('./welcome-email', () => ({
 import { authConfig } from './auth-config';
 
 describe('authConfig adapter', () => {
+  it('does not install a credentials placeholder provider when OAuth secrets are absent', () => {
+    expect(authConfig.providers).toEqual([]);
+  });
+
   it('does not wait for welcome scheduling before returning an OAuth-created user', async () => {
     mocks.prisma.user.findUnique.mockResolvedValue(null);
 

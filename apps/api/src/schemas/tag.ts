@@ -11,4 +11,4 @@ export const TagLabelSchema = z
 
 export const CreateTagSchema = z.object({
   label: TagLabelSchema,
-});
+}).strict();

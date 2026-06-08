@@ -1,5 +1,14 @@
 import type { OpenAPIV3 } from 'openapi-types';
 
+import { TAG_LABEL_MAX_LENGTH } from '@taskforge/shared';
+
+import {
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_QUERY_MAX_LENGTH,
+  TASK_TAGS_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH,
+} from './schemas/task';
+
 const errorResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -33,6 +42,32 @@ const authCredentials: OpenAPIV3.SchemaObject = {
   example: {
     email: 'user@example.com',
     password: 'StrongPassword123',
+  },
+};
+
+const authRefreshRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    refreshToken: { type: 'string', minLength: 1 },
+  },
+  required: ['refreshToken'],
+  additionalProperties: false,
+  example: {
+    refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh-token',
+  },
+};
+
+const sessionBridgeRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string', minLength: 1 },
+    email: { type: 'string', format: 'email' },
+  },
+  required: ['userId'],
+  additionalProperties: false,
+  example: {
+    userId: '26f26639-05ad-40b6-8248-379644dcdf18',
+    email: 'user@example.com',
   },
 };
 
@@ -125,10 +160,28 @@ const unauthorizedExample = { value: { error: 'Unauthorized' } } satisfies OpenA
 
 const invalidCredentialsExample = { value: { error: 'Invalid credentials' } } satisfies OpenAPIV3.ExampleObject;
 
+const invalidRefreshTokenExample = { value: { error: 'Invalid refresh token' } } satisfies OpenAPIV3.ExampleObject;
+
 const conflictExample = { value: { error: 'User already exists' } } satisfies OpenAPIV3.ExampleObject;
 
 const invalidPayloadExample = {
   value: errorResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const invalidQueryParametersExample = {
+  value: {
+    error: 'Invalid query parameters',
+    details: {
+      fieldErrors: {
+        dueSoonDays: ['Number must be greater than or equal to 1'],
+      },
+      formErrors: [],
+    },
+  },
+} satisfies OpenAPIV3.ExampleObject;
+
+const invalidDigestTimezonePreferenceExample = {
+  value: { error: 'Invalid digest timezone preference.' },
 } satisfies OpenAPIV3.ExampleObject;
 
 const invalidIdentifierExample = {
@@ -150,8 +203,6 @@ const accountMeSuccessExample = {
   },
 } satisfies OpenAPIV3.ExampleObject;
 
-const authMeAnonymousExample = { value: { user: null } } satisfies OpenAPIV3.ExampleObject;
-
 const emailPreferenceUpdateExample = {
   value: emailPreferenceUpdateInput.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
@@ -160,8 +211,41 @@ const emailPreferenceResponseExample = {
   value: emailPreferenceResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const welcomeEmailResponse: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  properties: {
+    deliveryId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Notification delivery record id when a welcome email service is configured.',
+    },
+    status: { type: 'string', enum: ['queued', 'sent', 'failed', 'skipped'] },
+  },
+  required: ['status'],
+  example: {
+    deliveryId: '1f2d1a2a-b9e1-4e52-83a0-f9b8d8e4c201',
+    status: 'queued',
+  },
+};
+
+const welcomeEmailResponseExample = {
+  value: welcomeEmailResponse.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const welcomeEmailSkippedExample = {
+  value: { status: 'skipped' },
+} satisfies OpenAPIV3.ExampleObject;
+
 const authCredentialsExample = {
   value: authCredentials.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const authRefreshRequestExample = {
+  value: authRefreshRequest.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
+const sessionBridgeRequestExample = {
+  value: sessionBridgeRequest.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
 const authSuccessResponseExample = {
@@ -173,10 +257,10 @@ const taskRecord: OpenAPIV3.SchemaObject = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     title: { type: 'string' },
-    description: { type: 'string', nullable: true },
+    description: { type: 'string' },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
-    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    dueDate: { type: 'string', format: 'date-time' },
     tags: { type: 'array', items: { type: 'string' } },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
@@ -203,7 +287,7 @@ const taskBoardItem: OpenAPIV3.SchemaObject = {
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     position: { type: 'integer', minimum: 0 },
-    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    dueDate: { type: 'string', format: 'date-time' },
     tags: { type: 'array', items: { type: 'string' } },
     updatedAt: { type: 'string', format: 'date-time' },
   },
@@ -226,7 +310,7 @@ const tagSummary: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Canonical lowercase tag label. Length limit applies after normalization.',
     },
     count: { type: 'integer', minimum: 0 },
@@ -245,7 +329,7 @@ const tagRecord: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Canonical lowercase tag label. Length limit applies after normalization.',
     },
   },
@@ -262,7 +346,7 @@ const tagCreateInput: OpenAPIV3.SchemaObject = {
     label: {
       type: 'string',
       minLength: 1,
-      maxLength: 64,
+      maxLength: TAG_LABEL_MAX_LENGTH,
       description: 'Tag label to create. Length limit applies after lowercase normalization.',
     },
   },
@@ -382,9 +466,14 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
   properties: {
     taskId: { type: 'string', format: 'uuid' },
     targetStatus: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
-    targetIndex: { type: 'integer', minimum: 0 },
+    targetIndex: {
+      type: 'integer',
+      minimum: 0,
+      description: 'Zero-based destination index in the target lane. The repository validates this against the lane length.',
+    },
   },
   required: ['taskId', 'targetStatus', 'targetIndex'],
+  additionalProperties: false,
   example: {
     taskId: '9e22c508-1383-4609-9bbd-2e09b7a2d108',
     targetStatus: 'DONE',
@@ -395,22 +484,24 @@ const boardMoveRequest: OpenAPIV3.SchemaObject = {
 const taskCreateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
     dueDate: { type: 'string', format: 'date-time' },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
-        maxLength: 64,
+        maxLength: TAG_LABEL_MAX_LENGTH,
         description: 'Tag label. Length limit applies after lowercase normalization.',
       },
     },
   },
   required: ['title'],
+  additionalProperties: false,
   example: {
     title: 'Book product sync',
     description: 'Coordinate roadmap review with stakeholders',
@@ -424,17 +515,18 @@ const taskCreateInput: OpenAPIV3.SchemaObject = {
 const taskUpdateInput: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
-    title: { type: 'string', minLength: 1 },
-    description: { type: 'string', minLength: 1 },
+    title: { type: 'string', minLength: 1, maxLength: TASK_TITLE_MAX_LENGTH },
+    description: { type: 'string', minLength: 1, maxLength: TASK_DESCRIPTION_MAX_LENGTH, nullable: true },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
-    dueDate: { type: 'string', format: 'date-time' },
+    dueDate: { type: 'string', format: 'date-time', nullable: true },
     tags: {
       type: 'array',
+      maxItems: TASK_TAGS_MAX_LENGTH,
       items: {
         type: 'string',
         minLength: 1,
-        maxLength: 64,
+        maxLength: TAG_LABEL_MAX_LENGTH,
         description: 'Tag label. Length limit applies after lowercase normalization.',
       },
     },
@@ -443,7 +535,8 @@ const taskUpdateInput: OpenAPIV3.SchemaObject = {
   example: {
     status: 'IN_PROGRESS',
     priority: 'MEDIUM',
-    dueDate: '2024-07-12T20:00:00.000Z',
+    description: null,
+    dueDate: null,
     tags: ['planning', 'proposal'],
   },
 };
@@ -532,7 +625,7 @@ const dailyDigestTaskSummary: OpenAPIV3.SchemaObject = {
     title: { type: 'string' },
     status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
     priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
-    dueDate: { type: 'string', format: 'date-time', nullable: true },
+    dueDate: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
     tags: { type: 'array', items: { type: 'string' } },
   },
@@ -614,7 +707,7 @@ const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
     digestDate: {
       type: 'string',
       format: 'date',
-      description: 'Optional local digest calendar date. Defaults to today in the user digest timezone.',
+      description: 'Optional local digest calendar date (YYYY-MM-DD). When omitted, manual sends default to today in the authenticated user\'s saved digest timezone, so the same UTC instant can resolve to different local digest dates for different users.',
     },
     digestHourUtc: {
       type: 'integer',
@@ -638,6 +731,44 @@ const dailyDigestSendRequest: OpenAPIV3.SchemaObject = {
   },
 };
 
+const dailyDigestJobRunRequest: OpenAPIV3.SchemaObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    digestDate: {
+      type: 'string',
+      format: 'date',
+      description: 'Optional local digest calendar date (YYYY-MM-DD). When omitted for scheduled jobs, each user is evaluated against their own saved dailyDigestTimezone and the response digestDate is null while digestDates lists every local date touched.',
+    },
+    digestHourUtc: {
+      type: 'integer',
+      minimum: 0,
+      maximum: 23,
+      description: 'Optional UTC hour filter. Users configured for a different hour are skipped.',
+    },
+    dryRun: {
+      description: 'When true, reports the digest run without sending email or recording delivery success.',
+      oneOf: [
+        { type: 'boolean' },
+        { type: 'string', enum: ['true', 'false', '1', '0'] },
+      ],
+      default: false,
+    },
+    sendLimit: {
+      type: 'integer',
+      minimum: 0,
+      maximum: 500,
+      description: 'Optional per-run send cap. Defaults to the configured job send limit.',
+    },
+  },
+  example: {
+    digestDate: '2026-05-21',
+    digestHourUtc: 13,
+    dryRun: true,
+    sendLimit: 5,
+  },
+};
+
 const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
   type: 'object',
   properties: {
@@ -645,12 +776,12 @@ const dailyDigestRunResponse: OpenAPIV3.SchemaObject = {
       type: 'string',
       format: 'date',
       nullable: true,
-      description: 'Explicit requested digest date, or null when a scheduled run derives local dates per user.',
+      description: 'Explicit requested digest date. Null means the run omitted digestDate and resolved per-user local digest dates from each user\'s daily digest timezone; see digestDates for the concrete dates touched.',
     },
     digestDates: {
       type: 'array',
       items: { type: 'string', format: 'date' },
-      description: 'Local digest dates touched by the run.',
+      description: 'Concrete per-user local digest dates touched by the run. Scheduled jobs without digestDate can include multiple dates when users span timezones.',
     },
     attempted: { type: 'integer', minimum: 0 },
     sent: { type: 'integer', minimum: 0 },
@@ -718,6 +849,10 @@ const dailyDigestSendRequestExample = {
   value: dailyDigestSendRequest.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
 
+const dailyDigestJobRunRequestExample = {
+  value: dailyDigestJobRunRequest.example as Record<string, unknown>,
+} satisfies OpenAPIV3.ExampleObject;
+
 const dailyDigestRunExample = {
   value: dailyDigestRunResponse.example as Record<string, unknown>,
 } satisfies OpenAPIV3.ExampleObject;
@@ -733,6 +868,33 @@ const digestDeliveryUnavailableExample = {
 const rateLimitedExample = {
   value: { error: 'Too many requests, please try again later.' },
 } satisfies OpenAPIV3.ExampleObject;
+
+const authRateLimitedExample = {
+  value: { error: 'Too many authentication attempts. Please try again later.' },
+} satisfies OpenAPIV3.ExampleObject;
+
+const authRateLimitResponse: OpenAPIV3.ResponseObject = {
+  description: 'Authentication or global rate limit exceeded',
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/ErrorResponse' },
+      examples: {
+        authRateLimited: authRateLimitedExample,
+        rateLimited: rateLimitedExample,
+      },
+    },
+  },
+};
+
+const rateLimitResponse: OpenAPIV3.ResponseObject = {
+  description: 'Rate limit exceeded',
+  content: {
+    'application/json': {
+      schema: { $ref: '#/components/schemas/ErrorResponse' },
+      examples: { rateLimited: rateLimitedExample },
+    },
+  },
+};
 
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: '3.0.3',
@@ -756,9 +918,32 @@ export const openApiDocument: OpenAPIV3.Document = {
         description:
           'HttpOnly session cookie issued by the auth routes. The cookie carries the same JWT used for bearer authentication.',
       },
+      sessionBridgeSecret: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-session-bridge-secret',
+        description:
+          'Shared server-side secret used by the web app to exchange a NextAuth session for API JWTs.',
+      },
+      jobSecretHeader: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-job-secret',
+        description: 'Shared secret required by protected background job routes.',
+      },
+      jobSecretBearer: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'shared-secret',
+        description:
+          'Alternative protected job authentication using `Authorization: Bearer <DIGEST_JOB_SECRET>`.',
+      },
     },
     schemas: {
       AuthCredentials: authCredentials,
+      AuthRefreshRequest: authRefreshRequest,
+      SessionBridgeRequest: sessionBridgeRequest,
+      WelcomeEmailResponse: welcomeEmailResponse,
       AuthTokens: authTokens,
       AuthSuccessResponse: {
         type: 'object',
@@ -772,18 +957,19 @@ export const openApiDocument: OpenAPIV3.Document = {
       AuthMeResponse: {
         type: 'object',
         properties: {
-          user: {
-            allOf: [authUser],
-            nullable: true,
-            description: 'Authenticated user when available; `null` if unauthenticated.',
-          },
-          emailPreference: {
-            allOf: [{ $ref: '#/components/schemas/EmailPreference' }],
-            description: 'Email preferences for the authenticated user. Present on `/api/taskforge/v1/me`.',
-          },
+          user: authUser,
         },
         required: ['user'],
         example: authMeSuccessExample.value,
+      },
+      AccountMeResponse: {
+        type: 'object',
+        properties: {
+          user: authUser,
+          emailPreference: { $ref: '#/components/schemas/EmailPreference' },
+        },
+        required: ['user', 'emailPreference'],
+        example: accountMeSuccessExample.value,
       },
       AuthLogoutResponse: {
         type: 'object',
@@ -815,6 +1001,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       DailyDigestGroup: dailyDigestGroup,
       DailyDigestPreviewResponse: dailyDigestPreviewResponse,
       DailyDigestSendRequest: dailyDigestSendRequest,
+      DailyDigestJobRunRequest: dailyDigestJobRunRequest,
       DailyDigestRunResponse: dailyDigestRunResponse,
     },
   },
@@ -838,6 +1025,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -890,6 +1078,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': authRateLimitResponse,
         },
       },
     },
@@ -942,6 +1131,208 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': authRateLimitResponse,
+        },
+      },
+    },
+    '/api/taskforge/v1/auth/session-bridge': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Exchange a web session for API JWTs',
+        description:
+          'Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret` and returns the same auth token envelope as credential login.',
+        security: [{ sessionBridgeSecret: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/SessionBridgeRequest' },
+              examples: {
+                default: sessionBridgeRequestExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Session exchanged successfully',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthSuccessResponse' },
+                examples: {
+                  success: authSuccessResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect session bridge secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  unauthorized: unauthorizedExample,
+                },
+              },
+            },
+          },
+          '404': {
+            description: 'User not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  notFound: { value: { error: 'User not found' } },
+                },
+              },
+            },
+          },
+          '409': {
+            description: 'User email mismatch',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  conflict: { value: { error: 'User email mismatch' } },
+                },
+              },
+            },
+          },
+          '429': authRateLimitResponse,
+        },
+      },
+    },
+    '/api/taskforge/v1/auth/welcome-email': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Schedule or send a welcome email for a bridged session user',
+        description:
+          'Server-to-server endpoint used by the web app after OAuth sign-in. Requires `x-session-bridge-secret`. Returns 202 because delivery may be queued asynchronously, skipped if already delivered, or skipped when no welcome email service is configured.',
+        security: [{ sessionBridgeSecret: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/SessionBridgeRequest' },
+              examples: { default: sessionBridgeRequestExample },
+            },
+          },
+        },
+        responses: {
+          '202': {
+            description: 'Welcome email accepted, queued, sent, failed, or skipped.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/WelcomeEmailResponse' },
+                examples: {
+                  queued: welcomeEmailResponseExample,
+                  skippedWithoutService: welcomeEmailSkippedExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect session bridge secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unauthorized: unauthorizedExample },
+              },
+            },
+          },
+          '404': {
+            description: 'User not found',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { notFound: { value: { error: 'User not found' } } },
+              },
+            },
+          },
+          '409': {
+            description: 'User email mismatch',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { conflict: { value: { error: 'User email mismatch' } } },
+              },
+            },
+          },
+          '429': rateLimitResponse,
+        },
+      },
+    },
+    '/api/taskforge/v1/auth/refresh': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Refresh API JWTs',
+        description: 'Exchanges a valid refresh token for a new auth token pair.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthRefreshRequest' },
+              examples: {
+                default: authRefreshRequestExample,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Token pair refreshed successfully',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthSuccessResponse' },
+                examples: {
+                  success: authSuccessResponseExample,
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                },
+              },
+            },
+          },
+          '401': {
+            description: 'Invalid refresh token',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: {
+                  invalidRefreshToken: invalidRefreshTokenExample,
+                },
+              },
+            },
+          },
+          '429': authRateLimitResponse,
         },
       },
     },
@@ -949,7 +1340,9 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: {
         tags: ['Auth'],
         summary: 'Invalidate the current JWT token',
-        security: [{ bearerAuth: [] }],
+        description:
+          'Clears the `tf_session` cookie for authenticated callers. Requires a valid JWT provided via the `Authorization: Bearer <token>` header or the `tf_session` HttpOnly cookie.',
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
         responses: {
           '200': {
             description: 'Logged out',
@@ -973,6 +1366,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1006,6 +1400,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1021,10 +1416,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             description: 'Current user and email preferences',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/AuthMeResponse' },
+                schema: { $ref: '#/components/schemas/AccountMeResponse' },
                 examples: {
                   authenticated: accountMeSuccessExample,
-                  unauthenticated: authMeAnonymousExample,
                 },
               },
             },
@@ -1040,6 +1434,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1095,6 +1490,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1142,7 +1538,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
-                examples: { invalidPayload: invalidPayloadExample },
+                examples: {
+                  invalidQueryParameters: invalidQueryParametersExample,
+                  invalidDigestTimezonePreference: invalidDigestTimezonePreferenceExample,
+                },
               },
             },
           },
@@ -1197,7 +1596,10 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/ErrorResponse' },
-                examples: { invalidPayload: invalidPayloadExample },
+                examples: {
+                  invalidPayload: invalidPayloadExample,
+                  invalidDigestTimezonePreference: invalidDigestTimezonePreferenceExample,
+                },
               },
             },
           },
@@ -1232,6 +1634,117 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+        },
+      },
+    },
+    '/api/taskforge/v1/jobs/digest': {
+      get: {
+        tags: ['Jobs'],
+        summary: 'Run the protected daily digest job',
+        description:
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
+        security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
+        parameters: [
+          {
+            name: 'digestDate',
+            in: 'query',
+            schema: { type: 'string', format: 'date' },
+            description: 'Optional local digest calendar date (YYYY-MM-DD). Omit for scheduled runs so each user is evaluated in their configured digest timezone.',
+          },
+          {
+            name: 'digestHourUtc',
+            in: 'query',
+            schema: { type: 'integer', minimum: 0, maximum: 23 },
+            description: 'Optional UTC hour filter. Users configured for a different hour are skipped.',
+          },
+          {
+            name: 'dryRun',
+            in: 'query',
+            schema: { type: 'string', enum: ['true', 'false', '1', '0'] },
+            description: 'When true or 1, renders and reports the run without sending email or recording delivery success.',
+          },
+          {
+            name: 'sendLimit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 0, maximum: 500 },
+            description: 'Optional per-run send cap. Defaults to the configured job send limit.',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Digest job run completed.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
+                examples: { default: dailyDigestRunExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid query parameters',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect job secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unauthorized: unauthorizedExample },
+              },
+            },
+          },
+          '429': rateLimitResponse,
+        },
+      },
+      post: {
+        tags: ['Jobs'],
+        summary: 'Run the protected daily digest job',
+        description:
+          'Protected scheduler endpoint. Requires `DIGEST_JOB_SECRET` via `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect secrets are throttled separately from valid scheduler invocations.',
+        security: [{ jobSecretBearer: [] }, { jobSecretHeader: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/DailyDigestJobRunRequest' },
+              examples: { default: dailyDigestJobRunRequestExample },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Digest job run completed.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DailyDigestRunResponse' },
+                examples: { default: dailyDigestRunExample },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { invalidPayload: invalidPayloadExample },
+              },
+            },
+          },
+          '401': {
+            description: 'Missing or incorrect job secret',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                examples: { unauthorized: unauthorizedExample },
+              },
+            },
+          },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1272,14 +1785,18 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: {
+              type: 'array',
+              maxItems: TASK_TAGS_MAX_LENGTH,
+              items: { type: 'string', minLength: 1, maxLength: TAG_LABEL_MAX_LENGTH },
+            },
             description:
               'Filter tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {
@@ -1329,6 +1846,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       post: {
@@ -1382,6 +1900,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1410,13 +1929,17 @@ export const openApiDocument: OpenAPIV3.Document = {
             in: 'query',
             style: 'form',
             explode: true,
-            schema: { type: 'array', items: { type: 'string' } },
+            schema: {
+              type: 'array',
+              maxItems: TASK_TAGS_MAX_LENGTH,
+              items: { type: 'string', minLength: 1, maxLength: TAG_LABEL_MAX_LENGTH },
+            },
             description: 'Filter board tasks that include the specified tag(s). Repeat the parameter to require multiple tags.',
           },
           {
             name: 'q',
             in: 'query',
-            schema: { type: 'string', minLength: 1 },
+            schema: { type: 'string', minLength: 1, maxLength: TASK_QUERY_MAX_LENGTH },
             description: 'Case-insensitive search over the title and description.',
           },
           {
@@ -1472,6 +1995,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1544,6 +2068,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1607,6 +2132,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       patch: {
@@ -1680,6 +2206,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       delete: {
@@ -1741,6 +2268,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },
@@ -1771,6 +2299,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
       post: {
@@ -1818,6 +2347,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               },
             },
           },
+          '429': rateLimitResponse,
         },
       },
     },

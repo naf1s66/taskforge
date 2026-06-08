@@ -77,7 +77,9 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `NEXTAUTH_SECRET` | `apps/web/.env` | `changeme` | Random 32+ character string generated with `openssl rand -hex 32`. In production this must be rotated and stored securely. |
 | `NEXTAUTH_URL` | `apps/web/.env` | `http://localhost:3000` | Match the public URL serving the Next.js app. When deploying, update to `https://<your-domain>`. |
 | `DATABASE_URL` | both | `postgresql://postgres:postgres@db:5432/taskforge?schema=public` | For local dev outside Docker switch the host from `db` to `localhost`. Production values should come from your managed Postgres provider. |
-| `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be origins without paths; set to the deployed web origin in production. |
+| `CORS_ALLOWED_ORIGINS` | `apps/api/.env` | `http://localhost:3000,http://127.0.0.1:3000` | Comma-separated browser origins allowed to call the API with credentials. Entries must be exact origins without paths, query strings, or fragments. Production fails closed when unset, so set every deployed web origin explicitly. |
+| `TRUST_PROXY` | `apps/api/.env` | _(unset)_ | Express trusted-proxy setting used for `req.ip` and IP-based rate limits behind platform proxies. Leave unset locally; in production match the actual proxy chain and avoid trusting arbitrary `X-Forwarded-*` headers. Prefer a hop count such as `1` only when exactly one trusted proxy scrubs forwarded headers. |
+| `API_JSON_BODY_LIMIT` | `apps/api/.env` | `64kb` | Explicit JSON request-body cap for the API. Keep this low for early deployment; task titles, descriptions, tags, filters, digest preview windows, and job parameters also have schema-level bounds. |
 | `API_BASE_URL` | `apps/web/.env` | `http://api:4000/api/taskforge` | Server-side (Next.js) requests to the Express API. Include the `/api/taskforge` prefix so callers can append `/v1/*` paths consistently. |
 | `NEXT_PUBLIC_API_BASE_URL` | `apps/web/.env` | `http://localhost:4000/api/taskforge` | Browser fetches to the Express API. Match the API origin plus `/api/taskforge` to mirror the Docker defaults. |
 | `GITHUB_ID` / `GITHUB_SECRET` | `apps/web/.env` | _(blank)_ | Populate when enabling GitHub OAuth. Leave blank to hide the provider in development. |
@@ -90,10 +92,15 @@ Keep `.env` files aligned with the templates in `infra/env/`. The table below su
 | `EMAIL_DAILY_SEND_LIMIT` | `apps/api/.env` | `90` | Daily digest budget guard. Keep at or below the Resend free daily limit unless the account is upgraded. |
 | `DIGEST_JOB_SECRET` | `apps/api/.env`, `apps/web/.env` | `dev-digest-job-secret` | Shared secret for the protected digest job endpoint and web cron proxy. Rotate and store securely in production. |
 | `CRON_SECRET` | `apps/web/.env` | `dev-cron-secret` | Vercel Cron bearer secret for `GET /api/cron/digest`; must differ from public/client secrets. |
+| `COOKIE_DOMAIN` | both (optional) | _(unset)_ | Host-only cookie by default. Set `.example.com` only when app/API subdomains intentionally share the same parent domain. |
 | `SEED_USER_PASSWORD` | `apps/api/.env` (optional) | `Demo1234!` | Overrides the deterministic password used during seeding. |
 | `BCRYPT_SALT_ROUNDS` | `apps/api/.env` (optional) | `10` | Tune hashing cost if parity with production is required. |
 
-For multi-subdomain deployments (for example `api.taskforge.app` and `app.taskforge.app`), set `COOKIE_DOMAIN` in both `.env` files so session cookies are shared correctly.
+The API session cookie is `httpOnly`, `SameSite=Lax`, seven days long, and `Secure` when `NODE_ENV=production`. The supported v1 browser-auth topology is same-site: either serve the API behind the web origin or use custom subdomains under the same parent domain, such as `app.example.com` and `api.example.com`. Leave `COOKIE_DOMAIN` unset for same-host/host-only cookies; set a shared parent domain such as `.example.com` only for deliberate cross-subdomain cookies. Raw unrelated platform domains such as a Vercel app calling a Render/Railway default host are not a supported production cookie topology for the OAuth session bridge. Preview deployments are not trusted automatically; add their exact origins to `CORS_ALLOWED_ORIGINS` or keep them isolated from the production API. See `docs/prod/browser-auth-deployment.md` for the full deployed browser checklist.
+
+### Web server routes and API data access
+- The Next.js app owns only auth/session infrastructure server routes: NextAuth (`/api/auth/[...nextauth]`), API-backed auth helpers (`/api/auth/me`, `/api/auth/logout`), the OAuth/API cookie handoff route (`/auth/session-bridge`), and the scheduler proxy (`/api/cron/digest`).
+- Task, tag, board, email preference, and digest preview/manual-send clients call the Express API directly through `NEXT_PUBLIC_API_BASE_URL` in the browser or `API_BASE_URL` on the server. There is no general-purpose Next.js proxy for `/tasks`, `/tags`, or `/board`; keep CORS and cookie settings correct for direct browser-to-API calls.
 
 ### Local vs. Docker setup
 1. Copy the env templates: `cp infra/env/api.env.example apps/api/.env` and `cp infra/env/web.env.example apps/web/.env`.
@@ -202,16 +209,19 @@ pnpm -C apps/api run lint:http
 - `make build` - build API and web packages.
 - `make ci` - local CI rehearsal: install, lint, typecheck, test, and build.
 - `make migrate` / `make seed` - database operations.
-- `make swagger` - export OpenAPI.
+- `make swagger` - export OpenAPI. CI also runs `pnpm -C apps/api gen:openapi` followed by `git diff --exit-code -- docs/openapi.json` to catch stale generated artifacts.
+- `docker compose -f infra/docker-compose.yml config --quiet` - validate compose without starting services.
+- `docker build -f apps/api/Dockerfile -t taskforge-api:local .` and `docker build -f apps/web/Dockerfile -t taskforge-web:local .` - local Docker image build checks for release-gate debugging.
+  Alpine image installs may print non-fatal optional native binding failures for packages such as `cpu-features` or `ssh2` when Python/compiler tooling is absent. Treat the Docker gate as passed only when the build exits `0` and exports/names the requested image.
 
 ## Deploy Targets (free tiers)
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
 - Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
-- Digest scheduling: protected API job endpoint invoked by a free scheduler. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
+- Digest scheduling: protected API job endpoint invoked by a free scheduler. The code path exists locally and in the release candidate, but production scheduled sends stay disabled until the production email fact register is complete and manual-only Resend/observability checks pass. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
-Task data persists via Prisma. Run migrations before exercising the API in any environment.
+Task data persists via Prisma. Run migrations before exercising the API in any environment. Day 7 deployment still must supply real managed-service facts for `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>`, `NEXTAUTH_URL=https://<APP_DOMAIN>`, `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXTAUTH_SECRET=<ROTATED_NEXTAUTH_SECRET>`, `SESSION_BRIDGE_SECRET=<ROTATED_SESSION_BRIDGE_SECRET>`, `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>`, `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>`, `COOKIE_DOMAIN=.example.com` only when needed, and `TF_DEV_BYPASS_AUTH=false`. Exact placeholder locations are listed in `docs/prod/README.md`.
 
 ## Email setup and local verification (Milestone 5)
 
@@ -239,6 +249,13 @@ Also configure:
 - API: `DIGEST_JOB_SECRET`
 - Web: `CRON_SECRET`
 - Web: `DIGEST_JOB_SECRET` (must match API value)
+
+### Rate limits and abuse controls
+- The API uses in-process Express rate limiters: a general `120 requests/minute` limiter, credential and refresh auth attempt limiting of `5 requests/15 minutes` per `req.ip`, server-side session bridge limiting of `120 requests/minute` per `req.ip`, email digest limiting of `10 requests/minute`, manual digest send limiting of `3 requests/minute` per authenticated user, and protected digest job limiting of `5 requests/minute`. All limiter responses use JSON `429` envelopes with rate-limit headers where configured.
+- The v1 production assumption is one API instance. If the API is horizontally scaled, add a shared `express-rate-limit` store such as Redis before increasing instance count; otherwise each instance keeps its own counters and effective limits reset per instance.
+- IP-based buckets depend on Express `req.ip`. Keep `TRUST_PROXY` unset unless the deployment has a known trusted proxy chain that scrubs forwarded headers; incorrect broad trust lets clients pick their own `X-Forwarded-For` bucket.
+- Rate limits are guardrails, not authentication. Protected job routes still require `DIGEST_JOB_SECRET` through `Authorization: Bearer <secret>` or `x-job-secret`; missing or incorrect job secrets are throttled without spending the valid scheduler bucket, and error bodies/logs must never include submitted secret values.
+- `TF_DEV_BYPASS_AUTH=true` is ignored outside `development` and `test` in both API and web helpers; do not set bypass secrets in production.
 
 ### Digest behavior summary
 - Daily digest execution is explicit (`/api/taskforge/v1/jobs/digest`) and can run as dry run or real send.

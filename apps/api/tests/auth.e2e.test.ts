@@ -328,6 +328,36 @@ describe('Auth API', () => {
     expect(invalid.body).toEqual(expect.objectContaining({ error: 'Invalid payload' }));
   });
 
+  it('rejects unknown fields in strict auth payloads', async () => {
+    const registered = await registerTestUser(agent, { email: 'strict-auth@example.com' });
+    const oauthUser = await createUser({
+      email: 'strict-welcome@example.com',
+      passwordHash: null,
+    });
+
+    await agent
+      .post('/api/taskforge/v1/auth/refresh')
+      .send({ refreshToken: registered.tokens.refreshToken, unknown: 'field' })
+      .expect(400);
+
+    await agent
+      .post('/api/taskforge/v1/auth/session-bridge')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: registered.user.id, email: registered.user.email, unknown: 'field' })
+      .expect(400);
+
+    await agent
+      .post('/api/taskforge/v1/auth/welcome-email')
+      .set('x-session-bridge-secret', sessionBridgeSecret)
+      .send({ userId: oauthUser.user.id, email: oauthUser.user.email, unknown: 'field' })
+      .expect(400);
+
+    const deliveries = await prisma.notificationDelivery.findMany({
+      where: { userId: oauthUser.user.id, type: 'WELCOME' },
+    });
+    expect(deliveries).toHaveLength(0);
+  });
+
   it('prevents duplicate registrations', async () => {
     const existing = await registerTestUser(agent, { email: 'dupe@example.com' });
 

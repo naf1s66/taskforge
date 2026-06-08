@@ -36,6 +36,22 @@ jobs:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/taskforge
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
+        run: docker compose -f infra/docker-compose.yml config --quiet
+      - name: Build API Docker image
+        run: >-
+          docker build
+          --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
+          -f apps/api/Dockerfile
+          -t taskforge-api:ci
+          .
+      - name: Build web Docker image
+        run: >-
+          docker build
+          --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taskforge?schema=public
+          -f apps/web/Dockerfile
+          -t taskforge-web:ci
+          .
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,6 +62,10 @@ jobs:
         run: pnpm --filter @taskforge/api exec prisma generate
       - name: Apply database migrations
         run: pnpm --filter @taskforge/api exec prisma migrate deploy
+      - name: Verify OpenAPI artifact
+        run: |
+          pnpm -C apps/api gen:openapi
+          git diff --exit-code -- docs/openapi.json
       - run: make lint
       - run: make typecheck
       - name: Run API tests

@@ -12,12 +12,10 @@ TaskForge sends daily digests through an explicit runner, not an always-running 
 
 ## Required Environment
 
-Set these values before enabling real sends:
+Set these values before enabling real sends. These are placeholder locations only; store real values in deployment secret managers, not in git:
 
-- API: `DIGEST_JOB_SECRET`
-- API: `EMAIL_DAILY_SEND_LIMIT=90`
-- Web: `CRON_SECRET`
-- Web: `DIGEST_JOB_SECRET`
+- API: `infra/env/api.prod.env.example` has `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>` and `EMAIL_DAILY_SEND_LIMIT=90`
+- Web: `infra/env/web.prod.env.example` has `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>` and `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>`
 
 The web and API `DIGEST_JOB_SECRET` values must match. Keep `EMAIL_DAILY_SEND_LIMIT` at `90` on the Resend free plan unless there is an intentional reason to use the full 100-message quota.
 
@@ -64,6 +62,8 @@ curl -X POST http://localhost:4000/api/taskforge/v1/jobs/digest \
 Replace `dev-digest-job-secret` if the local API env overrides `DIGEST_JOB_SECRET`.
 
 ## Production Enablement
+
+Real scheduled production sends are disabled for the release candidate. Enable them only after all gates below pass.
 
 1. Complete `docs/prod/resend-email-setup.md`.
 2. Complete the production fact register in `docs/prod/email-production-rollout.md`.
