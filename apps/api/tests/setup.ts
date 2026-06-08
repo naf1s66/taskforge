@@ -40,7 +40,16 @@ const truncateTables = [
 let prisma: PrismaClient;
 let container: StartedPostgreSqlContainer | undefined;
 
+function shouldUseDatabase() {
+  const testPath = expect.getState().testPath ?? '';
+  return !testPath.endsWith('smtp-config.test.ts');
+}
+
 beforeAll(async () => {
+  if (!shouldUseDatabase()) {
+    return;
+  }
+
   const shouldStartContainer = () => {
     const dbUrl = process.env.DATABASE_URL?.trim();
     if (!dbUrl) {
@@ -69,6 +78,10 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  if (!shouldUseDatabase()) {
+    return;
+  }
+
   if (!prisma) {
     throw new Error('Prisma client is not initialised for the test environment.');
   }
@@ -78,6 +91,10 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  if (!shouldUseDatabase()) {
+    return;
+  }
+
   if (prisma) {
     await prisma.$disconnect();
   }
