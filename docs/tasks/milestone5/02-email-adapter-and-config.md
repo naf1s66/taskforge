@@ -9,7 +9,7 @@
 ## Acceptance Criteria
 - [x] API exposes a reusable email adapter interface with `sendMail` and typed message inputs.
 - [x] Nodemailer transport uses MailHog defaults in local Docker and env-based SMTP settings outside local dev.
-- [x] Production docs and env examples use Resend SMTP defaults: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`, `SMTP_PASS=<RESEND_API_KEY>`, and `EMAIL_FROM=<verified sender>`.
+- [x] Production docs and env examples use Resend SMTP defaults: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=2587`, `SMTP_USER=resend`, `SMTP_PASS=<RESEND_API_KEY>`, and `EMAIL_FROM=<verified sender>`.
 - [x] Missing production SMTP settings fail fast with actionable configuration errors.
 - [x] Config validation requires a verified-domain sender address in production and refuses to start with placeholder Resend credentials.
 - [x] Email templates render deterministic subject, plaintext, and HTML output.

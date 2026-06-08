@@ -218,7 +218,7 @@ pnpm -C apps/api run lint:http
 - FE: Vercel
 - BE: Render or Railway
 - DB: Neon or Supabase
-- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
+- Email: provider-neutral Nodemailer SMTP adapter. Local Docker defaults to MailHog; production defaults to Resend SMTP (`smtp.resend.com:2587`) with a verified sending domain and `SMTP_PASS=<RESEND_API_KEY>`. Port `2587` is the selected free-hosting path because Render free web services block common SMTP ports `25`, `465`, and `587`, while Resend supports STARTTLS on `2587`. See `docs/prod/resend-email-setup.md` and `docs/prod/email-production-rollout.md`.
 - Digest scheduling: protected API job endpoint invoked by a free scheduler. The code path exists locally and in the release candidate, but production scheduled sends stay disabled until the production email fact register is complete and manual-only Resend/observability checks pass. Prefer Vercel Cron calling the web proxy route `GET /api/cron/digest`; use GitHub Actions schedule as the free fallback. See `docs/prod/adr/0006-digest-scheduler-invocation.md` and `docs/prod/digest-scheduler.md`.
 
 Task data persists via Prisma. Run migrations before exercising the API in any environment. Day 7 deployment still must supply real managed-service facts for `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>`, `NEXTAUTH_URL=https://<APP_DOMAIN>`, `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXTAUTH_SECRET=<ROTATED_NEXTAUTH_SECRET>`, `SESSION_BRIDGE_SECRET=<ROTATED_SESSION_BRIDGE_SECRET>`, `DIGEST_JOB_SECRET=<RANDOM_DIGEST_JOB_SECRET>`, `CRON_SECRET=<RANDOM_VERCEL_CRON_SECRET>`, `COOKIE_DOMAIN=.example.com` only when needed, and `TF_DEV_BYPASS_AUTH=false`. Exact placeholder locations are listed in `docs/prod/README.md`.
@@ -237,7 +237,7 @@ Task data persists via Prisma. Run migrations before exercising the API in any e
 
 ### Production default (Resend SMTP)
 - `SMTP_HOST=smtp.resend.com`
-- `SMTP_PORT=587`
+- `SMTP_PORT=2587`
 - `SMTP_USER=resend`
 - `SMTP_PASS=<RESEND_API_KEY>`
 - `EMAIL_FROM=<verified sender on the Resend-verified domain>`

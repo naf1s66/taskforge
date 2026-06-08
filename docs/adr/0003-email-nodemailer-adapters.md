@@ -11,7 +11,7 @@ Use **Nodemailer** behind a small adapter. Dev uses **MailHog** (docker). Produc
 Expected production SMTP shape:
 
 - `SMTP_HOST=smtp.resend.com`
-- `SMTP_PORT=587`
+- `SMTP_PORT=2587`
 - `SMTP_USER=resend`
 - `SMTP_PASS=<RESEND_API_KEY>`
 - `EMAIL_FROM=<verified sender on a Resend-verified domain>`

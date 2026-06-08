@@ -8,7 +8,7 @@ Use this document as the production fact register for enabling real TaskForge em
 - Real scheduled sends: disabled.
 - HTTP pack production-like real sends: disabled/commented by default.
 - Default provider: Resend SMTP through the provider-neutral Nodemailer adapter.
-- Resend quota source checked on 2026-05-26: free transactional email lists 100 emails/day and 3,000 emails/month. Sent and received messages count toward quota, and multiple recipients count separately.
+- Resend quota source checked on 2026-06-08: free transactional email lists 100 emails/day and 3,000 emails/month. Sent and received messages count toward quota, and multiple recipients count separately.
 - TaskForge application budget while on Resend free: `EMAIL_DAILY_SEND_LIMIT=90`.
 
 Official quota references:
@@ -27,10 +27,11 @@ Official quota references:
 | `EMAIL_FROM` | `<TBD before enablement>` |
 | Resend plan | Free until explicitly changed |
 | API `CORS_ALLOWED_ORIGINS` | `<TBD before enablement>`; exact deployed web origin list |
-| API `SMTP_PASS` storage | `<TBD before enablement>`; API secret manager only |
-| API `DIGEST_JOB_SECRET` storage | `<TBD before enablement>` |
-| Web `CRON_SECRET` storage | `<TBD before enablement>` |
-| Web `DIGEST_JOB_SECRET` storage | `<TBD before enablement>`; must match API |
+| API `SMTP_PORT` | `2587`; selected for Render free SMTP egress |
+| API `SMTP_PASS` storage | Render API service environment variable; API secret manager only |
+| API `DIGEST_JOB_SECRET` storage | Render API service environment variable; must match web |
+| Web `CRON_SECRET` storage | Vercel web project production environment variable |
+| Web `DIGEST_JOB_SECRET` storage | Vercel web project production environment variable; must match API |
 | CI fallback secrets | `<TBD before enablement>`; only if GitHub Actions scheduler fallback is enabled |
 | Production digest schedule | `<TBD before enablement>` UTC hour and expected local audience window |
 | Daily send budget | `90` while on Resend free |
@@ -43,15 +44,16 @@ Do not store the Resend API key in the web app, browser-visible env vars, reposi
 
 1. Complete the Resend setup checklist in `docs/prod/resend-email-setup.md`.
 2. Replace every `<TBD before enablement>` value in the fact register.
-3. Deploy API env from `infra/env/api.prod.env.example`.
+3. Deploy API env from `infra/env/api.prod.env.example`, including `SMTP_PORT=2587`.
 4. Deploy web env from `infra/env/web.prod.env.example`.
 5. Confirm API `CORS_ALLOWED_ORIGINS` contains the deployed web origin used by browsers.
 6. Confirm the web app has no `SMTP_PASS` or Resend API key.
-7. Run a production dry run through the protected digest job endpoint.
-8. Run a manual-only real send to an approved internal recipient.
-9. Confirm TaskForge delivery records, API logs, Resend logs, alert delivery, and quota state.
-10. Enable exactly one scheduler path: Vercel Cron preferred, GitHub Actions fallback only if selected.
-11. Keep first scheduled sends under daily human review.
+7. Confirm Task 04 proved API startup and SMTP egress on `smtp.resend.com:2587`, or recorded a no-cost fallback.
+8. Run a production dry run through the protected digest job endpoint.
+9. Run a manual-only real send to an approved internal recipient.
+10. Confirm TaskForge delivery records, API logs, Resend logs, alert delivery, and quota state.
+11. Enable exactly one scheduler path: Vercel Cron preferred, GitHub Actions fallback only if selected.
+12. Keep first scheduled sends under daily human review.
 
 ## Manual production smoke
 
