@@ -13,6 +13,7 @@ This checklist coordinates Milestone 7 production launch work. It links the exis
 - `docs/prod/digest-scheduler.md`
 - `docs/prod/email-observability-runbook.md`
 - `docs/prod/ci-release-coverage.md`
+- `docs/prod/v1-production-fact-register.md`
 
 ## Launch Order
 
@@ -27,6 +28,8 @@ This checklist coordinates Milestone 7 production launch work. It links the exis
 
 ## Required Non-Secret Facts To Record
 
+Record these in `docs/prod/v1-production-fact-register.md` unless a linked runbook names a narrower fact register.
+
 - Final deployed web origin.
 - Final deployed API origin.
 - Production database provider/project name.
@@ -37,6 +40,12 @@ This checklist coordinates Milestone 7 production launch work. It links the exis
 - OAuth providers enabled for v1.
 - Scheduler path selected for digest jobs, or explicit scheduled-send deferral.
 - Owner for first production email/digest monitoring window.
+
+## Manual Step Blocks
+
+- Before agent: approve scope freeze, choose accounts/projects/domains, create provider projects, generate secrets in secret managers, configure OAuth callbacks, and verify Resend DNS.
+- Agent after human provides facts: update non-secret register values, deploy or document deploy evidence, run smoke checks, and record the deployed SHA.
+- Human-only: account ownership, billing, DNS registrar changes, secret generation/rotation, OAuth provider dashboards, Resend API key creation, and final launch approval.
 
 ## Secret Handling Rules
 

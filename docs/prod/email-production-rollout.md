@@ -27,10 +27,10 @@ Official quota references:
 | `EMAIL_FROM` | `<TBD before enablement>` |
 | Resend plan | Free until explicitly changed |
 | API `CORS_ALLOWED_ORIGINS` | `<TBD before enablement>`; exact deployed web origin list |
-| API `SMTP_PASS` storage | `<TBD before enablement>`; API secret manager only |
-| API `DIGEST_JOB_SECRET` storage | `<TBD before enablement>` |
-| Web `CRON_SECRET` storage | `<TBD before enablement>` |
-| Web `DIGEST_JOB_SECRET` storage | `<TBD before enablement>`; must match API |
+| API `SMTP_PASS` storage | Render API service environment variable; API secret manager only |
+| API `DIGEST_JOB_SECRET` storage | Render API service environment variable; must match web |
+| Web `CRON_SECRET` storage | Vercel web project production environment variable |
+| Web `DIGEST_JOB_SECRET` storage | Vercel web project production environment variable; must match API |
 | CI fallback secrets | `<TBD before enablement>`; only if GitHub Actions scheduler fallback is enabled |
 | Production digest schedule | `<TBD before enablement>` UTC hour and expected local audience window |
 | Daily send budget | `90` while on Resend free |

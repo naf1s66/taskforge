@@ -13,6 +13,7 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 - `browser-auth-deployment.md` - deployed browser CORS, cookie-domain, session-bridge, and trusted-proxy runbook.
 - `ci-release-coverage.md` - CI Docker/OpenAPI gate behavior and the v1 requirement to cover all pull requests.
 - `v1-launch-checklist.md` - Milestone 7 production launch order, sign-off facts, and secret-handling rules.
+- `v1-production-fact-register.md` - selected v1 provider shape, same-site topology, secret storage locations, manual step timing, and scope freeze.
 - `adr/0004-hosting-vercel-render-neon.md` - accepted hosting topology decision.
 - `adr/0006-digest-scheduler-invocation.md` - accepted free-tier digest scheduler invocation decision.
 - `adr/0007-email-observability-rollout-decisions.md` - accepted monitoring, budget exhaustion, and scheduled-send enablement decisions for production email rollout.
@@ -21,6 +22,18 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 ## Production placeholder map
 
 Do not commit real secrets. Replace these placeholders in the deployment provider secret managers or production environment forms, not in git-tracked files.
+
+Milestone 7 uses the non-secret launch register in `v1-production-fact-register.md` as the source of truth for selected provider targets, same-site browser-auth topology, secret storage locations, and manual step ownership.
+
+## Selected v1 launch topology
+
+- Web: Vercel with an owned custom web subdomain.
+- API: Render with an owned custom API subdomain under the same parent domain.
+- Database: Neon Postgres.
+- Email: Resend SMTP, with scheduled sends disabled until the email enablement gates pass.
+- Browser auth: same-site custom subdomains with an intentional shared `COOKIE_DOMAIN`.
+- Rejected for v1: raw unrelated provider default domains such as Vercel default web origins calling Render/Railway default API origins.
+- Scope freeze: Milestone 7 is limited to release blockers, production configuration, verification, docs, and responsive fixes. Major product features are post-launch work.
 
 | Fact | Placeholder/location | Required production value |
 | --- | --- | --- |

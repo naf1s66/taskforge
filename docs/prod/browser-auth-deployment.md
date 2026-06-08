@@ -2,6 +2,8 @@
 
 Use this runbook for the deployed web/API browser path. Runtime code must not hard-code production domains; operators choose the exact origins and cookie topology for each environment.
 
+Milestone 7 selection: v1 uses owned same-site custom subdomains, for example `app.example.com` and `api.example.com`, with an intentional shared `COOKIE_DOMAIN` such as `.example.com`. Record the final non-secret values in `docs/prod/v1-production-fact-register.md` before deployment. Raw unrelated Vercel/Render/Railway default-domain browser auth is rejected for v1.
+
 ## CORS origin policy
 
 Task, tag, board, email preference, digest preview, and manual digest clients call the Express API directly from the browser or server using `NEXT_PUBLIC_API_BASE_URL` / `API_BASE_URL`. The web app does not provide a general task/tag/board proxy; it has auth/session routes and the cron proxy only. Treat CORS and cookie configuration as first-class production facts, not optional hardening.
