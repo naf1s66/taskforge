@@ -30,14 +30,18 @@
 - v1 rate limits use in-process state; production must run one API instance or add a shared store before horizontal scaling.
 
 ## Manual Step Timing
+Task 01 does not execute production provisioning, DNS changes, secret generation, OAuth app creation, deployed smoke, or real email enablement. It only records the launch decisions, capability checks, owner sequencing, and secret storage locations needed before those later tasks begin.
+
 | Step | Timing | Owner | Notes |
 | --- | --- | --- | --- |
-| Select deployment accounts/projects | Before agent | Human | Vercel/Render/Railway/Neon/Supabase account access cannot be invented in repo code. |
-| Choose production domains/subdomains | Before agent | Human | Required before final CORS, cookie-domain, OAuth callback, and browser-auth decisions. |
-| Generate production secrets | Before agent or during deployment | Human | Store in provider secret managers only; do not paste into docs or commits. |
-| Create OAuth apps and callbacks | Before deployed smoke | Human | Callback URLs must match `NEXTAUTH_URL`. |
-| Fill non-secret fact register values | Agent after human provides facts | Agent | Domain names, selected topology, and storage locations can be documented without secret values. |
-| Approve v1 scope freeze | Before implementation changes | Human | Prevents Milestone 7 from becoming feature expansion. |
+| Approve v1 scope freeze | Task 01 | Human | Completed. Prevents Milestone 7 from becoming feature expansion. |
+| Select provider shape and v1 OAuth intent | Task 01 | Human/agent | Completed. Vercel, Render, Neon, Resend, Vercel Cron, GitHub OAuth, and Google OAuth are selected with no-paid-requirement guardrails. |
+| Confirm provider capabilities/access path | Task 01 | Human/agent | Completed. Capability checks are recorded in `docs/prod/v1-production-fact-register.md`; service-specific env/domain checks move to provisioning. |
+| Choose exact production domains/subdomains | Task 04 | Human | Needed during hosting/domain setup before final CORS, cookie-domain, and OAuth callback values can be filled. |
+| Create production projects and database | Task 04 | Human/agent | Deferred to production hosting and migrations. |
+| Generate production secrets | Task 04 or Task 06 | Human | Deferred. Store in provider secret managers only; do not paste into docs or commits. |
+| Create OAuth apps and callbacks | Task 04 or Task 05 | Human | Deferred until final `NEXTAUTH_URL` exists. Callback URLs must match the deployed web origin. |
+| Verify Resend domain and enable real sends | Task 06 | Human | Deferred until email enablement gates and observability checks. |
 
 ## Verification
 - Run `rg -n "<TBD before enablement>|<TBD before deployment>|<TBD after deployment>|<APP_DOMAIN>|<API_DOMAIN>|<MANAGED_POSTGRES_URL>|<ROTATED_|<RANDOM_" docs/prod infra/env README.md docs/PRD.md`.

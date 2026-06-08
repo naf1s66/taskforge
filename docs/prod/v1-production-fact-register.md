@@ -85,23 +85,25 @@ Record only locations, never values.
 
 ## Manual Step Timing
 
+This section defines launch ownership, but not every row is part of task 01. Task 01 is complete once decisions, capability checks, secret storage locations, and sequencing are recorded. Rows that require real projects, DNS, secrets, OAuth dashboards, deployment, smoke, or email sending are deferred to the later Milestone 7 tasks named below.
+
 ### Before Agent
 
-1. Approve the v1 scope freeze: release blockers, production configuration, verification, docs, and responsive fixes only.
-2. Confirm account access for Vercel, Render, Neon, Resend, DNS registrar, GitHub OAuth, and Google Cloud OAuth if those OAuth providers are enabled.
-3. Choose the owned parent domain and final app/API subdomains.
-4. Create or select the Vercel web project, Render API service, and Neon Postgres project.
-5. Generate production secrets directly in provider secret managers or a password manager; do not paste them into chat, docs, HTTP files, screenshots, or commits.
-6. Create OAuth applications and configure callback URLs that match `NEXTAUTH_URL`.
-7. Verify the Resend sending domain and DNS records before enabling real email sends.
+1. Task 01: approve the v1 scope freeze: release blockers, production configuration, verification, docs, and responsive fixes only.
+2. Task 01: confirm selected provider capability/access paths for Vercel, Render, Neon, DNS, Resend, GitHub OAuth, and Google OAuth.
+3. Task 04: choose the owned parent domain and final app/API subdomains.
+4. Task 04: create or select the Vercel web project, Render API service, and Neon Postgres project.
+5. Task 04 or Task 06: generate production secrets directly in provider secret managers or a password manager; do not paste them into chat, docs, HTTP files, screenshots, or commits.
+6. Task 04 or Task 05: create OAuth applications and configure callback URLs that match `NEXTAUTH_URL`.
+7. Task 06: verify the Resend sending domain and DNS records before enabling real email sends.
 
 ### Agent After Human Provides Facts
 
-1. Replace non-secret `<TBD before deployment>` values in this register.
-2. Update `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_URL`, API base URLs, cookie-domain notes, and OAuth provider status in docs without recording secrets.
-3. Record the deployed branch SHA and provider project names.
-4. Run or document deployment smoke checks from `docs/testing/milestone7-manual-checklist.md`.
-5. Update `docs/prod/email-production-rollout.md` only after Resend and observability facts are known.
+1. Task 04: replace non-secret `<TBD before deployment>` values in this register.
+2. Task 04: update `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_URL`, API base URLs, cookie-domain notes, and OAuth provider status in docs without recording secrets.
+3. Task 04: record the deployed branch SHA and provider project names.
+4. Task 05: run or document deployment smoke checks from `docs/testing/milestone7-manual-checklist.md`.
+5. Task 06: update `docs/prod/email-production-rollout.md` only after Resend and observability facts are known.
 
 ### Human-Only
 
