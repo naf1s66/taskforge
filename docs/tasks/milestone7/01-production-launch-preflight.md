@@ -30,7 +30,7 @@
 - v1 rate limits use in-process state; production must run one API instance or add a shared store before horizontal scaling.
 
 ## Manual Step Timing
-Task 01 does not execute production provisioning, DNS changes, secret generation, OAuth app creation, deployed smoke, or real email enablement. It only records the launch decisions, capability checks, owner sequencing, and secret storage locations needed before those later tasks begin.
+Task 01 does not execute production provisioning, DNS changes, secret generation, OAuth app creation, deployed smoke, SMTP egress proof, or real email enablement. It only records the launch decisions, capability checks, owner sequencing, and secret storage locations needed before those later tasks begin.
 
 | Step | Timing | Owner | Notes |
 | --- | --- | --- | --- |
@@ -40,6 +40,7 @@ Task 01 does not execute production provisioning, DNS changes, secret generation
 | Choose exact production domains/subdomains | Task 04 | Human | Needed during hosting/domain setup before final CORS, cookie-domain, and OAuth callback values can be filled. |
 | Create production projects and database | Task 04 | Human/agent | Deferred to production hosting and migrations. |
 | Generate production secrets | Task 04 or Task 06 | Human | Deferred. Store in provider secret managers only; do not paste into docs or commits. |
+| Prove API SMTP egress path | Task 04 | Agent/human | Deferred. The selected free path is Resend SMTP STARTTLS on port `2587`; verify from the deployed API host before v1 launch. |
 | Create OAuth apps and callbacks | Task 04 or Task 05 | Human | Deferred until final `NEXTAUTH_URL` exists. Callback URLs must match the deployed web origin. |
 | Verify Resend domain and enable real sends | Task 06 | Human | Deferred until email enablement gates and observability checks. |
 

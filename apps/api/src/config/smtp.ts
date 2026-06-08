@@ -82,7 +82,7 @@ export function getSmtpConfig(): SmtpConfig {
   }
 
   const host = process.env.SMTP_HOST?.trim();
-  const port = parsePort(process.env.SMTP_PORT, 587);
+  const port = parsePort(process.env.SMTP_PORT, 2587);
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const from = process.env.EMAIL_FROM?.trim();

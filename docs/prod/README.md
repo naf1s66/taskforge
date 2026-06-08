@@ -40,7 +40,7 @@ Milestone 7 uses the non-secret launch register in `v1-production-fact-register.
 | API runtime port | `infra/env/api.prod.env.example`: `PORT=4000` | Platform service port, or the platform-provided override if the host requires one. |
 | Browser origins allowed by API | `infra/env/api.prod.env.example`: `CORS_ALLOWED_ORIGINS=https://<APP_DOMAIN>` | Exact deployed web origin list, comma-separated, origins only. |
 | API JSON body limit | `infra/env/api.prod.env.example`: `API_JSON_BODY_LIMIT=64kb` | Keep the low default unless a reviewed production payload need requires a larger cap. |
-| Managed database URL | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `DATABASE_URL=<MANAGED_POSTGRES_URL>` | Same managed Postgres connection string or provider-specific pooled/direct values for API, web NextAuth, and migrations. |
+| Managed database URL | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `DATABASE_URL=<MANAGED_POSTGRES_URL>` | Record whether API/web runtime use a pooled Neon URL and whether migrations use a direct Neon URL. Do not commit either value. |
 | API JWT signing secrets | `infra/env/api.prod.env.example`: `JWT_SECRET=<ROTATED_API_JWT_SECRET>`, `JWT_REFRESH_SECRET=<ROTATED_API_REFRESH_SECRET>` | Strong random values stored only in the API secret manager. |
 | API runtime mode | `infra/env/api.prod.env.example`: `NODE_ENV=production` | Must be production for secure cookies, production CORS behavior, and production-only guardrails. |
 | Web public URL | `infra/env/web.prod.env.example`: `NEXTAUTH_URL=https://<APP_DOMAIN>` | Exact HTTPS web origin used by browsers and OAuth callbacks. |
@@ -54,7 +54,7 @@ Milestone 7 uses the non-secret launch register in `v1-production-fact-register.
 | Dev bypass client secret | `infra/env/api.prod.env.example` and `infra/env/web.prod.env.example`: `TF_DEV_BYPASS_CLIENT_SECRET=` | Must remain blank in production. |
 | Trusted proxy chain | `infra/env/api.prod.env.example`: `TRUST_PROXY=1` with comments | Match the real platform proxy chain. Use `1` only when exactly one trusted proxy scrubs forwarded headers. |
 | API base URLs used by web | `infra/env/web.prod.env.example`: `API_BASE_URL=https://<API_DOMAIN>/api/taskforge`, `NEXT_PUBLIC_API_BASE_URL=https://<API_DOMAIN>/api/taskforge` | Exact API origin plus `/api/taskforge`; browser calls task/tag/board routes directly. |
-| Resend SMTP transport | `infra/env/api.prod.env.example`: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USER=resend`, `SMTP_PASS=<RESEND_API_KEY>` | API secret manager only for `SMTP_PASS`; never web/browser/repository. |
+| Resend SMTP transport | `infra/env/api.prod.env.example`: `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=2587`, `SMTP_USER=resend`, `SMTP_PASS=<RESEND_API_KEY>` | API secret manager only for `SMTP_PASS`; never web/browser/repository. Port `2587` is selected for Render free because common SMTP ports are blocked there. |
 | Production email sender and budget | `infra/env/api.prod.env.example`: `EMAIL_FROM=<VERIFIED_SENDER_ON_RESEND_DOMAIN>`, `EMAIL_DAILY_SEND_LIMIT=90` | Sender on the verified Resend domain; keep the conservative budget unless the account/rollout plan changes. |
 
 ## Production enablement boundaries
@@ -62,5 +62,6 @@ Milestone 7 uses the non-secret launch register in `v1-production-fact-register.
 - OAuth providers are implemented but production-enabled only after real provider apps, callback URLs, and secrets are configured.
 - Digest scheduling is implemented but real scheduled sends remain disabled until `email-production-rollout.md` has no `<TBD before enablement>` values and manual-only Resend/observability checks pass.
 - Resend is the production SMTP default, but real provider sends require a verified sending domain and safe sender/recipient checks.
+- Task 04 must prove the deployed API can reach the selected SMTP path before the API is considered launchable. If `smtp.resend.com:2587` fails from Render free, record a no-cost fallback such as a Resend HTTP API adapter or another verified provider path before smoke.
 - Cross-subdomain cookies are supported only when `COOKIE_DOMAIN` is deliberately set to a shared parent domain; unrelated platform domains are not a supported production browser-auth topology.
 - Rate limits use in-process state for v1. Run one API instance or add a shared rate-limit store before horizontal scaling.

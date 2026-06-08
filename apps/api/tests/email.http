@@ -96,7 +96,7 @@ Authorization: Bearer {{accessToken}}
 # - You intentionally set dryRun=false.
 # Placeholder variable names only:
 #   SMTP_HOST=smtp.resend.com
-#   SMTP_PORT=587
+#   SMTP_PORT=2587
 #   SMTP_USER=resend
 #   SMTP_PASS=<RESEND_API_KEY_FROM_ENV>
 #   EMAIL_FROM=TaskForge Notifications <notifications@YOUR_VERIFIED_DOMAIN>

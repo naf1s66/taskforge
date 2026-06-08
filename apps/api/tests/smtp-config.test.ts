@@ -69,7 +69,7 @@ describe('getSmtpConfig', () => {
     resetEnv({
       NODE_ENV: 'production',
       SMTP_HOST: 'smtp.resend.com',
-      SMTP_PORT: '587',
+      SMTP_PORT: '2587',
       SMTP_USER: 'resend',
       SMTP_PASS: 're_123456789',
       EMAIL_FROM: 'TaskForge <noreply@mail.taskforge.app>',
@@ -77,10 +77,27 @@ describe('getSmtpConfig', () => {
 
     expect(getSmtpConfig()).toEqual({
       host: 'smtp.resend.com',
-      port: 587,
+      port: 2587,
       user: 'resend',
       pass: 're_123456789',
       from: 'TaskForge <noreply@mail.taskforge.app>',
+    });
+  });
+
+  it('defaults production SMTP to the Render-free-compatible Resend STARTTLS port', () => {
+    resetEnv({
+      NODE_ENV: 'production',
+      SMTP_HOST: 'smtp.resend.com',
+      SMTP_PORT: undefined,
+      SMTP_USER: 'resend',
+      SMTP_PASS: 're_123456789',
+      EMAIL_FROM: 'TaskForge <noreply@mail.taskforge.app>',
+    });
+
+    expect(getSmtpConfig()).toMatchObject({
+      host: 'smtp.resend.com',
+      port: 2587,
+      user: 'resend',
     });
   });
 
@@ -88,7 +105,7 @@ describe('getSmtpConfig', () => {
     resetEnv({
       NODE_ENV: 'production',
       SMTP_HOST: 'smtp.resend.com',
-      SMTP_PORT: '587',
+      SMTP_PORT: '2587',
       SMTP_USER: 'resend',
       SMTP_PASS: 're_123456789',
       EMAIL_FROM: 'TaskForge <alerts@myexamplecorp.com>',
@@ -103,7 +120,7 @@ describe('getSmtpConfig', () => {
     resetEnv({
       NODE_ENV: 'production',
       SMTP_HOST: 'smtp.resend.com',
-      SMTP_PORT: '587',
+      SMTP_PORT: '2587',
       SMTP_USER: 'resend',
       SMTP_PASS: '<RESEND_API_KEY>',
       EMAIL_FROM: '<verified sender>',
@@ -116,7 +133,7 @@ describe('getSmtpConfig', () => {
     resetEnv({
       NODE_ENV: 'production',
       SMTP_HOST: 'smtp.resend.com',
-      SMTP_PORT: '587',
+      SMTP_PORT: '2587',
       SMTP_USER: 'resend',
       SMTP_PASS: 're_123456789',
       EMAIL_FROM: 'TaskForge <taskforge@gmail.com>',
@@ -129,7 +146,7 @@ describe('getSmtpConfig', () => {
     resetEnv({
       NODE_ENV: 'production',
       SMTP_HOST: 'smtp.resend.com',
-      SMTP_PORT: '587',
+      SMTP_PORT: '2587',
       SMTP_USER: 'resend',
       SMTP_PASS: 're_123456789',
       EMAIL_FROM: 'TaskForge <noreply@example.com>',

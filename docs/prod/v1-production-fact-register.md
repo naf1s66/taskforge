@@ -24,6 +24,7 @@ This register records non-secret production launch decisions for Milestone 7. Ke
 | OAuth callbacks | `https://<APP_DOMAIN>/api/auth/callback/<provider>` | Provider callbacks must match `NEXTAUTH_URL`. |
 | Rate-limit topology | One API instance for v1 | Add a shared limiter store before horizontal scaling. |
 | Trusted proxy | Render-specific proxy setting, usually `TRUST_PROXY=1` | Use `1` only after confirming Render is the single trusted scrubbing proxy hop. |
+| API SMTP egress | Resend SMTP STARTTLS on port `2587` | Selected free-hosting path after provider-doc check: Render free blocks outbound `25`, `465`, and `587`; Resend supports `2587`. Task 04 must prove this from the deployed API host. |
 
 Do not deploy v1 browser auth with raw unrelated provider domains such as `*.vercel.app` calling `*.onrender.com` or `*.up.railway.app`. Those domains are cross-site and are incompatible with the selected `SameSite=Lax` API cookie handoff.
 
@@ -45,6 +46,9 @@ Do not deploy v1 browser auth with raw unrelated provider domains such as `*.ver
 | Final `NEXTAUTH_URL` | `<TBD before deployment>` |
 | Final `API_BASE_URL` | `<TBD before deployment>` |
 | Final `NEXT_PUBLIC_API_BASE_URL` | `<TBD before deployment>` |
+| API runtime database URL shape | `<TBD before deployment>`; Neon pooled URL preferred for runtime if compatible with Prisma client |
+| Migration database URL shape | `<TBD before deployment>`; Neon direct URL preferred for `prisma migrate deploy` |
+| API SMTP egress result | `<TBD before deployment>`; prove `smtp.resend.com:2587` from deployed API host or document fallback |
 | Branch and commit SHA deployed | `<TBD after deployment>` |
 | OAuth providers enabled for v1 | GitHub and Google, provided both remain no-cost for basic sign-in with `openid`, email, and profile identity only |
 | Digest scheduler status | Vercel Cron selected; real scheduled sends disabled until email gates pass |
@@ -60,7 +64,8 @@ Do not deploy v1 browser auth with raw unrelated provider domains such as `*.ver
 | Render API service creation | Confirmed before service creation | User confirmed `+ New` and Web Service creation access; environment variables and custom domains require an actual service and will be verified during API service creation. |
 | Neon Postgres capability | Confirmed from official docs | Neon supports projects, Postgres connection strings, and pooled connection strings; project creation is deferred to database provisioning. |
 | DNS provider capability | Confirmed from official docs | Vercel and Render custom subdomains require DNS records at the domain provider; final records are deferred until domains are chosen. |
-| Resend email capability | Confirmed from official docs | Resend supports verified sending domains, API key creation, and SMTP with `smtp.resend.com`, username `resend`, and the API key as password. Real setup is deferred until email enablement. |
+| Resend email capability | Confirmed from official docs | Resend supports verified sending domains, API key creation, and SMTP with `smtp.resend.com`, username `resend`, API key as password, and STARTTLS port `2587`. Real setup is deferred until API provisioning/email enablement. |
+| Render free SMTP egress | Port-adjusted path selected | Render free web services block outbound `25`, `465`, and `587`; Resend `2587` is the selected no-cost SMTP path and must be proved in Task 04. |
 | GitHub OAuth capability | Enabled for v1 | GitHub OAuth Apps can be registered from Developer settings; final callback is `https://<APP_DOMAIN>/api/auth/callback/github`. |
 | Google OAuth capability | Enabled for v1 if no paid requirement appears during setup | Google Auth Platform supports OAuth 2.0 web clients with client ID/secret and redirect URIs; use only basic sign-in scopes. Disable Google for v1 if setup requires billing, paid verification, or sensitive/restricted scopes. |
 
@@ -70,7 +75,8 @@ Record only locations, never values.
 
 | Value | Storage location | Required in |
 | --- | --- | --- |
-| `DATABASE_URL` | Neon project connection string copied into Vercel and Render environment variables | Web, API, migration runner |
+| `DATABASE_URL` | Neon connection string copied into Vercel and Render environment variables | Web, API |
+| Migration database URL | Neon direct connection string stored only for the migration runner/operator environment | Migration runner |
 | `JWT_SECRET` | Render API service environment variable | API |
 | `JWT_REFRESH_SECRET` | Render API service environment variable | API |
 | `NEXTAUTH_SECRET` | Vercel web project production environment variable | Web |
@@ -80,6 +86,7 @@ Record only locations, never values.
 | GitHub OAuth client ID/secret | GitHub OAuth app dashboard; copied into Vercel web environment variables if enabled | Web |
 | Google OAuth client ID/secret | Google Cloud OAuth client; copied into Vercel web environment variables if enabled | Web |
 | `SMTP_PASS` / Resend API key | Resend API key copied into Render API service environment variable only | API |
+| `SMTP_PORT` | Non-secret Render API env value, selected as `2587` for v1 | API |
 | `EMAIL_FROM` | Non-secret sender address from verified Resend domain, stored in Render API env | API |
 | `TF_DEV_BYPASS_CLIENT_SECRET` | Not stored for production | None |
 
@@ -95,12 +102,13 @@ This section defines launch ownership, but not every row is part of task 01. Tas
 4. Task 04: create or select the Vercel web project, Render API service, and Neon Postgres project.
 5. Task 04 or Task 06: generate production secrets directly in provider secret managers or a password manager; do not paste them into chat, docs, HTTP files, screenshots, or commits.
 6. Task 04 or Task 05: create OAuth applications and configure callback URLs that match `NEXTAUTH_URL`.
-7. Task 06: verify the Resend sending domain and DNS records before enabling real email sends.
+7. Task 04: prove API startup and SMTP egress using Resend STARTTLS on `smtp.resend.com:2587`, or record a no-cost fallback before deployment smoke.
+8. Task 06: verify the Resend sending domain and DNS records before enabling real email sends.
 
 ### Agent After Human Provides Facts
 
 1. Task 04: replace non-secret `<TBD before deployment>` values in this register.
-2. Task 04: update `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_URL`, API base URLs, cookie-domain notes, and OAuth provider status in docs without recording secrets.
+2. Task 04: update `CORS_ALLOWED_ORIGINS`, `NEXTAUTH_URL`, API base URLs, cookie-domain notes, database URL shape, SMTP egress result, and OAuth provider status in docs without recording secrets.
 3. Task 04: record the deployed branch SHA and provider project names.
 4. Task 05: run or document deployment smoke checks from `docs/testing/milestone7-manual-checklist.md`.
 5. Task 06: update `docs/prod/email-production-rollout.md` only after Resend and observability facts are known.
