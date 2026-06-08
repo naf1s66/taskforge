@@ -12,6 +12,7 @@ Production and pre-launch operations docs live here. Milestone/task planning fil
 - `dev-auth-bypass.md` - development bypass behavior and the production expectation that it stays disabled.
 - `browser-auth-deployment.md` - deployed browser CORS, cookie-domain, session-bridge, and trusted-proxy runbook.
 - `ci-release-coverage.md` - CI Docker/OpenAPI gate behavior and the v1 requirement to cover all pull requests.
+- `v1-launch-checklist.md` - Milestone 7 production launch order, sign-off facts, and secret-handling rules.
 - `adr/0004-hosting-vercel-render-neon.md` - accepted hosting topology decision.
 - `adr/0006-digest-scheduler-invocation.md` - accepted free-tier digest scheduler invocation decision.
 - `adr/0007-email-observability-rollout-decisions.md` - accepted monitoring, budget exhaustion, and scheduled-send enablement decisions for production email rollout.
