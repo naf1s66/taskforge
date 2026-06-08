@@ -46,11 +46,23 @@ Do not deploy v1 browser auth with raw unrelated provider domains such as `*.ver
 | Final `API_BASE_URL` | `<TBD before deployment>` |
 | Final `NEXT_PUBLIC_API_BASE_URL` | `<TBD before deployment>` |
 | Branch and commit SHA deployed | `<TBD after deployment>` |
-| OAuth providers enabled for v1 | `<TBD before deployed smoke>` |
+| OAuth providers enabled for v1 | GitHub and Google, provided both remain no-cost for basic sign-in with `openid`, email, and profile identity only |
 | Digest scheduler status | Vercel Cron selected; real scheduled sends disabled until email gates pass |
 | Production email status | Resend selected; real scheduled sends disabled until fact register and smoke pass |
 | First production email monitoring owner | `<TBD before email enablement>` |
 | Known launch limitations | Free-tier cold starts; one API instance; scheduled email disabled until gates pass |
+
+## Provider Capability And Access Preflight
+
+| Check | Status | Evidence |
+| --- | --- | --- |
+| Vercel project management | Confirmed | User confirmed project creation/settings access plus environment-variable and domain pages. |
+| Render API service creation | Confirmed before service creation | User confirmed `+ New` and Web Service creation access; environment variables and custom domains require an actual service and will be verified during API service creation. |
+| Neon Postgres capability | Confirmed from official docs | Neon supports projects, Postgres connection strings, and pooled connection strings; project creation is deferred to database provisioning. |
+| DNS provider capability | Confirmed from official docs | Vercel and Render custom subdomains require DNS records at the domain provider; final records are deferred until domains are chosen. |
+| Resend email capability | Confirmed from official docs | Resend supports verified sending domains, API key creation, and SMTP with `smtp.resend.com`, username `resend`, and the API key as password. Real setup is deferred until email enablement. |
+| GitHub OAuth capability | Enabled for v1 | GitHub OAuth Apps can be registered from Developer settings; final callback is `https://<APP_DOMAIN>/api/auth/callback/github`. |
+| Google OAuth capability | Enabled for v1 if no paid requirement appears during setup | Google Auth Platform supports OAuth 2.0 web clients with client ID/secret and redirect URIs; use only basic sign-in scopes. Disable Google for v1 if setup requires billing, paid verification, or sensitive/restricted scopes. |
 
 ## Secret Storage Locations
 
